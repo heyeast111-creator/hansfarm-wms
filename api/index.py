@@ -3,7 +3,6 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from mangum import Mangum
 
 app = FastAPI()
 
@@ -57,4 +56,3 @@ async def move_stock(data: InventoryMove):
         )
         return {"status": "success"}
 
-handler = Mangum(app)
