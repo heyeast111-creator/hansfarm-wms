@@ -1,6 +1,7 @@
+import os
 import httpx
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -32,8 +33,10 @@ HTML_CONTENT = """
     <style>
         body { background-color: #e2e8f0; }
         .rack-cell { transition: all 0.15s; }
-        .cell-empty { background-color: #4ade80; border: 1px solid #166534; color: #064e3b; }
-        .cell-full { background-color: #ffffff; border: 1px solid #94a3b8; color: #334155; }
+        
+        /* 🎨 요청하신 색상 반전 적용 */
+        .cell-empty { background-color: #ffffff; border: 1px dashed #cbd5e1; color: #94a3b8; } /* 빈공간: 흰색 */
+        .cell-full { background-color: #4ade80; border: 1px solid #166534; color: #064e3b; font-weight: bold; } /* 적재됨: 초록색 */
         .cell-active { background-color: #3b82f6; border: 2px solid #1e3a8a; color: #ffffff; font-weight: bold; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); z-index: 10; relative; }
         
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -43,14 +46,18 @@ HTML_CONTENT = """
 </head>
 <body class="font-sans h-screen flex overflow-hidden text-slate-800 selection:bg-indigo-200">
 
-    <aside class="w-28 bg-white border-r border-slate-300 flex flex-col items-center py-6 shadow-lg z-20 shrink-0">
-        <div class="font-black text-indigo-700 text-lg mb-8 tracking-tighter leading-tight text-center">HANS<br>FARM</div>
+    <aside class="w-32 bg-white border-r border-slate-300 flex flex-col items-center py-6 shadow-lg z-20 shrink-0">
+        
+        <div class="mb-8 w-full px-4 flex justify-center">
+            <img src="/logo.png" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm">
+        </div>
+
         <div class="flex flex-col space-y-3 w-full px-3">
             <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">대시보드</button>
-            <button class="w-full py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-sm relative">가져오기</button>
-            <button class="w-full py-3 rounded-md bg-orange-50 border border-orange-200 text-orange-700 font-black shadow-inner text-sm relative">내보내기</button>
             <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">재고조회</button>
             <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">검색</button>
+            <button class="w-full py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-sm relative">가져오기</button>
+            <button class="w-full py-3 rounded-md bg-orange-50 border border-orange-200 text-orange-700 font-black shadow-inner text-sm relative">내보내기</button>
         </div>
     </aside>
 
@@ -111,10 +118,9 @@ HTML_CONTENT = """
 
     <script>
         let globalOccupancy = [];
-        let currentZone = '실온'; // 기본값 실온
+        let currentZone = '실온'; 
         let selectedCellId = null;
 
-        // 🏠 [실온 탭 레이아웃] : J~A (F,G,H,I는 10칸) + 가로 K(10)
         const layoutRoom = [
             { id: 'J', cols: 12 }, { aisle: true }, 
             { id: 'I', cols: 10 }, { gap: true }, { id: 'H', cols: 10 }, { aisle: true },
@@ -124,7 +130,6 @@ HTML_CONTENT = """
             { id: 'A', cols: 12 }
         ];
 
-        // ❄️ [냉장 탭 레이아웃] : F~A (A,F는 10칸, B,C,D,E는 12칸) + 가로 I(8)
         const layoutCold = [
             { id: 'F', cols: 10 }, { aisle: true }, 
             { id: 'E', cols: 12 }, { gap: true }, { id: 'D', cols: 12 }, { aisle: true },
@@ -145,7 +150,7 @@ HTML_CONTENT = """
 
         function switchZone(zone) {
             currentZone = zone;
-            selectedCellId = null; // 탭 바꿀 때 선택 해제
+            selectedCellId = null;
             clearInfo();
             
             if(zone === '실온') {
@@ -172,7 +177,6 @@ HTML_CONTENT = """
             const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold;
             let vHtml = '';
             
-            // 1. 세로 렉 렌더링
             activeLayout.forEach(col => {
                 if (col.aisle) {
                     vHtml += `<div class="w-14 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1">
@@ -206,7 +210,6 @@ HTML_CONTENT = """
             });
             vContainer.innerHTML = vHtml;
 
-            // 2. 가로 렉 렌더링
             let hHtml = `<div class="flex space-x-1">`;
             let hPrefix = currentZone === '실온' ? 'K' : 'I';
             let hCols = currentZone === '실온' ? 10 : 8;
@@ -237,7 +240,6 @@ HTML_CONTENT = """
             const panel = document.getElementById('info-panel');
             const floor = document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text;
             
-            // 상단 공통 타이틀 영역
             let panelHtml = `
                 <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-6">
                     <div class="flex justify-between items-start">
@@ -296,7 +298,6 @@ HTML_CONTENT = """
                 `;
             }
 
-            // 하단 입고/출고 액션 버튼 (정보 패널 내부)
             panelHtml += `
                 <div class="flex space-x-2 pt-4 border-t border-slate-200 mt-auto">
                     <button class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-3 rounded-lg font-black shadow-md transition-colors text-sm">입고 처리</button>
@@ -316,6 +317,14 @@ HTML_CONTENT = """
 @app.get("/")
 async def serve_ui():
     return HTMLResponse(content=HTML_CONTENT)
+
+# 🖼️ 이미지를 띄워주기 위한 파이썬 명령어 추가
+@app.get("/logo.png")
+async def serve_logo():
+    logo_path = os.path.join("public", "logo.png")
+    if os.path.exists(logo_path):
+        return FileResponse(logo_path)
+    return {"error": "Logo not found. Please upload logo.png to public folder."}
 
 @app.get("/api/occupancy")
 async def get_occupancy():
