@@ -3,7 +3,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 app = FastAPI()
 
@@ -18,14 +18,14 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# --- 데이터 모델 세팅 ---
+# --- 🛡️ 데이터 모델 개선 (빈칸 null 완벽 허용) ---
 class InboundData(BaseModel):
     location_id: str
     category: str
     item_name: str
     quantity: int
-    production_date: str = None
-    remarks: str = ""
+    production_date: Optional[str] = None  # 날짜 비워둬도 에러 안 나게 수정!
+    remarks: Optional[str] = ""
 
 class OutboundData(BaseModel):
     inventory_id: str
@@ -44,7 +44,7 @@ class TransferData(BaseModel):
     item_name: str
     quantity: int
 
-# --- HTML/JS 프론트엔드 (UI 디자인 동결) ---
+# --- HTML/JS 프론트엔드 (UI 동결, 에러 감지기 탑재) ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ko">
@@ -232,7 +232,6 @@ HTML_CONTENT = """
             else if(viewName === 'dashboard') { updateDashboard(); }
         }
 
-        // --- 1. 품목 등록 로직 (거짓말 방지 에러 체크 추가!) ---
         function renderProductMaster() {
             const list = document.getElementById('pm-list');
             let html = '';
@@ -259,11 +258,8 @@ HTML_CONTENT = """
                     alert("품목이 등록되었습니다!");
                     document.getElementById('pm-cat').value = ''; document.getElementById('pm-name').value = '';
                     load();
-                } else {
-                    // 에러가 났을 때 진짜 에러 메시지를 보여줍니다.
-                    alert("DB 등록 실패!\\n원인: " + (data.message || "알 수 없는 오류"));
-                }
-            } catch(e) { alert("서버 통신 실패! 인터넷 연결을 확인하세요."); }
+                } else { alert("DB 등록 실패!\\n원인: " + (data.message || "알 수 없는 오류")); }
+            } catch(e) { alert("서버 통신 실패!"); }
         }
 
         async function deleteProduct(name) {
@@ -271,7 +267,6 @@ HTML_CONTENT = """
             try { await fetch(`/api/products/${name}`, { method: 'DELETE' }); load(); } catch(e) { alert("삭제 실패!"); }
         }
 
-        // --- 2. 대시보드 ---
         function updateDashboard() {
             const period = document.getElementById('dash-period').value;
             const now = new Date(); let startDate = new Date();
@@ -294,7 +289,6 @@ HTML_CONTENT = """
             document.getElementById('dash-cap').innerText = capRate + '%';
         }
 
-        // --- 3. 검색 ---
         function executeSearch() {
             const keyword = document.getElementById('search-keyword').value.trim();
             if(!keyword) return alert("검색어를 입력하세요.");
@@ -311,7 +305,6 @@ HTML_CONTENT = """
             });
         }
 
-        // --- 4. 기존 재고조회 ---
         function switchZone(zone) {
             currentZone = zone; selectedCellId = null; clearInfo();
             const fifoBtn = document.getElementById('fifo-btn-container');
@@ -419,21 +412,38 @@ HTML_CONTENT = """
             document.getElementById('in-item').innerHTML = filtered.map(p => `<option value="${p.item_name}">${p.item_name}</option>`).join('');
         }
 
+        // 🛡️ 입고 거짓말 방지 에러 체크 추가
         async function processInbound(locId) {
             const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = document.getElementById('in-qty').value; const date = document.getElementById('in-date').value;
             if(!cat || !item || !qty) return alert("필수값을 입력하세요.");
-            try { await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: parseInt(qty), production_date: date || null }) }); alert("입고 완료!"); load(); } catch(e) {}
+            try { 
+                const res = await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: parseInt(qty), production_date: date || null }) }); 
+                const data = await res.json();
+                if(data.status === 'success') {
+                    alert("입고 완료!"); load(); 
+                } else {
+                    alert("입고 DB 에러: " + data.message);
+                }
+            } catch(e) { alert("서버 통신 에러!"); }
         }
 
         async function processOutbound(invId, itemName, maxQty, locId) {
             if(!confirm(`[${itemName}] 전량 출고하시겠습니까?`)) return;
-            try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: maxQty }) }); alert("출고 완료!"); load(); } catch(e) {}
+            try { 
+                const res = await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: maxQty }) }); 
+                const data = await res.json();
+                if(data.status === 'success') { alert("출고 완료!"); load(); } else { alert("출고 에러: " + data.message); }
+            } catch(e) { alert("통신 에러!"); }
         }
 
         async function processTransfer(invId, itemName, fromLoc) {
             const toLoc = prompt(`[${itemName}] 이동할 목적지 렉을 입력하세요\\n(입력 예시: B-02-1F)`);
             if(!toLoc) return;
-            try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: 1 }) }); alert("이동 완료!"); load(); } catch(e) { alert("이동 오류!"); }
+            try { 
+                const res = await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: 1 }) }); 
+                const data = await res.json();
+                if(data.status === 'success') { alert("이동 완료!"); load(); } else { alert("이동 에러: " + data.message); }
+            } catch(e) { alert("통신 에러!"); }
         }
 
         function highlightFIFO() {
@@ -489,12 +499,9 @@ async def get_products():
 @app.post("/api/products")
 async def add_product(data: ProductData):
     async with httpx.AsyncClient() as client:
-        # 응답 상태를 확인해서 파이썬이 거짓말을 못하도록 막습니다!
         res = await client.post(f"{SUPABASE_URL}/rest/v1/products", json={"category": data.category, "item_name": data.item_name}, headers=HEADERS)
-        if res.status_code in [200, 201, 204]:
-            return {"status": "success"}
-        else:
-            return {"status": "error", "message": "Supabase 테이블 연결 거부(테이블이 없거나 권한이 막혔습니다)"}
+        if res.status_code in [200, 201, 204]: return {"status": "success"}
+        return {"status": "error", "message": res.text}
 
 @app.delete("/api/products/{item_name}")
 async def delete_product(item_name: str):
@@ -514,26 +521,49 @@ async def get_history():
         r = await client.get(f"{SUPABASE_URL}/rest/v1/history_log?select=*", headers=HEADERS)
         return r.json() if r.status_code == 200 else []
 
+# 🛡️ 에러를 무시하지 않고 끝까지 추적하는 진짜 방어 코드
 @app.post("/api/inbound")
 async def inbound_stock(data: InboundData):
     async with httpx.AsyncClient() as client:
+        # 1. 재고 테이블에 넣기
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "production_date": data.production_date if data.production_date else None, "remarks": data.remarks}
-        await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
-        log_payload = inv_payload.copy(); log_payload["action_type"] = "입고"
-        await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
+        res1 = await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
+        
+        if res1.status_code not in [200, 201, 204]:
+            return {"status": "error", "message": f"재고 DB 에러: {res1.text}"}
+
+        # 2. 히스토리 테이블에 넣기 (카테고리 제거 완료!)
+        log_payload = {
+            "location_id": data.location_id,
+            "action_type": "입고",
+            "item_name": data.item_name,
+            "quantity": data.quantity,
+            "production_date": data.production_date if data.production_date else None,
+            "remarks": data.remarks
+        }
+        res2 = await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
+        
+        if res2.status_code not in [200, 201, 204]:
+            # 재고는 들어갔는데 히스토리가 실패한 경우
+            return {"status": "error", "message": f"재고는 등록되었으나 히스토리 DB 에러 발생: {res2.text}"}
+
         return {"status": "success"}
 
 @app.post("/api/outbound")
 async def outbound_stock(data: OutboundData):
     async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "출고", "item_name": data.item_name, "quantity": data.quantity}, headers=HEADERS)
+        res1 = await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
+        if res1.status_code not in [200, 201, 204]: return {"status": "error", "message": res1.text}
+
+        res2 = await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "출고", "item_name": data.item_name, "quantity": data.quantity}, headers=HEADERS)
         return {"status": "success"}
 
 @app.post("/api/transfer")
 async def transfer_stock(data: TransferData):
     async with httpx.AsyncClient() as client:
-        await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": data.to_location}, headers=HEADERS)
+        res1 = await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": data.to_location}, headers=HEADERS)
+        if res1.status_code not in [200, 201, 204]: return {"status": "error", "message": res1.text}
+
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.to_location, "action_type": "이동", "item_name": data.item_name, "quantity": data.quantity, "remarks": f"From {data.from_location}"}, headers=HEADERS)
         return {"status": "success"}
 
