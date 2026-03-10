@@ -21,161 +21,270 @@ class InventoryMove(BaseModel):
     to_loc: str
     item: str
 
-# 🎨 새로 개편된 렉맵 UI (역순 배치, 10/12칸, 2층, 통로 반영 완료)
+# 🎨 데스크톱 WMS 전용 완벽 커스텀 UI (목업 100% 반영)
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>한스팜 클라우드 WMS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HANSFARM WMS - PC Version</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 모바일에서 스크롤바 예쁘게 숨기기 */
-        .custom-scrollbar::-webkit-scrollbar { height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        body { background-color: #e2e8f0; } /* 바탕화면 톤 */
+        .rack-cell { transition: all 0.15s; }
+        .cell-empty { background-color: #4ade80; border: 1px solid #166534; color: #064e3b; } /* 초록색 */
+        .cell-full { background-color: #ffffff; border: 1px solid #94a3b8; color: #334155; } /* 흰색 */
+        .cell-active { background-color: #3b82f6; border: 2px solid #1e3a8a; color: #ffffff; font-weight: bold; transform: scale(1.05); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); } /* 파란색 */
+        
+        /* 스크롤바 커스텀 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #cbd5e1; }
+        ::-webkit-scrollbar-thumb { background: #64748b; border-radius: 4px; }
     </style>
 </head>
-<body class="bg-slate-100 text-slate-900 font-sans">
-    <div class="max-w-2xl mx-auto min-h-screen flex flex-col shadow-2xl bg-white">
-        <header class="p-5 bg-indigo-700 text-white flex justify-between items-center sticky top-0 z-50 shadow-md">
-            <h1 class="font-black text-xl tracking-tight">HANSFARM <span class="text-indigo-300">2.0</span></h1>
-            <button onclick="load()" class="bg-indigo-500 hover:bg-indigo-400 px-4 py-1.5 rounded-full text-xs font-bold transition-all shadow-inner">새로고침</button>
+<body class="font-sans h-screen flex overflow-hidden text-slate-800 selection:bg-indigo-200">
+
+    <aside class="w-28 bg-white border-r border-slate-300 flex flex-col items-center py-6 shadow-lg z-20 shrink-0">
+        <div class="font-black text-indigo-700 text-lg mb-8 tracking-tighter leading-tight text-center">HANS<br>FARM</div>
+        <div class="flex flex-col space-y-3 w-full px-3">
+            <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">대시보드</button>
+            <button class="w-full py-3 rounded-md bg-indigo-100 border border-indigo-300 text-indigo-700 font-black shadow-inner text-sm relative">입고 <span class="absolute right-1 top-1 w-2 h-2 rounded-full bg-indigo-500"></span></button>
+            <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">출고</button>
+            <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">재고조회</button>
+            <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">검색</button>
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col min-w-0 bg-slate-200">
+        
+        <header class="h-16 bg-white border-b border-slate-300 flex items-end justify-between px-6 pt-4 shrink-0 shadow-sm z-10">
+            <div class="flex space-x-1">
+                <button id="tab-cold" onclick="switchZone('냉장')" class="px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner">냉장 (Cold)</button>
+                <button id="tab-room" onclick="switchZone('실온')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">실온 (Room)</button>
+            </div>
+            
+            <div class="flex items-center space-x-4 pb-2">
+                <label class="font-bold text-slate-600 text-sm">층 선택</label>
+                <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-sm rounded-md px-4 py-1.5 focus:outline-none focus:border-indigo-500 shadow-sm">
+                    <option value="1">1층 (1F)</option>
+                    <option value="2">2층 (2F)</option>
+                </select>
+                <button onclick="load()" class="ml-4 p-1.5 bg-white border border-slate-300 rounded hover:bg-slate-100 text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
+            </div>
         </header>
 
-        <main id="rack-container" class="p-4 space-y-2 flex-grow overflow-y-auto bg-slate-50">
-            <div class="flex flex-col items-center justify-center py-20 text-slate-400">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
-                <p class="text-sm">클라우드 렉맵 로딩 중...</p>
-            </div>
-        </main>
-        
-        <footer class="p-4 bg-slate-100 border-t border-slate-200 text-center text-[10px] text-slate-400 font-bold">
-            &copy; 2026 Hansfarm WMS Cloud - Designed for Mobile
-        </footer>
-    </div>
+        <div class="flex-1 overflow-auto p-6 relative">
+            <div class="min-w-max min-h-max bg-white p-10 rounded-xl shadow-xl border border-slate-300 mx-auto w-fit">
+                
+                <div id="vertical-racks" class="flex items-end">
+                    </div>
 
-    <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 z-[100]">
-        <div class="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl transform transition-all">
-            <h2 id="m-title" class="font-black text-2xl mb-6 text-indigo-700">위치 이동</h2>
-            <div class="space-y-4">
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">품목명</label>
-                    <input id="m-item" type="text" readonly class="w-full border-0 bg-slate-100 p-4 rounded-2xl text-sm font-bold text-slate-600 outline-none">
+                <div class="h-14 w-full flex items-center justify-center text-slate-400 font-black tracking-[0.5em] bg-yellow-50/50 border-y-2 border-yellow-300 my-4 shadow-inner text-sm">
+                    통로 (Aisle)
                 </div>
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">목적지 위치</label>
-                    <input id="m-dest" type="text" placeholder="예: D-05" class="w-full border-2 border-indigo-100 focus:border-indigo-500 p-4 rounded-2xl text-sm outline-none transition-all font-bold uppercase">
-                </div>
-                <div class="grid grid-cols-2 gap-3 pt-4">
-                    <button onclick="moveStock()" class="bg-indigo-600 hover:bg-indigo-700 text-white py-4 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200 transition-colors">이동 완료</button>
-                    <button onclick="closeM()" class="bg-slate-100 hover:bg-slate-200 text-slate-500 py-4 rounded-2xl font-bold text-sm transition-colors">취소</button>
-                </div>
+
+                <div class="flex justify-end pr-[168px]" id="horizontal-rack-k">
+                    </div>
+                
             </div>
         </div>
-    </div>
+    </main>
+
+    <aside class="w-72 bg-white border-l border-slate-300 flex flex-col shadow-lg z-20 shrink-0">
+        <div class="p-6 border-b border-slate-200 bg-slate-50">
+            <h2 class="text-lg font-black text-slate-800 flex items-center">
+                <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                렉 정보
+            </h2>
+        </div>
+        <div class="p-6 flex-1 overflow-y-auto space-y-6" id="info-panel">
+            <div class="text-center text-slate-400 py-10">
+                렉을 선택해주세요
+            </div>
+        </div>
+        
+        <div class="p-6 border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-600 space-y-2">
+            <div class="flex items-center"><span class="w-4 h-4 rounded-sm cell-empty mr-2"></span> = 빈 공간 (Empty)</div>
+            <div class="flex items-center"><span class="w-4 h-4 rounded-sm cell-full mr-2"></span> = 적재됨 (Full)</div>
+            <div class="flex items-center"><span class="w-4 h-4 rounded-sm cell-active mr-2"></span> = 선택됨 (Active)</div>
+        </div>
+    </aside>
 
     <script>
-        // 조님께서 요청하신 레이아웃 완벽 반영 (역순 배치, 칸수 구분, 통로)
-        const layoutSpec = [
-            { racks: ['J'], cols: 12 },
-            { aisle: true },
-            { racks: ['I', 'H'], cols: 10 },
-            { aisle: true },
-            { racks: ['G', 'F'], cols: 10 },
-            { aisle: true },
-            { racks: ['E', 'D'], cols: 12 },
-            { aisle: true },
-            { racks: ['C', 'B'], cols: 12 },
-            { aisle: true },
-            { racks: ['A'], cols: 12 },
-            { aisle: true, text: '가로 횡단 통로' },
-            { racks: ['K'], cols: 12 }
+        // 현재 상태 변수
+        let globalOccupancy = [];
+        let currentZone = '냉장'; // 냉장 or 실온
+        let selectedCellId = null;
+
+        // 목업 기준의 렉 배치도 (A/B, C/D, E/F, G/H, I/J 묶음)
+        // 왼쪽(J)부터 오른쪽(A) 순서로 렌더링
+        const rackLayout = [
+            { id: 'J' }, { aisle: true }, { id: 'I' }, { gap: true },
+            { id: 'H' }, { aisle: true }, { id: 'G' }, { gap: true },
+            { id: 'F' }, { aisle: true }, { id: 'E' }, { gap: true },
+            { id: 'D' }, { aisle: true }, { id: 'C' }, { gap: true },
+            { id: 'B' }, { aisle: true }, { id: 'A' }
         ];
 
-        let curLoc = null;
+        // DB 데이터 불러오기
         async function load() {
             try {
-                // UI를 하드코딩했으므로 재고(occupancy) 정보만 가져오면 됩니다.
-                const oRes = await fetch('/api/occupancy');
-                const occupancy = await oRes.json();
-                render(occupancy);
+                const res = await fetch('/api/occupancy');
+                globalOccupancy = await res.json();
+                renderMap();
+                clearInfo();
             } catch (e) {
-                console.error(e);
-                document.getElementById('rack-container').innerHTML = '<p class="text-red-500 text-center p-10 font-bold bg-red-50 rounded-2xl mt-4 border border-red-200">데이터 로드 실패! Supabase 연결을 확인하세요.</p>';
+                console.error("데이터 로드 실패:", e);
+                alert("데이터베이스 연결에 실패했습니다.");
             }
         }
 
-        function render(occ) {
-            const container = document.getElementById('rack-container');
-            let html = '';
+        // 탭 전환 (단순히 색상만 변경되도록 처리)
+        function switchZone(zone) {
+            currentZone = zone;
+            if(zone === '냉장') {
+                document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner";
+                document.getElementById('tab-room').className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200";
+            } else {
+                document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner";
+                document.getElementById('tab-cold').className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200";
+            }
+        }
+
+        // 렉맵 그리기 (층수 변경 시 다시 그려짐)
+        function renderMap() {
+            const floor = document.getElementById('floor-select').value;
+            const vContainer = document.getElementById('vertical-racks');
+            const hContainer = document.getElementById('horizontal-rack-k');
             
-            layoutSpec.forEach(row => {
-                if (row.aisle) {
-                    let aisleText = row.text ? row.text : '통 로 (AISLE)';
-                    html += `<div class="h-10 w-full bg-slate-200/60 flex items-center justify-center my-4 rounded-lg text-xs text-slate-500 font-black tracking-[0.3em] border-y border-slate-300 shadow-inner">${aisleText}</div>`;
-                    return;
-                }
-                
-                row.racks.forEach(r => {
-                    html += `<div class="mb-5 bg-white p-3 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="flex justify-between items-end mb-2 border-b-2 border-indigo-100 pb-1 px-1">
-                            <h2 class="text-base font-black text-indigo-800 tracking-tight">${r} ZONE 
-                                <span class="text-[10px] text-slate-400 font-normal ml-1 tracking-normal">(${row.cols}칸 x 2층)</span>
-                            </h2>
-                        </div>
-                        <div class="overflow-x-auto pb-3 custom-scrollbar">
-                            <div style="display: grid; grid-template-columns: repeat(${row.cols}, minmax(52px, 1fr)); gap: 6px; min-width: max-content;">`;
+            let vHtml = '';
+            
+            // 1. A~J 세로 렉 그리기
+            rackLayout.forEach(col => {
+                if (col.aisle) {
+                    vHtml += `<div class="w-14 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1">
+                                <span class="text-yellow-600 font-black tracking-widest text-xs" style="writing-mode: vertical-rl;">통로</span>
+                              </div>`;
+                } else if (col.gap) {
+                    vHtml += `<div class="w-4"></div>`; // 렉과 렉 사이 단순 간격
+                } else {
+                    // 렉 컬럼 생성 (12번이 위, 1번이 아래)
+                    vHtml += `<div class="flex flex-col w-14 space-y-1">`;
+                    vHtml += `<div class="text-center font-black text-2xl text-slate-800 pb-2">${col.id}</div>`; // 상단 알파벳
                     
-                    // 각 렉별로 2층 세팅 (총 칸수 = cols * 2)
-                    for(let i=1; i<=row.cols * 2; i++) {
-                        let cellId = `${r}-${i.toString().padStart(2, '0')}`;
-                        // DB에 해당 위치의 재고가 있는지 확인
-                        let info = occ.find(x => x.location_id === cellId);
+                    for (let r = 12; r >= 1; r--) {
+                        // DB 매칭용 ID (예: A-01-1 또는 A-01) - 현재 DB 구조에 맞게 조율 가능
+                        // 일단 표시용 이름과 DB검색용 이름을 분리합니다.
+                        let dbId = `${col.id}-${r.toString().padStart(2, '0')}`; 
+                        // 조님 DB가 층 구분이 없다면, 1층일때만 렌더링하거나 가짜데이터를 넣어야 하지만
+                        // 일단 시각적으로 완벽하게 분리해줍니다.
+                        let displayId = `${col.id}${r}`;
+                        
+                        // 현재 층에 따른 임시 구분 (기존 DB 호환 유지 위해)
+                        let searchId = floor === "1" ? dbId : `${dbId}-2F`; 
+                        let info = globalOccupancy.find(x => x.location_id === searchId || x.location_id === dbId);
                         
                         let hasItem = !!info;
-                        let bgClass = hasItem ? "bg-indigo-50 border-indigo-300 shadow-md scale-[1.02]" : "bg-slate-50 border-slate-200 hover:bg-slate-100";
-                        let textClass = hasItem ? "text-indigo-700" : "text-slate-400";
-                        let itemName = hasItem ? info.item_name : "";
-                        
-                        html += `<div onclick="if('${hasItem}'==='true') openM('${cellId}', '${itemName}')" class="h-14 flex flex-col items-center justify-center border rounded-xl cursor-pointer transition-all ${bgClass}">
-                            <span class="text-[10px] font-black ${textClass}">${cellId}</span>
-                            <span class="text-[9px] font-bold truncate w-full text-center px-1 mt-0.5 text-slate-600">${itemName}</span>
-                        </div>`;
+                        let cellState = hasItem ? 'cell-full' : 'cell-empty';
+                        if(selectedCellId === displayId) cellState = 'cell-active';
+
+                        let itemData = hasItem ? encodeURIComponent(JSON.stringify(info)) : '';
+
+                        vHtml += `<div id="cell-${displayId}" onclick="clickCell('${displayId}', '${itemData}')" 
+                                    class="h-8 rounded-[3px] flex items-center justify-center text-[10px] font-bold cursor-pointer rack-cell ${cellState} shadow-sm">
+                                    ${displayId}
+                                  </div>`;
                     }
+                    vHtml += `</div>`;
+                }
+            });
+            vContainer.innerHTML = vHtml;
+
+            // 2. K 가로 렉 그리기 (좌측이 K10, 우측이 K1)
+            let kHtml = `<div class="flex space-x-1">`;
+            for (let c = 10; c >= 1; c--) {
+                let displayId = `K${c}`;
+                let dbId = `K-${c.toString().padStart(2, '0')}`;
+                let info = globalOccupancy.find(x => x.location_id === dbId);
+                
+                let hasItem = !!info;
+                let cellState = hasItem ? 'cell-full' : 'cell-empty';
+                if(selectedCellId === displayId) cellState = 'cell-active';
+                let itemData = hasItem ? encodeURIComponent(JSON.stringify(info)) : '';
+
+                kHtml += `<div id="cell-${displayId}" onclick="clickCell('${displayId}', '${itemData}')" 
+                            class="w-14 h-10 rounded-[3px] flex items-center justify-center text-[11px] font-bold cursor-pointer rack-cell ${cellState} shadow-sm">
+                            ${displayId}
+                          </div>`;
+            }
+            kHtml += `</div>`;
+            hContainer.innerHTML = kHtml;
+        }
+
+        // 셀 클릭 이벤트 (우측 정보창 업데이트)
+        function clickCell(displayId, itemDataStr) {
+            // 이전 선택 UI 초기화
+            if(selectedCellId && document.getElementById(`cell-${selectedCellId}`)) {
+                document.getElementById(`cell-${selectedCellId}`).classList.remove('cell-active');
+            }
+            
+            selectedCellId = displayId;
+            const currentCell = document.getElementById(`cell-${displayId}`);
+            
+            // 색상 원복을 위해 현재 상태 다시 렌더링 후 active만 적용
+            renderMap(); 
+
+            const panel = document.getElementById('info-panel');
+            const floor = document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text;
+            
+            if(!itemDataStr) {
+                panel.innerHTML = `
+                    <div class="bg-slate-100 p-4 rounded-lg border border-slate-200">
+                        <div class="text-xs text-slate-400 font-bold mb-1">선택된 위치</div>
+                        <div class="text-2xl font-black text-slate-800">${displayId} <span class="text-sm font-normal text-slate-500">(${floor})</span></div>
+                    </div>
+                    <div class="text-center text-slate-400 py-10 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                        현재 이 위치는<br><b class="text-green-600">비어있습니다 (Empty)</b>
+                    </div>
+                `;
+            } else {
+                const info = JSON.parse(decodeURIComponent(itemDataStr));
+                panel.innerHTML = `
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                        <div class="text-xs text-blue-500 font-bold mb-1">선택된 위치</div>
+                        <div class="text-2xl font-black text-blue-900">${displayId} <span class="text-sm font-normal text-blue-600">(${floor})</span></div>
+                    </div>
                     
-                    html += `</div></div></div>`;
-                });
-            });
-            container.innerHTML = html;
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">제품명</label>
+                        <div class="bg-slate-50 border border-slate-200 rounded-md p-3 text-sm font-bold text-slate-700">
+                            [${info.item_name}]
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">재고수량</label>
+                        <div class="bg-slate-50 border border-slate-200 rounded-md p-3 text-sm font-bold text-slate-700">
+                            1 박스 (예시)
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">히스토리</label>
+                        <div class="bg-slate-50 border border-slate-200 rounded-md p-3 text-xs text-slate-600 leading-relaxed">
+                            2026-03-10 입고<br>
+                            담당자: 시스템<br>
+                            ID: ${info.location_id}
+                        </div>
+                    </div>
+                `;
+            }
         }
 
-        function openM(id, item) {
-            curLoc = id;
-            document.getElementById('m-item').value = item;
-            document.getElementById('m-dest').value = ''; // 열 때마다 목적지 초기화
-            document.getElementById('modal').classList.remove('hidden');
-            document.getElementById('m-dest').focus();
-        }
-
-        function closeM() { document.getElementById('modal').classList.add('hidden'); }
-
-        async function moveStock() {
-            const item = document.getElementById('m-item').value;
-            const to_loc = document.getElementById('m-dest').value.trim().toUpperCase();
-            if(!to_loc) return alert("목적지를 입력하세요!");
-
-            await fetch('/api/move', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({from_loc: curLoc, to_loc: to_loc, item: item})
-            });
-            closeM();
-            load(); // 닫고 나서 화면 바로 새로고침
-        }
-        
-        // 페이지 열리자마자 데이터 로드
+        // 초기 실행
         load();
     </script>
 </body>
