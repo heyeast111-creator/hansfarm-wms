@@ -1,12 +1,10 @@
-import os
 import httpx
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 app = FastAPI()
 
-# 🔑 조님의 Supabase 정보 반영 완료!
+# 🔑 조님의 실시간 정보 반영
 SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 
@@ -21,17 +19,6 @@ class InventoryMove(BaseModel):
     from_loc: str
     to_loc: str
     item: str
-
-# Vercel 환경에서 경로를 더 잘 찾도록 수정된 로직
-@app.get("/")
-async def serve_ui():
-    # 현재 파일(index.py) 위치에서 한 단계 위로 올라가서 public/index.html 찾기
-    base_path = os.path.dirname(os.path.dirname(__file__))
-    ui_path = os.path.join(base_path, "public", "index.html")
-    
-    if os.path.exists(ui_path):
-        return FileResponse(ui_path)
-    return {"message": f"index.html을 찾을 수 없습니다! (경로: {ui_path})"}
 
 @app.get("/api/layout")
 async def get_layout():
