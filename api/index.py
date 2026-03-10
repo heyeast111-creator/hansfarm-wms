@@ -49,7 +49,7 @@ HTML_CONTENT = """
     <aside class="w-32 bg-white border-r border-slate-300 flex flex-col items-center py-6 shadow-lg z-20 shrink-0">
         
         <div class="mb-8 w-full px-4 flex justify-center">
-            <img src="/logo.png" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm">
+            <img src="/logo.jpg" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm">
         </div>
 
         <div class="flex flex-col space-y-3 w-full px-3">
