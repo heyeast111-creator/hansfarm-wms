@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# 🚨 주의: 아래 두 줄의 내용을 본인의 Supabase 정보로 꼭 변경하셔야 합니다!
+# 🔑 본인의 Supabase 정보 (반드시 양끝에 큰따옴표 " 유지)
 SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 
@@ -22,13 +22,12 @@ class InventoryMove(BaseModel):
     to_loc: str
     item: str
 
-# 로컬에서 브라우저 접속 시 UI 화면을 보여주는 라우터
 @app.get("/")
 async def serve_ui():
-    ui_path = os.path.join("public", "ui.html")
+    ui_path = os.path.join("public", "index.html")
     if os.path.exists(ui_path):
         return FileResponse(ui_path)
-    return {"message": "public/ui.html 파일을 찾을 수 없습니다."}
+    return {"message": "index.html 파일을 찾을 수 없습니다!"}
 
 @app.get("/api/layout")
 async def get_layout():
@@ -55,4 +54,3 @@ async def move_stock(data: InventoryMove):
             headers=HEADERS
         )
         return {"status": "success"}
-
