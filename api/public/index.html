@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>한스팜 클라우드 WMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+    <div class="max-w-md mx-auto min-h-screen flex flex-col shadow-2xl bg-white">
+        <header class="p-5 bg-indigo-600 text-white flex justify-between items-center sticky top-0 z-50">
+            <h1 class="font-black text-xl tracking-tight">HANSFARM <span class="text-indigo-200">2.0</span></h1>
+            <button onclick="load()" class="bg-indigo-500 hover:bg-indigo-400 px-4 py-1 rounded-full text-xs font-bold transition-all">새로고침</button>
+        </header>
+
+        <main id="rack-container" class="p-4 space-y-6 flex-grow overflow-y-auto">
+            <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-4"></div>
+                <p class="text-sm">클라우드 DB 연결 중...</p>
+            </div>
+        </main>
+        
+        <footer class="p-4 bg-slate-50 border-t border-slate-200 text-center text-[10px] text-slate-400">
+            &copy; 2026 Hansfarm WMS Cloud - Powered by Vercel
+        </footer>
+    </div>
+
+    <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-6 z-[100]">
+        <div class="bg-white p-6 rounded-3xl w-full max-w-xs shadow-2xl transform transition-all">
+            <h2 id="m-title" class="font-black text-2xl mb-6 text-indigo-600">위치 이동</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">품목명</label>
+                    <input id="m-item" type="text" readonly class="w-full border-0 bg-slate-100 p-4 rounded-2xl text-sm font-bold">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">목적지 위치</label>
+                    <input id="m-dest" type="text" placeholder="예: D-05" class="w-full border-2 border-indigo-100 focus:border-indigo-500 p-4 rounded-2xl text-sm outline-none transition-all">
+                </div>
+                <div class="grid grid-cols-2 gap-3 pt-4">
+                    <button onclick="moveStock()" class="bg-indigo-600 text-white py-4 rounded-2xl font-bold text-sm shadow-lg shadow-indigo-200">이동</button>
+                    <button onclick="closeM()" class="bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold text-sm">취소</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let curLoc = null;
+        async function load() {
+            try {
+                const [lRes, oRes] = await Promise.all([fetch('/api/layout'), fetch('/api/occupancy')]);
+                const layout = await lRes.json();
+                const occupancy = await oRes.json();
+                render(layout.cells, occupancy);
+            } catch (e) {
+                console.error(e);
+                document.getElementById('rack-container').innerHTML = '<p class="text-red-500 text-center p-10 font-bold">데이터 로드 실패! Supabase API 키를 확인하세요.</p>';
+            }
+        }
+
+        function render(cells, occ) {
+            const container = document.getElementById('rack-container');
+            container.innerHTML = '';
+            const racks = ['A','B','C','D','E','F','G','H','I'];
+            
+            racks.forEach(r => {
+                const section = document.createElement('div');
+                section.innerHTML = '<h2 class="text-xs font-black text-slate-400 mb-3 tracking-widest pl-1">'+r+' ZONE</h2>';
+                const grid = document.createElement('div');
+                grid.className = "grid grid-cols-4 gap-2";
+                
+                cells.filter(c => c.id.startsWith(r)).forEach(c => {
+                    const info = occ.find(x => x.location_id === c.id);
+                    const div = document.createElement('div');
+                    // 재고 유무에 따라 색상 분기
+                    const baseClass = "h-14 rounded-xl border flex flex-col items-center justify-center transition-all cursor-pointer shadow-sm";
+                    div.className = info 
+                        ? baseClass + " bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:scale-105" 
+                        : baseClass + " bg-white border-slate-200 text-slate-400 hover:bg-slate-50";
+                    
+                    div.innerHTML = '<span class="text-[10px] font-black">'+c.id+'</span><span class="text-[9px] truncate px-1 w-full text-center font-bold text-slate-600 mt-0.5">'+(info ? info.item_name : '')+'</span>';
+                    
+                    div.onclick = () => {
+                        if(info) openM(c.id, info.item_name);
+                    };
+                    grid.appendChild(div);
+                });
+                section.appendChild(grid);
+                container.appendChild(section);
+            });
+        }
+
+        function openM(id, item) {
+            curLoc = id;
+            document.getElementById('m-item').value = item;
+            document.getElementById('modal').classList.remove('hidden');
+            document.getElementById('m-dest').focus();
+        }
+
+        function closeM() { document.getElementById('modal').classList.add('hidden'); }
+
+        async function moveStock() {
+            const item = document.getElementById('m-item').value;
+            const to_loc = document.getElementById('m-dest').value.trim().toUpperCase();
+            if(!to_loc) return alert("목적지를 입력하세요!");
+
+            await fetch('/api/move', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({from_loc: curLoc, to_loc: to_loc, item: item})
+            });
+            closeM();
+            load();
+        }
+        load();
+    </script>
+</body>
+</html>
