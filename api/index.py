@@ -319,9 +319,9 @@ async def serve_ui():
     return HTMLResponse(content=HTML_CONTENT)
 
 # 🖼️ 이미지를 띄워주기 위한 파이썬 명령어 추가
-@app.get("/logo.png")
+@app.get("/logo.jpg")
 async def serve_logo():
-    logo_path = os.path.join("public", "logo.png")
+    logo_path = os.path.join("public", "logo.jpg")
     if os.path.exists(logo_path):
         return FileResponse(logo_path)
     return {"error": "Logo not found. Please upload logo.png to public folder."}
