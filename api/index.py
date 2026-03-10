@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# 🔑 본인의 Supabase 정보 (반드시 양끝에 큰따옴표 " 유지)
+# 🔑 조님의 Supabase 정보 반영 완료!
 SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 
@@ -22,33 +22,33 @@ class InventoryMove(BaseModel):
     to_loc: str
     item: str
 
+# Vercel 환경에서 경로를 더 잘 찾도록 수정된 로직
 @app.get("/")
 async def serve_ui():
-    ui_path = os.path.join("public", "index.html")
+    # 현재 파일(index.py) 위치에서 한 단계 위로 올라가서 public/index.html 찾기
+    base_path = os.path.dirname(os.path.dirname(__file__))
+    ui_path = os.path.join(base_path, "public", "index.html")
+    
     if os.path.exists(ui_path):
         return FileResponse(ui_path)
-    return {"message": "index.html 파일을 찾을 수 없습니다!"}
+    return {"message": f"index.html을 찾을 수 없습니다! (경로: {ui_path})"}
 
 @app.get("/api/layout")
 async def get_layout():
     async with httpx.AsyncClient() as client:
         r = await client.get(f"{SUPABASE_URL}/rest/v1/locations?select=*&order=display_order", headers=HEADERS)
-        if r.status_code != 200:
-            return {"cells": []}
-        return {"cells": r.json()}
+        return {"cells": r.json() if r.status_code == 200 else []}
 
 @app.get("/api/occupancy")
 async def get_occupancy():
     async with httpx.AsyncClient() as client:
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory?select=*", headers=HEADERS)
-        if r.status_code != 200:
-            return []
-        return r.json()
+        return r.json() if r.status_code == 200 else []
 
 @app.post("/api/move")
 async def move_stock(data: InventoryMove):
     async with httpx.AsyncClient() as client:
-        r = await client.patch(
+        await client.patch(
             f"{SUPABASE_URL}/rest/v1/inventory?location_id=eq.{data.from_loc}&item_name=eq.{data.item}",
             json={"location_id": data.to_loc},
             headers=HEADERS
