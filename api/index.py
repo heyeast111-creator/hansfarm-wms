@@ -3,6 +3,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
+from typing import List
 
 app = FastAPI()
 
@@ -17,7 +18,6 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# 데이터 수신용 모델
 class InboundData(BaseModel):
     location_id: str
     category: str
@@ -32,7 +32,6 @@ class OutboundData(BaseModel):
     item_name: str
     quantity: int
 
-# --- UI 코드 (디자인 100% 동결, 기능 JS만 추가) ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ko">
@@ -41,6 +40,7 @@ HTML_CONTENT = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HANSFARM WMS - PC Version</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body { background-color: #e2e8f0; }
         .rack-cell { transition: all 0.15s; }
@@ -54,6 +54,8 @@ HTML_CONTENT = """
 </head>
 <body class="font-sans h-screen flex overflow-hidden text-slate-800 selection:bg-indigo-200">
 
+    <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importExcel(event)">
+
     <aside class="w-32 bg-white border-r border-slate-300 flex flex-col items-center py-6 shadow-lg z-20 shrink-0">
         <div class="mb-8 w-full px-4 flex justify-center">
             <img src="/logo.jpg" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm">
@@ -62,8 +64,8 @@ HTML_CONTENT = """
             <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">대시보드</button>
             <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">재고조회</button>
             <button class="w-full py-3 rounded-md bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm">검색</button>
-            <button onclick="alert('엑셀 가져오기(Import) 기능이 연결될 예정입니다.')" class="w-full py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-sm relative">가져오기</button>
-            <button onclick="alert('엑셀 내보내기(Export) 기능이 연결될 예정입니다.')" class="w-full py-3 rounded-md bg-orange-50 border border-orange-200 text-orange-700 font-black shadow-inner text-sm relative">내보내기</button>
+            <button onclick="document.getElementById('excel-upload').click()" class="w-full py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-sm relative transition-all hover:bg-emerald-100">가져오기</button>
+            <button onclick="exportExcel()" class="w-full py-3 rounded-md bg-orange-50 border border-orange-200 text-orange-700 font-black shadow-inner text-sm relative transition-all hover:bg-orange-100">내보내기</button>
         </div>
     </aside>
 
@@ -81,7 +83,6 @@ HTML_CONTENT = """
                         선입선출 추천
                     </button>
                 </div>
-
                 <label class="font-bold text-slate-600 text-sm">층 선택</label>
                 <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-sm rounded-md px-4 py-1.5 focus:outline-none focus:border-indigo-500 shadow-sm">
                     <option value="1">1층 (1F)</option>
@@ -113,9 +114,7 @@ HTML_CONTENT = """
         </div>
         
         <div class="p-6 flex-1 overflow-y-auto" id="info-panel">
-            <div class="text-center text-slate-400 py-10 mt-10">
-                도면에서 렉을 선택해주세요
-            </div>
+            <div class="text-center text-slate-400 py-10 mt-10">도면에서 렉을 선택해주세요</div>
         </div>
         
         <div class="p-6 border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-600 space-y-2 shrink-0">
@@ -149,7 +148,6 @@ HTML_CONTENT = """
 
         async function load() {
             try {
-                // 재고와 품목 마스터 데이터를 동시에 불러옵니다.
                 const [occRes, prodRes] = await Promise.all([
                     fetch('/api/inventory'),
                     fetch('/api/products')
@@ -160,17 +158,83 @@ HTML_CONTENT = """
                 renderMap();
                 if(selectedCellId) clickCell(selectedCellId);
                 else clearInfo();
-            } catch (e) {
-                console.error("데이터 로딩 에러:", e);
-            }
+            } catch (e) { console.error("데이터 로딩 에러:", e); }
         }
 
+        // ==========================================
+        // 📊 엑셀 내보내기 (Export) 로직
+        // ==========================================
+        function exportExcel() {
+            if(globalOccupancy.length === 0) return alert("내보낼 재고 데이터가 없습니다.");
+            
+            // 엑셀용 데이터 포맷팅
+            const wsData = globalOccupancy.map(item => ({
+                "렉 위치(Location)": item.location_id,
+                "카테고리": item.category,
+                "품목명": item.item_name,
+                "적재수량": item.quantity,
+                "산란일(제조일)": item.production_date || "",
+                "비고": item.remarks || "",
+                "최초입고일시": new Date(item.created_at).toLocaleString('ko-KR')
+            }));
+
+            // SheetJS를 이용해 엑셀 파일 생성 및 다운로드
+            const ws = XLSX.utils.json_to_sheet(wsData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "현재재고현황");
+            XLSX.writeFile(wb, "HANSFARM_재고현황.xlsx");
+        }
+
+        // ==========================================
+        // 📥 엑셀 가져오기 (Import) 로직
+        // ==========================================
+        function importExcel(event) {
+            const file = event.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+                    
+                    if(json.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
+
+                    // 로딩 표시 (임시)
+                    document.getElementById('map-container').style.opacity = '0.5';
+                    
+                    // 파이썬 서버로 데이터 전송 (벌크 업로드)
+                    const res = await fetch('/api/inbound_batch', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(json)
+                    });
+                    
+                    if(res.ok) {
+                        alert(`총 ${json.length}건의 데이터가 성공적으로 업로드 되었습니다!`);
+                        load(); // 화면 새로고침
+                    } else {
+                        alert("업로드 중 서버 에러가 발생했습니다. 양식을 확인해주세요.");
+                    }
+                } catch(err) {
+                    alert("엑셀 파일을 읽는 중 오류가 발생했습니다.");
+                    console.error(err);
+                } finally {
+                    document.getElementById('map-container').style.opacity = '1';
+                    event.target.value = ''; // 파일 선택 초기화
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 기존 UI 렌더링 함수들 (동결)
         function switchZone(zone) {
             currentZone = zone;
             selectedCellId = null;
             clearInfo();
-            
-            // FIFO 버튼 제어
             const fifoBtn = document.getElementById('fifo-btn-container');
             if(zone === '냉장') {
                 fifoBtn.classList.remove('hidden');
@@ -185,9 +249,7 @@ HTML_CONTENT = """
         }
 
         function clearInfo() {
-            document.getElementById('info-panel').innerHTML = `
-                <div class="text-center text-slate-400 py-10 mt-10">도면에서 렉을 선택해주세요</div>
-            `;
+            document.getElementById('info-panel').innerHTML = `<div class="text-center text-slate-400 py-10 mt-10">도면에서 렉을 선택해주세요</div>`;
         }
 
         function renderMap() {
@@ -211,7 +273,6 @@ HTML_CONTENT = """
                         let displayId = `${col.id}${r}`;
                         let searchId = floor === "1" ? dbId : `${dbId}-2F`; 
                         
-                        // 해당 렉에 물건이 1개라도 있는지 확인
                         let items = globalOccupancy.filter(x => x.location_id === searchId);
                         let hasItem = items.length > 0;
                         
@@ -252,7 +313,6 @@ HTML_CONTENT = """
             hContainer.innerHTML = hHtml;
         }
 
-        // 우측 패널 그리기 (입고/출고 폼)
         async function clickCell(displayId, searchId) {
             selectedCellId = displayId;
             if(!searchId) {
@@ -265,7 +325,6 @@ HTML_CONTENT = """
             const panel = document.getElementById('info-panel');
             const floorName = document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text;
             
-            // 해당 렉의 물품 리스트
             const items = globalOccupancy.filter(x => x.location_id === searchId);
             
             let panelHtml = `
@@ -282,7 +341,6 @@ HTML_CONTENT = """
                 </div>
             `;
 
-            // 1. 적재된 물건이 있을 경우 (출고 리스트 뷰 + 추가 입고 버튼)
             if(items.length > 0) {
                 panelHtml += `<div class="mb-2 text-xs font-bold text-slate-500 flex justify-between items-end">
                                 <span>적재 목록 (${items.length}건)</span>
@@ -309,15 +367,9 @@ HTML_CONTENT = """
                     `;
                 });
             } else {
-                panelHtml += `
-                    <div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 mb-4">
-                        <b class="text-emerald-600 inline-block">비어있습니다 (Empty)</b>
-                    </div>
-                `;
+                panelHtml += `<div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 mb-4"><b class="text-emerald-600 inline-block">비어있습니다 (Empty)</b></div>`;
             }
 
-            // 2. 입고 폼 (빈 렉이거나 추가 입고 시)
-            // 카테고리 중복 제거 옵션 생성
             const categories = [...new Set(productMaster.map(p => p.category))];
             let catOptions = categories.map(c => `<option value="${c}">${c}</option>`).join('');
 
@@ -359,21 +411,17 @@ HTML_CONTENT = """
                     </div>
                 </div>
             `;
-            
             panel.innerHTML = panelHtml;
         }
 
-        // 드롭다운 연동 로직
         function updateProductDropdown() {
             const cat = document.getElementById('in-cat').value;
             const itemSelect = document.getElementById('in-item');
             const filtered = productMaster.filter(p => p.category === cat);
-            
             itemSelect.innerHTML = filtered.map(p => `<option value="${p.item_name}">${p.item_name}</option>`).join('');
             if(filtered.length === 0) itemSelect.innerHTML = '<option value="">품목 없음</option>';
         }
 
-        // 📥 입고 처리 API 호출
         async function processInbound(locationId) {
             const cat = document.getElementById('in-cat').value;
             const item = document.getElementById('in-item').value;
@@ -395,54 +443,38 @@ HTML_CONTENT = """
                     })
                 });
                 alert("입고 완료!");
-                load(); // 화면 갱신
+                load(); 
             } catch (e) { alert("입고 중 오류 발생!"); }
         }
 
-        // 📤 출고 처리 API 호출
         async function processOutbound(invId, itemName, maxQty, locationId) {
             if(!confirm(`[${itemName}] 전량 출고하시겠습니까?`)) return;
-
             try {
                 await fetch('/api/outbound', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        inventory_id: invId,
-                        location_id: locationId,
-                        item_name: itemName,
-                        quantity: maxQty
-                    })
+                    body: JSON.stringify({ inventory_id: invId, location_id: locationId, item_name: itemName, quantity: maxQty })
                 });
                 alert("출고 완료!");
                 load();
             } catch (e) { alert("출고 중 오류 발생!"); }
         }
 
-        // 🔔 선입선출 하이라이트 기능 (가장 오래된 산란일 찾기)
         function highlightFIFO() {
-            // 산란일이 있는 계란 데이터 필터링
             const eggs = globalOccupancy.filter(x => x.production_date);
             if(eggs.length === 0) return alert("현재 적재된 계란(산란일 데이터)이 없습니다.");
 
-            // 날짜 오름차순(오래된 순) 정렬
             eggs.sort((a, b) => new Date(a.production_date) - new Date(b.production_date));
             const oldestDate = eggs[0].production_date;
-            
-            // 가장 오래된 날짜를 가진 렉의 위치 찾기
             const targetLocations = eggs.filter(x => x.production_date === oldestDate).map(x => x.location_id);
             
             alert(`가장 오래된 산란일: ${oldestDate}\\n해당 렉을 빨간색으로 깜빡입니다!`);
 
-            // 시각적 피드백 (화면의 해당 셀을 찾아서 애니메이션 적용)
             targetLocations.forEach(loc => {
-                // loc 형식(예: A-01-2F)을 셀 ID 형식(예: A1)으로 변환
-                const is2F = loc.includes('2F');
                 let match = loc.match(/([A-Z])-([0-9]+)/);
                 if(match) {
                     let cellDisplayId = `${match[1]}${parseInt(match[2])}`;
                     let el = document.getElementById(`cell-${cellDisplayId}`);
-                    // 층이 일치할 때만 깜빡임 (임시방편, 나중엔 층 상관없이 탭 전환 등 고려 가능)
                     if(el) {
                         el.style.border = '3px solid red';
                         el.style.animation = 'pulse 1s infinite';
@@ -450,7 +482,6 @@ HTML_CONTENT = """
                 }
             });
             
-            // 깜빡임 CSS 동적 추가
             if(!document.getElementById('pulse-css')) {
                 const style = document.createElement('style');
                 style.id = 'pulse-css';
@@ -458,7 +489,6 @@ HTML_CONTENT = """
                 document.head.appendChild(style);
             }
         }
-
         load();
     </script>
 </body>
@@ -476,25 +506,21 @@ async def serve_logo():
         return FileResponse(logo_path)
     return {"error": "Logo not found."}
 
-# 1. 품목 마스터 가져오기
 @app.get("/api/products")
 async def get_products():
     async with httpx.AsyncClient() as client:
         r = await client.get(f"{SUPABASE_URL}/rest/v1/products?select=*", headers=HEADERS)
         return r.json() if r.status_code == 200 else []
 
-# 2. 전체 재고 가져오기 (새로운 테이블 연동)
 @app.get("/api/inventory")
 async def get_inventory():
     async with httpx.AsyncClient() as client:
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?select=*", headers=HEADERS)
         return r.json() if r.status_code == 200 else []
 
-# 3. 입고 처리 (재고 추가 + 히스토리 기록)
 @app.post("/api/inbound")
 async def inbound_stock(data: InboundData):
     async with httpx.AsyncClient() as client:
-        # 재고 추가
         inv_payload = {
             "location_id": data.location_id,
             "category": data.category,
@@ -504,22 +530,15 @@ async def inbound_stock(data: InboundData):
             "remarks": data.remarks
         }
         await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
-        
-        # 히스토리 기록
         log_payload = inv_payload.copy()
         log_payload["action_type"] = "입고"
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
-        
         return {"status": "success"}
 
-# 4. 출고 처리 (재고 삭제 + 히스토리 기록)
 @app.post("/api/outbound")
 async def outbound_stock(data: OutboundData):
     async with httpx.AsyncClient() as client:
-        # 재고 삭제 (이번 버전은 전량 출고)
         await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        
-        # 히스토리 기록
         log_payload = {
             "location_id": data.location_id,
             "action_type": "출고",
@@ -527,5 +546,30 @@ async def outbound_stock(data: OutboundData):
             "quantity": data.quantity
         }
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
-        
         return {"status": "success"}
+
+# ==========================================
+# 🚀 엑셀 벌크 업로드(Batch Inbound) 파이썬 통신망 추가
+# ==========================================
+@app.post("/api/inbound_batch")
+async def inbound_batch(rows: List[dict]):
+    async with httpx.AsyncClient() as client:
+        payloads = []
+        for row in rows:
+            # 엑셀의 한국어 헤더를 DB 영문 컬럼에 맞게 매핑
+            payloads.append({
+                "location_id": row.get("렉 위치(Location)", ""),
+                "category": row.get("카테고리", "미분류"),
+                "item_name": row.get("품목명", "이름없음"),
+                "quantity": int(row.get("적재수량", 1)),
+                "production_date": row.get("산란일(제조일)", None) if row.get("산란일(제조일)") else None,
+                "remarks": row.get("비고", "")
+            })
+            
+            # (옵션) 엑셀로 업로드 된 새로운 품목명이면 Product Master 테이블에도 자동 추가하도록 할 수 있습니다.
+
+        # Supabase에 리스트 형태로 던지면 한 번에 수백 개가 Insert 됩니다.
+        if payloads:
+            await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=payloads, headers=HEADERS)
+            
+        return {"status": "success", "count": len(payloads)}
