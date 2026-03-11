@@ -18,7 +18,6 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# --- 데이터 모델 세팅 ---
 class InboundData(BaseModel):
     location_id: str
     category: str
@@ -36,7 +35,7 @@ class OutboundData(BaseModel):
 class ProductData(BaseModel):
     category: str
     item_name: str
-    daily_usage: int = 0  # 🚨 일간 소모량 추가!
+    daily_usage: int = 0
 
 class TransferData(BaseModel):
     inventory_id: str
@@ -51,7 +50,6 @@ class AdjustData(BaseModel):
     item_name: str
     new_quantity: int
 
-# --- HTML/JS 프론트엔드 ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ko">
@@ -147,18 +145,12 @@ HTML_CONTENT = """
         <div id="view-safety" class="hidden flex-col h-full w-full absolute inset-0 p-8 overflow-auto z-10 bg-slate-100">
             <div class="flex justify-between items-end mb-8 border-b-2 border-slate-200 pb-4">
                 <div>
-                    <h1 class="text-3xl font-black text-slate-800 flex items-center">
-                        <svg class="w-8 h-8 mr-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        안전재고 모니터링
-                    </h1>
+                    <h1 class="text-3xl font-black text-slate-800 flex items-center"><svg class="w-8 h-8 mr-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg> 안전재고 모니터링</h1>
                     <p class="text-slate-500 font-bold mt-2">일간 소모량을 바탕으로 고갈 위험이 있는 자재를 파악합니다.</p>
                 </div>
                 <div class="flex items-center space-x-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                     <label class="font-bold text-slate-600">일괄 안전재고 확보 기준:</label>
-                    <div class="relative">
-                        <input type="number" id="safe-days-target" value="7" min="1" onchange="renderSafetyStock()" class="w-20 border-2 border-indigo-200 rounded-lg p-2 font-black text-indigo-700 text-center outline-none">
-                        <span class="absolute right-3 top-2.5 font-bold text-slate-400">일</span>
-                    </div>
+                    <div class="relative"><input type="number" id="safe-days-target" value="7" min="1" onchange="renderSafetyStock()" class="w-20 border-2 border-indigo-200 rounded-lg p-2 font-black text-indigo-700 text-center outline-none"><span class="absolute right-3 top-2.5 font-bold text-slate-400">일</span></div>
                 </div>
             </div>
             
@@ -166,16 +158,10 @@ HTML_CONTENT = """
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
-                            <th class="p-4 font-black">카테고리</th>
-                            <th class="p-4 font-black">품목명</th>
-                            <th class="p-4 font-black text-right">현재 총 재고</th>
-                            <th class="p-4 font-black text-right">일간 소모량</th>
-                            <th class="p-4 font-black text-center">예상 소진일 (버틸 수 있는 기간)</th>
-                            <th class="p-4 font-black text-center">상태</th>
+                            <th class="p-4 font-black">카테고리</th><th class="p-4 font-black">품목명</th><th class="p-4 font-black text-right">현재 총 재고</th><th class="p-4 font-black text-right">일간 소모량</th><th class="p-4 font-black text-center">예상 소진일</th><th class="p-4 font-black text-center">상태</th>
                         </tr>
                     </thead>
-                    <tbody id="safety-list" class="divide-y divide-slate-100">
-                        </tbody>
+                    <tbody id="safety-list" class="divide-y divide-slate-100"></tbody>
                 </table>
             </div>
         </div>
@@ -188,7 +174,6 @@ HTML_CONTENT = """
                     <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="pm-cat" class="w-full border border-slate-300 rounded p-3 mb-4 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-3 mb-4 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">일간 소모량 (BOM 기초데이터)</label><input type="number" id="pm-usage" value="0" min="0" class="w-full border border-slate-300 rounded p-3 mb-6 font-bold text-sm">
-                    
                     <button onclick="addProduct()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">DB에 등록하기</button>
                 </div>
                 <div class="col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200">
@@ -241,49 +226,28 @@ HTML_CONTENT = """
             else if(viewName === 'safety') renderSafetyStock();
         }
 
-        // ==========================================
-        // 🚨 1. 안전재고 모니터링 로직 추가
-        // ==========================================
         function renderSafetyStock() {
             const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7;
             const tbody = document.getElementById('safety-list');
-            
-            // 현재고량 계산 (아이템별 합산)
             let currentTotals = {};
-            globalOccupancy.forEach(item => {
-                currentTotals[item.item_name] = (currentTotals[item.item_name] || 0) + item.quantity;
-            });
+            globalOccupancy.forEach(item => { currentTotals[item.item_name] = (currentTotals[item.item_name] || 0) + item.quantity; });
 
             let html = '';
-            // 일간 소모량이 등록된 품목만 검사
             let monitoredProducts = productMaster.filter(p => p.daily_usage > 0);
             
             if(monitoredProducts.length === 0) {
-                html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 품목이 없습니다.<br>품목관리에서 일간 소모량을 먼저 등록해주세요.</td></tr>`;
+                html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 품목이 없습니다.</td></tr>`;
             } else {
                 monitoredProducts.forEach(p => {
                     let totalQty = currentTotals[p.item_name] || 0;
                     let safeDaysLeft = totalQty / p.daily_usage;
                     let isDanger = safeDaysLeft < targetDays;
-                    
-                    let statusHtml = isDanger 
-                        ? `<span class="bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-black text-xs animate-pulse">🔴 위험 (발주 요망)</span>`
-                        : `<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-xs">🟢 여유</span>`;
-                    
-                    let rowClass = isDanger ? "bg-rose-50/30" : "";
-
+                    let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-black text-xs animate-pulse">🔴 위험 (발주 요망)</span>` : `<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-xs">🟢 여유</span>`;
                     html += `
-                    <tr class="hover:bg-slate-50 transition-colors ${rowClass}">
-                        <td class="p-4 text-slate-500 text-sm font-bold">${p.category}</td>
-                        <td class="p-4 text-slate-800 font-black">${p.item_name}</td>
-                        <td class="p-4 text-right font-bold text-lg text-indigo-700">${totalQty.toLocaleString()}</td>
-                        <td class="p-4 text-right font-bold text-slate-500">${p.daily_usage.toLocaleString()} / 일</td>
-                        <td class="p-4 text-center">
-                            <div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 max-w-[150px] mx-auto overflow-hidden">
-                                <div class="h-2.5 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div>
-                            </div>
-                            <span class="text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span>
-                        </td>
+                    <tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}">
+                        <td class="p-4 text-slate-500 text-sm font-bold">${p.category}</td><td class="p-4 text-slate-800 font-black">${p.item_name}</td>
+                        <td class="p-4 text-right font-bold text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-4 text-right font-bold text-slate-500">${p.daily_usage.toLocaleString()} / 일</td>
+                        <td class="p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 max-w-[150px] mx-auto overflow-hidden"><div class="h-2.5 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td>
                         <td class="p-4 text-center">${statusHtml}</td>
                     </tr>`;
                 });
@@ -291,48 +255,27 @@ HTML_CONTENT = """
             tbody.innerHTML = html;
         }
 
-        // ==========================================
-        // 🗂️ 2. 품목 마스터 (소모량 추가)
-        // ==========================================
         function renderProductMaster() {
             document.getElementById('pm-list').innerHTML = productMaster.map(p => `
                 <div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200">
-                    <div>
-                        <span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded mr-1">${p.category}</span>
-                        <span class="font-bold text-sm text-slate-800">${p.item_name}</span>
-                        <div class="text-[10px] text-slate-500 mt-1">소모량: 하루 ${p.daily_usage}개</div>
-                    </div>
+                    <div><span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded mr-1">${p.category}</span><span class="font-bold text-sm text-slate-800">${p.item_name}</span><div class="text-[10px] text-slate-500 mt-1">소모량: 하루 ${p.daily_usage}개</div></div>
                     <button onclick="deleteProduct('${p.item_name}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                 </div>`).join('');
         }
 
         async function addProduct() {
-            const cat = document.getElementById('pm-cat').value.trim(); 
-            const name = document.getElementById('pm-name').value.trim();
-            const usage = parseInt(document.getElementById('pm-usage').value) || 0;
-
+            const cat = document.getElementById('pm-cat').value.trim(); const name = document.getElementById('pm-name').value.trim(); const usage = parseInt(document.getElementById('pm-usage').value) || 0;
             if(!cat || !name) return alert("카테고리와 품목명을 입력하세요.");
-            try { 
-                const res = await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, daily_usage: usage}) }); 
-                const data = await res.json();
+            try { const res = await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, daily_usage: usage}) }); const data = await res.json();
                 if(data.status === 'success') { alert("등록 성공!"); document.getElementById('pm-cat').value = ''; document.getElementById('pm-name').value = ''; document.getElementById('pm-usage').value = '0'; load(); } else alert("오류: " + data.message);
             } catch(e) { alert("서버 통신 실패"); }
         }
 
-        async function deleteProduct(name) {
-            if(!confirm(`[${name}] 품목을 완전히 삭제하시겠습니까?`)) return;
-            try { await fetch(`/api/products/${name}`, { method: 'DELETE' }); load(); } catch(e) { alert("삭제 실패"); }
-        }
+        async function deleteProduct(name) { if(!confirm(`[${name}] 품목을 완전히 삭제하시겠습니까?`)) return; try { await fetch(`/api/products/${name}`, { method: 'DELETE' }); load(); } catch(e) { alert("삭제 실패"); } }
 
-        // ==========================================
-        // 📊 대시보드 및 기존 로직 (동결)
-        // ==========================================
         function updateDashboard() {
-            const period = document.getElementById('dash-period').value;
-            let startDate = new Date();
-            if(period === 'daily') startDate.setDate(startDate.getDate() - 1);
-            else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7);
-            else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1);
+            const period = document.getElementById('dash-period').value; let startDate = new Date();
+            if(period === 'daily') startDate.setDate(startDate.getDate() - 1); else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7); else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1);
             let inQty = 0, outQty = 0;
             globalHistory.forEach(log => { if(new Date(log.created_at) >= startDate) { if(log.action_type === '입고') inQty += log.quantity; if(log.action_type === '출고') outQty += log.quantity; } });
             document.getElementById('dash-in').innerText = inQty + ' 박스'; document.getElementById('dash-out').innerText = outQty + ' 박스';
@@ -340,25 +283,20 @@ HTML_CONTENT = """
         }
 
         function executeSearch() {
-            const keyword = document.getElementById('search-keyword').value.trim();
-            const countStr = document.getElementById('search-count').value;
-            const count = parseInt(countStr);
-            if(!keyword || isNaN(count) || count < 1) return alert("품목명과 필요 파레트 수를 정확히 입력하세요.");
-            
+            const keyword = document.getElementById('search-keyword').value.trim(); const count = parseInt(document.getElementById('search-count').value);
+            if(!keyword || isNaN(count) || count < 1) return alert("입력을 확인하세요.");
             let matches = globalOccupancy.filter(x => x.item_name.includes(keyword) && x.production_date);
-            if(matches.length === 0) return alert("해당 품목의 산란일 데이터가 창고에 없습니다.");
+            if(matches.length === 0) return alert("산란일 데이터가 없습니다.");
             matches.sort((a, b) => new Date(a.production_date) - new Date(b.production_date));
             let targets = matches.slice(0, count);
-
-            document.getElementById('nav-inv').click();
-            alert(`가장 오래된 산란일을 가진 렉 ${targets.length}개를 찾았습니다!\\n(맵에서 붉은색 깜빡임을 확인하세요)`);
+            document.getElementById('nav-inv').click(); alert(`가장 오래된 산란일을 가진 렉 ${targets.length}개를 찾았습니다!`);
             document.querySelectorAll('.highlight-pulse').forEach(el => el.classList.remove('highlight-pulse'));
-            targets.forEach(item => {
-                let match = item.location_id.match(/([A-Z])-([0-9]+)/);
-                if(match) { let el = document.getElementById(`cell-${match[1]}${parseInt(match[2])}`); if(el) el.classList.add('highlight-pulse'); }
-            });
+            targets.forEach(item => { let match = item.location_id.match(/([A-Z])-([0-9]+)/); if(match) { let el = document.getElementById(`cell-${match[1]}${parseInt(match[2])}`); if(el) el.classList.add('highlight-pulse'); } });
         }
 
+        // ==========================================
+        // 🚀 속도 개선의 핵심: 사전식 색인 (Hash Map) 적용!
+        // ==========================================
         function switchZone(zone) {
             currentZone = zone; selectedCellId = null; clearInfo();
             const fifoBtn = document.getElementById('fifo-btn-container');
@@ -372,8 +310,12 @@ HTML_CONTENT = """
             const vContainer = document.getElementById('vertical-racks');
             const hContainer = document.getElementById('horizontal-rack');
             const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold;
-            let vHtml = '';
             
+            // 💡 병목 해결: 200번 반복 필터링 대신, 딱 1번만 읽어서 '위치 지도(Map)'를 만듭니다!
+            const occMap = {};
+            globalOccupancy.forEach(item => { occMap[item.location_id] = true; });
+
+            let vHtml = '';
             activeLayout.forEach(col => {
                 if (col.aisle) { vHtml += `<div class="w-14 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1"><span class="text-yellow-600 font-black tracking-widest text-xs" style="writing-mode: vertical-rl;">통로</span></div>`; }
                 else if (col.gap) { vHtml += `<div class="w-4"></div>`; }
@@ -383,8 +325,10 @@ HTML_CONTENT = """
                         let dbId = `${col.id}-${r.toString().padStart(2, '0')}`;
                         let displayId = `${col.id}${r}`;
                         let searchId = floor === "1" ? dbId : `${dbId}-2F`; 
-                        let items = globalOccupancy.filter(x => x.location_id === searchId);
-                        let cellState = items.length > 0 ? 'cell-full' : 'cell-empty';
+                        
+                        // 💡 병목 해결: filter() 대신 Map에서 0.001초 만에 바로 꺼냅니다!
+                        let hasItem = occMap[searchId]; 
+                        let cellState = hasItem ? 'cell-full' : 'cell-empty';
                         if(selectedCellId === displayId) cellState = 'cell-active';
                         vHtml += `<div id="cell-${displayId}" onclick="clickCell('${displayId}', '${searchId}')" class="h-8 rounded-[3px] flex items-center justify-center text-[10px] font-bold cursor-pointer rack-cell ${cellState} shadow-sm">${displayId}</div>`;
                     }
@@ -401,8 +345,10 @@ HTML_CONTENT = """
                 let displayId = `${hPrefix}${c}`;
                 let dbId = `${hPrefix}-${c.toString().padStart(2, '0')}`;
                 let searchId = floor === "1" ? dbId : `${dbId}-2F`; 
-                let items = globalOccupancy.filter(x => x.location_id === searchId);
-                let cellState = items.length > 0 ? 'cell-full' : 'cell-empty';
+                
+                // 💡 여기도 Map 적용 완료!
+                let hasItem = occMap[searchId];
+                let cellState = hasItem ? 'cell-full' : 'cell-empty';
                 if(selectedCellId === displayId) cellState = 'cell-active';
                 hHtml += `<div id="cell-${displayId}" onclick="clickCell('${displayId}', '${searchId}')" class="w-14 h-10 rounded-[3px] flex items-center justify-center text-[11px] font-bold cursor-pointer rack-cell ${cellState} shadow-sm">${displayId}</div>`;
             }
@@ -480,7 +426,6 @@ HTML_CONTENT = """
             document.getElementById('in-item').innerHTML = filtered.map(p => `<option value="${p.item_name}">${p.item_name}</option>`).join('');
         }
 
-        // 백엔드 통신
         async function processInbound(locId) {
             const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = document.getElementById('in-qty').value; const date = document.getElementById('in-date').value;
             if(!cat || !item || !qty) return alert("필수값을 입력하세요.");
@@ -502,7 +447,6 @@ HTML_CONTENT = """
             const qtyStr = prompt(`[${itemName}] 이동시킬 수량을 입력하세요. (최대 ${maxQty}박스)`, maxQty);
             if(!qtyStr) return; const qty = parseInt(qtyStr);
             if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량입니다.");
-
             const toLoc = prompt(`[${itemName}] ${qty}박스를 이동할 목적지 렉을 입력하세요\\n(입력 예시: B-02-1F)`);
             if(!toLoc) return;
             try { const res = await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty }) }); const data = await res.json();
@@ -600,7 +544,6 @@ async def inbound_stock(data: InboundData):
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "production_date": data.production_date if data.production_date else None, "remarks": data.remarks}
         res1 = await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
         if res1.status_code not in [200, 201, 204]: return {"status": "error", "message": f"재고 DB 에러: {res1.text}"}
-
         log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "production_date": data.production_date if data.production_date else None, "remarks": data.remarks}
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
         return {"status": "success"}
@@ -611,13 +554,11 @@ async def outbound_stock(data: OutboundData):
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
         inv = r.json()
         if not inv: return {"status": "error", "message": "재고를 찾을 수 없습니다."}
-        
         current_qty = inv[0]['quantity']
         if data.quantity >= current_qty:
             await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
         else:
             await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity}, headers=HEADERS)
-
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "출고", "item_name": data.item_name, "quantity": data.quantity}, headers=HEADERS)
         return {"status": "success"}
 
@@ -627,10 +568,8 @@ async def transfer_stock(data: TransferData):
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
         inv = r.json()
         if not inv: return {"status": "error", "message": "재고를 찾을 수 없습니다."}
-        
         item_data = inv[0]
         current_qty = item_data['quantity']
-
         if data.quantity >= current_qty:
             await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": data.to_location}, headers=HEADERS)
         else:
@@ -640,7 +579,6 @@ async def transfer_stock(data: TransferData):
             new_row['location_id'] = data.to_location
             new_row['quantity'] = data.quantity
             await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=new_row, headers=HEADERS)
-
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.to_location, "action_type": "이동", "item_name": data.item_name, "quantity": data.quantity, "remarks": f"From {data.from_location}"}, headers=HEADERS)
         return {"status": "success"}
 
