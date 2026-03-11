@@ -7,58 +7,28 @@ from typing import List, Optional
 
 app = FastAPI()
 
-# 🔑 조님의 실시간 데이터베이스 정보
 SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
+HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
-HEADERS = {
-    "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "return=representation"
-}
-
-# --- 데이터 모델 세팅 ---
 class InboundData(BaseModel):
-    location_id: str
-    category: str
-    item_name: str
-    quantity: int
-    production_date: Optional[str] = None
-    remarks: Optional[str] = ""
-
+    location_id: str; category: str; item_name: str; quantity: int; production_date: Optional[str] = None; remarks: Optional[str] = ""
 class OutboundData(BaseModel):
-    inventory_id: str
-    location_id: str
-    item_name: str
-    quantity: int
-
+    inventory_id: str; location_id: str; item_name: str; quantity: int
 class ProductData(BaseModel):
-    category: str
-    item_name: str
-    daily_usage: int = 0
-
+    category: str; item_name: str; daily_usage: int = 0; unit_price: int = 0  # 단가 추가
 class TransferData(BaseModel):
-    inventory_id: str
-    from_location: str
-    to_location: str
-    item_name: str
-    quantity: int
-
+    inventory_id: str; from_location: str; to_location: str; item_name: str; quantity: int
 class AdjustData(BaseModel):
-    inventory_id: str
-    location_id: str
-    item_name: str
-    new_quantity: int
+    inventory_id: str; location_id: str; item_name: str; new_quantity: int
 
-# --- HTML/JS 프론트엔드 ---
 HTML_CONTENT = """
 <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HANSFARM WMS - PC Version</title>
+    <title>HANSFARM WMS & MES - PC Version</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
@@ -86,7 +56,7 @@ HTML_CONTENT = """
             <button onclick="showView('dashboard')" class="nav-btn w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all">대시보드</button>
             <button onclick="showView('inventory')" id="nav-inv" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">재고조회</button>
             <button onclick="showView('search')" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">검색</button>
-            <button onclick="showView('safety')" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all text-rose-600">안전재고</button>
+            <button onclick="showView('safety')" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all text-rose-600">안전재고/발주</button>
             <button onclick="showView('products')" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">품목관리</button>
             <div class="my-2 border-b border-slate-200 w-full"></div>
             <button onclick="document.getElementById('excel-upload').click()" class="w-full py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-sm transition-all hover:bg-emerald-100">가져오기</button>
@@ -104,14 +74,10 @@ HTML_CONTENT = """
                 <div class="flex space-x-1">
                     <button id="tab-room" onclick="switchZone('실온')" class="px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner">실온 (Room)</button>
                     <button id="tab-cold" onclick="switchZone('냉장')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">냉장 (Cold)</button>
+                    <button id="tab-floor" onclick="switchZone('현장')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">생산 현장 (Floor)</button>
                 </div>
                 <div class="flex items-center space-x-4 pb-2">
-                    <div id="fifo-btn-container" class="hidden mr-4">
-                        <button onclick="highlightFIFO()" class="px-4 py-1.5 bg-rose-100 border border-rose-300 text-rose-700 font-black rounded-md hover:bg-rose-200 text-sm flex items-center shadow-sm">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            선입선출 추천
-                        </button>
-                    </div>
+                    <div id="fifo-btn-container" class="hidden mr-4"><button onclick="highlightFIFO()" class="px-4 py-1.5 bg-rose-100 border border-rose-300 text-rose-700 font-black rounded-md hover:bg-rose-200 text-sm flex items-center shadow-sm">선입선출 추천</button></div>
                     <label class="font-bold text-slate-600 text-sm">층 선택</label>
                     <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-sm rounded-md px-4 py-1.5 shadow-sm"><option value="1">1층 (1F)</option><option value="2">2층 (2F)</option></select>
                     <button onclick="load()" class="ml-4 p-1.5 bg-white border border-slate-300 rounded hover:bg-slate-100"><svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
@@ -120,7 +86,7 @@ HTML_CONTENT = """
             <div class="flex-1 overflow-auto p-6 relative">
                 <div class="min-w-max min-h-max bg-white p-10 rounded-xl shadow-xl border border-slate-300 mx-auto w-fit transition-all" id="map-container">
                     <div id="vertical-racks" class="flex items-end"></div>
-                    <div class="h-14 w-full flex items-center justify-center text-slate-400 font-black tracking-[0.5em] bg-yellow-50/50 border-y-2 border-yellow-300 my-4 shadow-inner text-sm">통로 (Aisle)</div>
+                    <div class="h-14 w-full flex items-center justify-center text-slate-400 font-black tracking-[0.5em] bg-yellow-50/50 border-y-2 border-yellow-300 my-4 shadow-inner text-sm" id="aisle-text">통로 (Aisle)</div>
                     <div class="flex justify-end pr-[168px]" id="horizontal-rack"></div>
                 </div>
             </div>
@@ -134,7 +100,7 @@ HTML_CONTENT = """
             
             <div class="grid grid-cols-3 gap-6 mb-6">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center justify-center">
-                    <div class="text-slate-500 font-black text-sm mb-4 w-full text-left">전체 창고 적재율</div>
+                    <div class="text-slate-500 font-black text-sm mb-4 w-full text-left">전체 창고 적재율 (현장 제외)</div>
                     <div class="relative w-36 h-36 rounded-full donut-ring flex items-center justify-center shadow-inner" id="dash-donut" style="background: conic-gradient(#10b981 0%, #e2e8f0 0%);">
                         <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
                             <span class="text-3xl font-black text-emerald-600" id="dash-cap-percent">0%</span>
@@ -142,7 +108,6 @@ HTML_CONTENT = """
                         </div>
                     </div>
                 </div>
-                
                 <div class="col-span-2 grid grid-cols-2 gap-4">
                     <div class="bg-indigo-50 p-5 rounded-2xl shadow-sm border border-indigo-100 flex flex-col justify-between">
                         <div class="flex justify-between items-center mb-2"><div class="font-black text-indigo-800">❄️ 냉장 창고 (Cold)</div><div class="text-indigo-500 font-bold text-sm" id="dash-cold-percent">0%</div></div>
@@ -162,7 +127,6 @@ HTML_CONTENT = """
                     </div>
                 </div>
             </div>
-
             <div class="grid grid-cols-2 gap-6">
                 <div class="bg-white p-6 rounded-2xl shadow-md border-l-4 border-blue-500">
                     <div class="text-slate-500 font-bold text-sm mb-1 flex items-center justify-between"><span>기간 내 총 입고량 (IN)</span><span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded font-black">파레트 단위</span></div>
@@ -173,7 +137,6 @@ HTML_CONTENT = """
                     <div class="text-4xl font-black text-rose-600 mt-2" id="dash-out">0 파레트</div>
                 </div>
             </div>
-            
             <div id="admin-dashboard-panel"></div>
         </div>
 
@@ -191,8 +154,8 @@ HTML_CONTENT = """
         <div id="view-safety" class="hidden flex-col h-full w-full absolute inset-0 p-8 overflow-auto z-10 bg-slate-100">
             <div class="flex justify-between items-end mb-8 border-b-2 border-slate-200 pb-4">
                 <div>
-                    <h1 class="text-3xl font-black text-slate-800 flex items-center"><svg class="w-8 h-8 mr-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg> 안전재고 모니터링</h1>
-                    <p class="text-slate-500 font-bold mt-2">일간 소모량을 바탕으로 고갈 위험이 있는 자재를 파악하고 알림을 보냅니다.</p>
+                    <h1 class="text-3xl font-black text-slate-800 flex items-center"><svg class="w-8 h-8 mr-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg> 자동 발주/안전재고</h1>
+                    <p class="text-slate-500 font-bold mt-2">재고 위험 시 카카오톡 발주 텍스트를 즉시 생성합니다.</p>
                 </div>
                 <div class="flex items-center space-x-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
                     <label class="font-bold text-slate-600">일괄 안전재고 기준:</label>
@@ -203,7 +166,7 @@ HTML_CONTENT = """
                 <table class="w-full text-left border-collapse">
                     <thead>
                         <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-sm">
-                            <th class="p-4 font-black">카테고리</th><th class="p-4 font-black">품목명</th><th class="p-4 font-black text-right">현재 총 재고</th><th class="p-4 font-black text-right">일간 소모량</th><th class="p-4 font-black text-center">예상 소진일</th><th class="p-4 font-black text-center">상태 및 알림</th>
+                            <th class="p-4 font-black">카테고리</th><th class="p-4 font-black">품목명</th><th class="p-4 font-black text-right">현재 총 재고</th><th class="p-4 font-black text-right">일간 소모량</th><th class="p-4 font-black text-center">예상 소진일</th><th class="p-4 font-black text-center">상태 및 발주</th>
                         </tr>
                     </thead>
                     <tbody id="safety-list" class="divide-y divide-slate-100"></tbody>
@@ -222,9 +185,10 @@ HTML_CONTENT = """
             <div class="grid grid-cols-3 gap-8">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit">
                     <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2">신규 품목 추가</h2>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="pm-cat" class="w-full border border-slate-300 rounded p-3 mb-4 font-bold text-sm">
-                    <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-3 mb-4 font-bold text-sm">
-                    <label class="block text-xs font-bold text-slate-500 mb-1">일간 소모량 (BOM 기초데이터)</label><input type="number" id="pm-usage" value="0" min="0" class="w-full border border-slate-300 rounded p-3 mb-6 font-bold text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="pm-cat" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">일간 소모량</label><input type="number" id="pm-usage" value="0" min="0" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">단가(원) - 비용계산용</label><input type="number" id="pm-price" value="0" min="0" class="w-full border border-slate-300 rounded p-2 mb-6 font-bold text-sm text-indigo-700">
                     <button onclick="addProduct()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">DB에 등록하기</button>
                 </div>
                 <div class="col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200">
@@ -237,40 +201,23 @@ HTML_CONTENT = """
 
     <aside id="right-sidebar" class="hidden w-80 bg-white border-l border-slate-300 flex-col shadow-lg z-20 shrink-0 transition-all">
         <div class="p-6 border-b border-slate-200 bg-slate-50">
-            <h2 class="text-lg font-black text-slate-800 flex items-center">
-                <svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 렉 정보
-            </h2>
+            <h2 class="text-lg font-black text-slate-800 flex items-center"><svg class="w-5 h-5 mr-2 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 위치 상세 정보</h2>
         </div>
-        <div class="p-6 flex-1 overflow-y-auto" id="info-panel"><div class="text-center text-slate-400 py-10 mt-10">도면에서 렉을 선택해주세요</div></div>
-        <div class="p-6 border-t border-slate-200 bg-slate-50 text-xs font-bold text-slate-600 space-y-2 shrink-0">
-            <div class="flex items-center"><span class="w-4 h-4 rounded-sm cell-empty mr-2"></span> = 빈 공간 (Empty)</div>
-            <div class="flex items-center"><span class="w-4 h-4 rounded-sm cell-full mr-2"></span> = 적재됨 (Full)</div>
-            <div class="flex items-center"><span class="w-4 h-4 rounded-sm cell-active mr-2"></span> = 선택됨 (Active)</div>
-        </div>
+        <div class="p-6 flex-1 overflow-y-auto" id="info-panel"><div class="text-center text-slate-400 py-10 mt-10">도면에서 위치를 선택해주세요</div></div>
     </aside>
 
     <script>
-        let globalOccupancy = []; let productMaster = []; let globalHistory = []; let currentZone = '실온'; let selectedCellId = null;
-        let isAdmin = false; // 🔒 관리자 권한 변수
+        let globalOccupancy = []; let productMaster = []; let globalHistory = []; let currentZone = '실온'; let selectedCellId = null; let isAdmin = false;
         
+        // 🚨 렉맵 레이아웃 (현장 탭 추가)
         const layoutRoom = [ { id: 'J', cols: 12 }, { aisle: true }, { id: 'I', cols: 10 }, { gap: true }, { id: 'H', cols: 10 }, { aisle: true }, { id: 'G', cols: 10 }, { gap: true }, { id: 'F', cols: 10 }, { aisle: true }, { id: 'E', cols: 12 }, { gap: true }, { id: 'D', cols: 12 }, { aisle: true }, { id: 'C', cols: 12 }, { gap: true }, { id: 'B', cols: 12 }, { aisle: true }, { id: 'A', cols: 12 } ];
         const layoutCold = [ { id: 'F', cols: 10 }, { aisle: true }, { id: 'E', cols: 12 }, { gap: true }, { id: 'D', cols: 12 }, { aisle: true }, { id: 'C', cols: 12 }, { gap: true }, { id: 'B', cols: 12 }, { aisle: true }, { id: 'A', cols: 10 } ];
+        // 현장은 라인별 구역(A구역, B구역 등)을 심플하게 박스로 제공
+        const layoutFloor = [ { id: 'FL-C', title: '❄️ 현장 대기 (냉장/원재료)', cols: 10 }, { aisle: true, text: '생산 라인 작업대' }, { id: 'FL-R', title: '☀️ 현장 대기 (실온/부자재)', cols: 10 } ];
 
-        // --- 관리자 로그인 ---
         function adminLogin() {
-            if(isAdmin) {
-                isAdmin = false; alert("관리자 모드가 해제되었습니다.");
-                document.getElementById('admin-btn').innerText = "🔒 관리자 로그인";
-                document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-slate-800 border border-slate-900 text-slate-300 font-black shadow-inner text-[11px] transition-all hover:bg-slate-700 hover:text-white";
-                load(); return;
-            }
-            const pw = prompt("관리자 비밀번호를 입력하세요.");
-            if(pw === "00700") {
-                isAdmin = true; alert("관리자 권한이 활성화되었습니다.\\n(데이터 초기화, 품목 삭제, 수량 임의 보정이 가능합니다)");
-                document.getElementById('admin-btn').innerText = "🔓 관리자 권한 (ON)";
-                document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-rose-600 border border-rose-700 text-white font-black shadow-inner text-[11px] transition-all hover:bg-rose-500 animate-pulse";
-                load();
-            } else if(pw) { alert("비밀번호가 틀렸습니다."); }
+            if(isAdmin) { isAdmin = false; alert("관리자 모드 해제"); document.getElementById('admin-btn').innerText = "🔒 관리자 로그인"; document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-slate-800 border border-slate-900 text-slate-300 font-black shadow-inner text-[11px] transition-all hover:bg-slate-700 hover:text-white"; load(); return; }
+            const pw = prompt("비밀번호 입력:"); if(pw === "1234") { isAdmin = true; alert("관리자 권한 활성화"); document.getElementById('admin-btn').innerText = "🔓 관리자 권한 (ON)"; document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-rose-600 border border-rose-700 text-white font-black shadow-inner text-[11px] transition-all hover:bg-rose-500 animate-pulse"; load(); }
         }
 
         async function load() {
@@ -279,162 +226,112 @@ HTML_CONTENT = """
                 globalOccupancy = await occRes.json(); productMaster = await prodRes.json(); globalHistory = await histRes.json();
                 renderMap(); renderProductMaster(); updateDashboard(); renderSafetyStock();
                 if(selectedCellId) clickCell(selectedCellId); else clearInfo();
-            } catch (e) { console.error("데이터 로딩 에러:", e); }
+            } catch (e) { console.error("로딩 에러:", e); }
         }
 
         function showView(viewName) {
             document.querySelectorAll('.nav-btn').forEach(btn => btn.className = "nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all");
-            let targetBtn = event.currentTarget;
-            if(!targetBtn.classList.contains('nav-btn')) targetBtn = document.getElementById('nav-inv');
+            let targetBtn = event.currentTarget; if(!targetBtn.classList.contains('nav-btn')) targetBtn = document.getElementById('nav-inv');
             targetBtn.className = "nav-btn w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all" + (viewName==='safety' ? ' text-rose-600 border-rose-200 bg-rose-50' : '');
-            
             ['view-inventory', 'view-dashboard', 'view-search', 'view-products', 'view-safety'].forEach(id => { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); });
             document.getElementById('right-sidebar').classList.add('hidden');
-            
             document.getElementById('view-' + viewName).classList.remove('hidden'); document.getElementById('view-' + viewName).classList.add('flex');
             
             if(viewName === 'inventory') { document.getElementById('right-sidebar').classList.remove('hidden'); document.getElementById('right-sidebar').classList.add('flex'); renderMap(); }
-            else if(viewName === 'products') renderProductMaster();
-            else if(viewName === 'dashboard') updateDashboard();
-            else if(viewName === 'safety') renderSafetyStock();
+            else if(viewName === 'products') renderProductMaster(); else if(viewName === 'dashboard') updateDashboard(); else if(viewName === 'safety') renderSafetyStock();
         }
 
         // ==========================================
-        // 📊 대시보드 개편 & 관리자 패널
+        // 💬 카톡 발주 텍스트 자동생성기
         // ==========================================
-        function updateDashboard() {
-            const period = document.getElementById('dash-period').value;
-            let startDate = new Date();
-            if(period === 'daily') startDate.setDate(startDate.getDate() - 1); else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7); else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1);
-            let inPallets = 0, outPallets = 0;
-            globalHistory.forEach(log => { if(new Date(log.created_at) >= startDate) { if(log.action_type === '입고') inPallets++; if(log.action_type === '출고') outPallets++; } });
-            document.getElementById('dash-in').innerText = inPallets + ' 파레트'; document.getElementById('dash-out').innerText = outPallets + ' 파레트';
-
-            let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0;
-            const occMap = {}; globalOccupancy.forEach(item => occMap[item.location_id] = true);
-
-            layoutRoom.forEach(col => { if(col.cols) { totalRoom += col.cols * 2; for(let r=1; r<=col.cols; r++) { if(occMap[`${col.id}-${r.toString().padStart(2, '0')}`]) occRoom++; if(occMap[`${col.id}-${r.toString().padStart(2, '0')}-2F`]) occRoom++; } } });
-            totalRoom += 20; for(let c=1; c<=10; c++) { if(occMap[`K-${c.toString().padStart(2, '0')}`]) occRoom++; if(occMap[`K-${c.toString().padStart(2, '0')}-2F`]) occRoom++; }
-            layoutCold.forEach(col => { if(col.cols) { totalCold += col.cols * 2; for(let r=1; r<=col.cols; r++) { if(occMap[`${col.id}-${r.toString().padStart(2, '0')}`]) occCold++; if(occMap[`${col.id}-${r.toString().padStart(2, '0')}-2F`]) occCold++; } } });
-            totalCold += 16; for(let c=1; c<=8; c++) { if(occMap[`I-${c.toString().padStart(2, '0')}`]) occCold++; if(occMap[`I-${c.toString().padStart(2, '0')}-2F`]) occCold++; }
-
-            let totalAll = totalRoom + totalCold; let occAll = occRoom + occCold; let capRate = totalAll > 0 ? Math.round((occAll / totalAll) * 100) : 0;
-
-            document.getElementById('dash-cap-percent').innerText = capRate + '%'; document.getElementById('dash-cap-text').innerText = `${occAll} / ${totalAll} 파레트`;
-            document.getElementById('dash-donut').style.background = `conic-gradient(#10b981 0% ${capRate}%, #e2e8f0 ${capRate}% 100%)`;
-
-            document.getElementById('dash-room-total').innerText = totalRoom; document.getElementById('dash-room-occ').innerText = occRoom; document.getElementById('dash-room-empty').innerText = totalRoom - occRoom; document.getElementById('dash-room-percent').innerText = totalRoom > 0 ? Math.round((occRoom/totalRoom)*100) + '%' : '0%';
-            document.getElementById('dash-cold-total').innerText = totalCold; document.getElementById('dash-cold-occ').innerText = occCold; document.getElementById('dash-cold-empty').innerText = totalCold - occCold; document.getElementById('dash-cold-percent').innerText = totalCold > 0 ? Math.round((occCold/totalCold)*100) + '%' : '0%';
-
-            // 🔒 관리자 전용 구역 렌더링
-            let adminHtml = '';
-            if(isAdmin) {
-                adminHtml = `
-                <div class="mt-8 p-6 bg-rose-50 border border-rose-200 rounded-2xl">
-                    <h3 class="text-rose-800 font-black text-lg mb-4 flex items-center">🚨 시스템 관리자 전용 구역 (데이터 강제 초기화)</h3>
-                    <div class="flex space-x-4">
-                        <button onclick="clearData('inventory')" class="bg-white border border-rose-300 text-rose-600 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-rose-100 transition-colors">📦 창고 재고 전체 삭제</button>
-                        <button onclick="clearData('history')" class="bg-white border border-rose-300 text-rose-600 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-rose-100 transition-colors">📝 히스토리 내역 전체 삭제</button>
-                    </div>
-                    <p class="text-xs text-rose-500 mt-3 font-bold">* 주의: 초기화된 데이터는 절대로 복구할 수 없습니다.</p>
-                </div>`;
-            }
-            document.getElementById('admin-dashboard-panel').innerHTML = adminHtml;
+        function generateKakaoText(itemName) {
+            const supplier = prompt(`[${itemName}] 발주 넣으실 입고처(업체명)를 입력하세요:\\n(예: 서울계란, 한스패키지 등)`);
+            if(!supplier) return;
+            const moq = prompt(`[${supplier}]에 요청할 발주 수량을 입력하세요:\\n(예: 1000박스, 5파레트 등)`, "1000개");
+            if(!moq) return;
+            const leadTime = prompt(`납기 요청일을 입력하세요:`, "최대한 빠르게");
+            
+            const text = `[발주 요청서]\n수신: ${supplier}\n\n안녕하세요, 한스팜입니다.\n아래 품목 발주 요청드립니다.\n\n- 품목명: ${itemName}\n- 발주수량: ${moq}\n- 납기요청: ${leadTime}\n\n확인 후 회신 부탁드립니다. 감사합니다.`;
+            
+            navigator.clipboard.writeText(text).then(() => {
+                alert("✅ 카카오톡 발주 멘트가 복사되었습니다!\n원하시는 채팅방에 붙여넣기(Ctrl+V) 하세요.\n\n" + text);
+            });
         }
 
-        async function clearData(target) {
-            const label = target === 'inventory' ? '현재 창고의 모든 재고를' : '모든 히스토리 내역을';
-            if(!confirm(`[경고] 정말로 ${label} 삭제하시겠습니까?\\n복구가 불가능합니다!`)) return;
-            try { 
-                await fetch(`/api/clear_data?target=${target}`, { method: 'DELETE' }); 
-                alert("초기화가 완료되었습니다."); load(); 
-            } catch(e) { alert("초기화 실패!"); }
-        }
-
-        // ==========================================
-        // 🚨 안전재고 & 발주
-        // ==========================================
         function renderSafetyStock() {
             const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7;
-            const tbody = document.getElementById('safety-list');
             let currentTotals = {}; globalOccupancy.forEach(item => { currentTotals[item.item_name] = (currentTotals[item.item_name] || 0) + item.quantity; });
             let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0);
             if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 품목이 없습니다.</td></tr>`; } 
             else {
                 monitoredProducts.forEach(p => {
                     let totalQty = currentTotals[p.item_name] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays;
-                    let actionBtn = isDanger ? `<button onclick="sendOrderAlert('${p.item_name}', ${safeDaysLeft.toFixed(1)})" class="mt-2 block w-full bg-rose-500 hover:bg-rose-600 text-white text-[10px] px-2 py-1.5 rounded shadow-sm font-bold transition-colors">이메일 발주알림 전송</button>` : '';
+                    let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 카톡 발주 복사</button>` : '';
                     let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-black text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-xs">🟢 여유</span>`;
                     html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-4 text-slate-500 text-sm font-bold">${p.category}</td><td class="p-4 text-slate-800 font-black">${p.item_name}</td><td class="p-4 text-right font-bold text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-4 text-right font-bold text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 max-w-[150px] mx-auto overflow-hidden"><div class="h-2.5 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-4 text-center">${statusHtml}</td></tr>`;
                 });
             }
-            tbody.innerHTML = html;
-        }
-
-        function sendOrderAlert(itemName, days) { if(confirm(`[${itemName}] 발주 긴급 알림을 전송하시겠습니까?`)) { alert(`✅ 알림 전송 완료!\\n\\n"⚠️ 긴급: ${itemName} 품목의 재고가 ${days}일치 밖에 남지 않았습니다. 발주를 진행해주세요."`); } }
-
-        // ==========================================
-        // 🗂️ 품목 관리 (엑셀 I/O + 🔒 관리자 제어)
-        // ==========================================
-        function renderProductMaster() {
-            document.getElementById('pm-list').innerHTML = productMaster.map(p => {
-                // 🔒 관리자일 때만 삭제 버튼 표시
-                let delBtn = isAdmin ? `<button onclick="deleteProduct('${p.item_name}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>` : '';
-                return `<div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200"><div><span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded mr-1">${p.category}</span><span class="font-bold text-sm text-slate-800">${p.item_name}</span><div class="text-[10px] text-slate-500 mt-1">소모량: 하루 ${p.daily_usage}개</div></div>${delBtn}</div>`;
-            }).join('');
-        }
-
-        async function addProduct() {
-            const cat = document.getElementById('pm-cat').value.trim(); const name = document.getElementById('pm-name').value.trim(); const usage = parseInt(document.getElementById('pm-usage').value) || 0;
-            if(!cat || !name) return alert("카테고리와 품목명을 입력하세요.");
-            try { const res = await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, daily_usage: usage}) }); const data = await res.json();
-                if(data.status === 'success') { alert("등록 성공!"); document.getElementById('pm-cat').value = ''; document.getElementById('pm-name').value = ''; document.getElementById('pm-usage').value = '0'; load(); } else alert("오류: " + data.message);
-            } catch(e) { alert("서버 통신 실패"); }
-        }
-        async function deleteProduct(name) { if(!confirm(`[${name}] 품목을 완전히 삭제하시겠습니까?`)) return; try { await fetch(`/api/products/${name}`, { method: 'DELETE' }); load(); } catch(e) { alert("삭제 실패"); } }
-
-        function exportProductsExcel() {
-            let wsData = productMaster.length === 0 ? [{ "카테고리": "", "품목명": "", "일간소모량": "" }] : productMaster.map(p => ({ "카테고리": p.category, "품목명": p.item_name, "일간소모량": p.daily_usage }));
-            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "품목마스터"); XLSX.writeFile(wb, "품목마스터_양식.xlsx");
-        }
-        function importProductsExcel(e) {
-            const file = e.target.files[0]; if(!file) return;
-            const reader = new FileReader();
-            reader.onload = async function(ev) {
-                const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'});
-                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                if(json.length > 0) { await fetch('/api/products_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); alert("품목 대량 업로드 완료!"); load(); }
-            };
-            reader.readAsArrayBuffer(file); e.target.value = '';
+            document.getElementById('safety-list').innerHTML = html;
         }
 
         // ==========================================
-        // ⚡ 재고맵 및 검색
+        // 엑셀 관련 (비용 계산 포함)
         // ==========================================
-        function executeSearch() {
-            const keyword = document.getElementById('search-keyword').value.trim(); const count = parseInt(document.getElementById('search-count').value);
-            if(!keyword || isNaN(count) || count < 1) return alert("입력을 확인하세요.");
-            let matches = globalOccupancy.filter(x => x.item_name.includes(keyword) && x.production_date);
-            if(matches.length === 0) return alert("산란일 데이터가 없습니다.");
-            matches.sort((a, b) => new Date(a.production_date) - new Date(b.production_date));
-            let targets = matches.slice(0, count);
-            document.getElementById('nav-inv').click(); alert(`가장 오래된 산란일을 가진 렉 ${targets.length}개를 찾았습니다!`);
-            document.querySelectorAll('.highlight-pulse').forEach(el => el.classList.remove('highlight-pulse'));
-            targets.forEach(item => { let match = item.location_id.match(/([A-Z])-([0-9]+)/); if(match) { let el = document.getElementById(`cell-${match[1]}${parseInt(match[2])}`); if(el) el.classList.add('highlight-pulse'); } });
+        function exportExcel() {
+            let wsData = [];
+            if(globalOccupancy.length === 0) {
+                alert("재고가 없어 양식만 다운로드합니다.");
+                wsData = [{ "렉 위치": "", "카테고리": "", "품목명": "", "수량": "", "단가(원)": "", "총비용(원)": "", "산란일": "", "입고처(비고)": "" }];
+            } else {
+                wsData = globalOccupancy.map(item => {
+                    let pInfo = productMaster.find(p => p.item_name === item.item_name);
+                    let price = pInfo ? pInfo.unit_price : 0;
+                    return { "렉 위치": item.location_id, "카테고리": item.category, "품목명": item.item_name, "수량": item.quantity, "단가(원)": price, "총비용(원)": price * item.quantity, "산란일": item.production_date || "", "입고처(비고)": item.remarks || "" };
+                });
+            }
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "재고 및 자산"); XLSX.writeFile(wb, "한스팜_재고자산현황.xlsx");
         }
 
+        // ==========================================
+        // ⚡ 렉맵 & 현장 탭 (Floor) 렌더링
+        // ==========================================
         function switchZone(zone) {
             currentZone = zone; selectedCellId = null; clearInfo();
-            const fifoBtn = document.getElementById('fifo-btn-container');
-            if(zone === '냉장') { fifoBtn.classList.remove('hidden'); document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('tab-room').className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; }
-            else { fifoBtn.classList.add('hidden'); document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('tab-cold').className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; }
+            ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => { document.getElementById(id).className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; });
+            if(zone === '실온') { document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); }
+            else if(zone === '냉장') { document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.remove('hidden'); }
+            else if(zone === '현장') { document.getElementById('tab-floor').className = "px-8 py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); }
             renderMap();
         }
 
         function renderMap() {
-            const floor = document.getElementById('floor-select').value; const vContainer = document.getElementById('vertical-racks'); const hContainer = document.getElementById('horizontal-rack'); const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold;
+            const floor = document.getElementById('floor-select').value; const vContainer = document.getElementById('vertical-racks'); const hContainer = document.getElementById('horizontal-rack'); 
             const occMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; });
-            let vHtml = '';
+            let vHtml = ''; hContainer.innerHTML = '';
+            
+            // 현장 탭일 경우 렌더링 로직 완전히 다름
+            if(currentZone === '현장') {
+                document.getElementById('aisle-text').innerText = "생산 라인 (Production Line)";
+                layoutFloor.forEach(col => {
+                    if(col.aisle) { vHtml += `<div class="w-14 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-2"><span class="text-yellow-600 font-black tracking-widest text-xs" style="writing-mode: vertical-rl;">${col.text}</span></div>`; }
+                    else if(col.gap) { vHtml += `<div class="w-8"></div>`; }
+                    else {
+                        vHtml += `<div class="flex flex-col w-16 space-y-1 justify-end"><div class="text-center font-black text-xs text-emerald-800 pb-2 bg-emerald-100 rounded-t-lg">${col.title}</div>`;
+                        for (let r = col.cols; r >= 1; r--) {
+                            let dbId = `${col.id}-${r.toString().padStart(2, '0')}`; let searchId = dbId; // 현장은 층 구분이 의미없음
+                            let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty';
+                            if(selectedCellId === dbId) cellState = 'cell-active';
+                            vHtml += `<div id="cell-${dbId}" onclick="clickCell('${dbId}', '${searchId}')" class="h-12 rounded-lg border-2 flex flex-col items-center justify-center text-[10px] font-bold cursor-pointer rack-cell ${cellState} shadow-md"><span class="text-emerald-600">구역</span>${r}</div>`;
+                        }
+                        vHtml += `</div>`;
+                    }
+                });
+                vContainer.innerHTML = vHtml; return;
+            }
+
+            // 일반 냉장/실온 렌더링
+            document.getElementById('aisle-text').innerText = "통로 (Aisle)";
+            const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold;
             activeLayout.forEach(col => {
                 if (col.aisle) { vHtml += `<div class="w-14 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1"><span class="text-yellow-600 font-black tracking-widest text-xs" style="writing-mode: vertical-rl;">통로</span></div>`; }
                 else if (col.gap) { vHtml += `<div class="w-4"></div>`; }
@@ -465,7 +362,7 @@ HTML_CONTENT = """
             selectedCellId = displayId;
             if(!searchId) { const floor = document.getElementById('floor-select').value; const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${p1}-${p2.padStart(2, '0')}`); searchId = floor === "1" ? baseId : `${baseId}-2F`; }
             renderMap(); 
-            const panel = document.getElementById('info-panel'); const floorName = document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text;
+            const panel = document.getElementById('info-panel'); const floorName = currentZone === '현장' ? '생산현장' : document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text;
             const items = globalOccupancy.filter(x => x.location_id === searchId);
             
             let panelHtml = `<div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-4"><div class="flex justify-between items-start"><div><div class="text-[10px] text-indigo-500 font-bold mb-1">선택된 위치</div><div class="text-3xl font-black text-indigo-900">${displayId}</div></div><div class="text-right"><span class="inline-block bg-white text-indigo-700 text-xs font-bold px-2 py-1 rounded shadow-sm border border-indigo-100">${floorName}</span></div></div></div>`;
@@ -474,19 +371,18 @@ HTML_CONTENT = """
                 panelHtml += `<div class="mb-2 text-xs font-bold text-slate-500">적재 목록 (${items.length}건)</div>`;
                 items.forEach(item => {
                     let dateHtml = item.production_date ? `<div class="text-xs text-rose-600 font-bold mt-1">산란일: ${item.production_date}</div>` : '';
-                    // 🔒 관리자일 때만 보정 버튼 표시
+                    let pInfo = productMaster.find(p => p.item_name === item.item_name); let cost = pInfo ? (pInfo.unit_price * item.quantity).toLocaleString() : '0';
                     let adjustBtn = isAdmin ? `<button onclick="processAdjust('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="text-[9px] text-slate-400 font-normal underline hover:text-indigo-600 ml-2">수량 보정</button>` : '';
                     panelHtml += `
                         <div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mb-3">
                             <div class="flex justify-between items-start mb-2">
-                                <div><span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span>
-                                <div class="font-black text-sm text-slate-800 mt-1">${item.item_name}${adjustBtn}</div></div>
+                                <div><span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span><div class="font-black text-sm text-slate-800 mt-1">${item.item_name}${adjustBtn}</div><div class="text-[10px] text-slate-400">입고처: ${item.remarks||'없음'} (총 ${cost}원)</div></div>
                                 <div class="text-right"><div class="text-sm font-bold text-indigo-600">${item.quantity} 박스</div></div>
                             </div>
                             ${dateHtml}
                             <div class="flex space-x-2 mt-3 border-t pt-2">
-                                <button onclick="processTransfer('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[11px] font-bold transition-colors">위치 이동</button>
-                                <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[11px] font-bold transition-colors">선택 출고</button>
+                                <button onclick="processTransfer('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[11px] font-bold transition-colors">위치 이동 (현장으로 빼기)</button>
+                                <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[11px] font-bold transition-colors">선택 출고 (생산완료)</button>
                             </div>
                         </div>`;
                 });
@@ -497,67 +393,59 @@ HTML_CONTENT = """
                 <div class="mt-4 pt-4 border-t border-slate-200">
                     <h3 class="text-sm font-black text-slate-700 mb-3 flex items-center"><svg class="w-4 h-4 mr-1 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 신규 입고</h3>
                     <div class="space-y-2">
-                        <div class="flex space-x-2">
-                            <div class="w-1/3"><label class="block text-[10px] font-bold text-slate-400 mb-1">카테고리</label><select id="in-cat" onchange="updateProductDropdown()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="">선택</option>${catOptions}</select></div>
-                            <div class="w-2/3"><label class="block text-[10px] font-bold text-slate-400 mb-1">품목명</label><select id="in-item" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="">카테고리 선택</option></select></div>
-                        </div>
-                        <div class="flex space-x-2">
-                            <div class="w-1/2"><label class="block text-[10px] font-bold text-slate-400 mb-1">수량</label><input type="number" id="in-qty" value="1" min="1" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"></div>
-                            <div class="w-1/2"><label class="block text-[10px] font-bold text-slate-400 mb-1">산란일</label><input type="date" id="in-date" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"></div>
-                        </div>
+                        <div class="flex space-x-2"><div class="w-1/3"><label class="block text-[10px] font-bold text-slate-400 mb-1">카테고리</label><select id="in-cat" onchange="updateProductDropdown()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="">선택</option>${catOptions}</select></div><div class="w-2/3"><label class="block text-[10px] font-bold text-slate-400 mb-1">품목명</label><select id="in-item" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="">선택 대기</option></select></div></div>
+                        <div class="flex space-x-2"><div class="w-1/2"><label class="block text-[10px] font-bold text-slate-400 mb-1">수량</label><input type="number" id="in-qty" value="1" min="1" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"></div><div class="w-1/2"><label class="block text-[10px] font-bold text-slate-400 mb-1">산란일</label><input type="date" id="in-date" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"></div></div>
+                        <div><label class="block text-[10px] font-bold text-rose-500 mb-1">입고처 (비고)</label><input type="text" id="in-remark" placeholder="발주/입고처 입력" class="w-full border border-rose-300 bg-rose-50 rounded p-1.5 text-xs font-bold"></div>
                         <button onclick="processInbound('${searchId}')" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg font-black shadow-md transition-colors text-sm mt-1">입고 처리</button>
                     </div>
                 </div>`;
-            
-            let locHistory = globalHistory.filter(h => h.location_id === searchId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
-            let histHtml = '<div class="mt-6 pt-4 border-t border-slate-200"><h3 class="text-sm font-black text-slate-700 mb-3 flex items-center"><svg class="w-4 h-4 mr-1 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 최근 내역 (최대 5건)</h3><div class="space-y-2">';
-            if(locHistory.length > 0) {
-                locHistory.forEach(h => {
-                    let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : 'text-blue-600');
-                    let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
-                    histHtml += `<div class="bg-white p-2 border border-slate-200 rounded text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700">${h.item_name} <span class="text-slate-400">(${h.quantity})</span></span></div>`;
-                });
-            } else { histHtml += `<div class="text-xs text-slate-400 text-center py-4">기록이 없습니다.</div>`; }
-            histHtml += '</div></div>';
-            panelHtml += histHtml;
-
             panel.innerHTML = panelHtml;
         }
 
+        // ==========================================
+        // 통신 로직 및 품목 렌더링
+        // ==========================================
         function clearInfo() { document.getElementById('info-panel').innerHTML = `<div class="text-center text-slate-400 py-10 mt-10">도면에서 렉을 선택해주세요</div>`; }
         function updateProductDropdown() { const cat = document.getElementById('in-cat').value; document.getElementById('in-item').innerHTML = productMaster.filter(p => p.category === cat).map(p => `<option value="${p.item_name}">${p.item_name}</option>`).join(''); }
 
-        // ==========================================
-        // 빈칸 양식 다운로드 로직 추가
-        // ==========================================
-        function exportExcel() {
-            let wsData = [];
-            if(globalOccupancy.length === 0) {
-                alert("현재 창고에 재고가 없습니다. 엑셀 빈 양식만 다운로드합니다.");
-                wsData = [{ "렉 위치": "", "카테고리": "", "품목명": "", "수량": "", "산란일": "", "비고": "" }];
-            } else {
-                wsData = globalOccupancy.map(item => ({ "렉 위치": item.location_id, "카테고리": item.category, "품목명": item.item_name, "수량": item.quantity, "산란일": item.production_date || "", "비고": item.remarks || "" }));
-            }
-            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "재고"); XLSX.writeFile(wb, "재고현황.xlsx");
-        }
-        function importExcel(e) {
-            const file = e.target.files[0]; if(!file) return;
-            const reader = new FileReader();
-            reader.onload = async function(ev) {
-                const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'});
-                const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                if(json.length > 0) { await fetch('/api/inbound_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); alert("재고 업로드 완료!"); load(); }
-            };
-            reader.readAsArrayBuffer(file); e.target.value = '';
+        function renderProductMaster() {
+            document.getElementById('pm-list').innerHTML = productMaster.map(p => {
+                let delBtn = isAdmin ? `<button onclick="deleteProduct('${p.item_name}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>` : '';
+                return `<div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200"><div><span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded mr-1">${p.category}</span><span class="font-bold text-sm text-slate-800">${p.item_name}</span><div class="text-[10px] text-slate-500 mt-1">소모량: ${p.daily_usage}개 | 단가: ${p.unit_price.toLocaleString()}원</div></div>${delBtn}</div>`;
+            }).join('');
         }
 
-        async function processInbound(locId) { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = document.getElementById('in-qty').value; const date = document.getElementById('in-date').value; if(!cat || !item || !qty) return alert("필수값을 입력하세요."); try { await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: parseInt(qty), production_date: date || null }) }); alert("입고 완료!"); load(); } catch(e) {} }
-        async function processOutbound(invId, itemName, maxQty, locId) { const qtyStr = prompt(`[${itemName}] 출고할 수량을 입력하세요. (최대 ${maxQty}박스)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량입니다."); try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty }) }); alert("출고 완료!"); load(); } catch(e) {} }
-        async function processTransfer(invId, itemName, maxQty, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량을 입력하세요. (최대 ${maxQty}박스)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량입니다."); const toLoc = prompt(`[${itemName}] ${qty}박스를 이동할 목적지 렉을 입력하세요\\n(입력 예시: B-02-1F)`); if(!toLoc) return; try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty }) }); alert("이동 완료!"); load(); } catch(e) {} }
-        async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`[${itemName}] 실제 창고에 있는 정확한 수량을 입력하세요.\\n(현재 전산 수량: ${currentQty}박스)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return alert("잘못된 수량입니다."); try { await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); alert("수량 보정 완료!"); load(); } catch(e) {} }
+        async function addProduct() {
+            const cat = document.getElementById('pm-cat').value.trim(); const name = document.getElementById('pm-name').value.trim(); const usage = parseInt(document.getElementById('pm-usage').value) || 0; const price = parseInt(document.getElementById('pm-price').value) || 0;
+            if(!cat || !name) return alert("필수 입력 누락");
+            try { await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, daily_usage: usage, unit_price: price}) }); alert("등록 완료"); load(); } catch(e) {}
+        }
+        async function deleteProduct(name) { if(!confirm("완전히 삭제하시겠습니까?")) return; try { await fetch(`/api/products/${name}`, { method: 'DELETE' }); load(); } catch(e) {} }
 
-        load(); // 기본 실행 (초기화면 대시보드로)
-        showView('dashboard');
+        async function processInbound(locId) { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = document.getElementById('in-qty').value; const date = document.getElementById('in-date').value; const rm = document.getElementById('in-remark').value; if(!cat || !item || !qty) return alert("필수값 입력 요망"); try { await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: parseInt(qty), production_date: date || null, remarks: rm }) }); alert("입고 완료!"); load(); } catch(e) {} }
+        async function processOutbound(invId, itemName, maxQty, locId) { const qtyStr = prompt(`[${itemName}] 출고/생산 소진할 수량을 입력하세요. (최대 ${maxQty}박스)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty }) }); alert("출고 완료!"); load(); } catch(e) {} }
+        async function processTransfer(invId, itemName, maxQty, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량을 입력하세요. (최대 ${maxQty}박스)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}박스를 이동할 목적지를 입력하세요\\n(창고 렉 예시: B-02-1F)\\n(현장 구역 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty }) }); alert("이동 완료!"); load(); } catch(e) {} }
+        async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty}박스)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); alert("보정 완료!"); load(); } catch(e) {} }
+
+        // 대시보드 업데이트 & 기타 유지
+        function updateDashboard() {
+            const period = document.getElementById('dash-period').value; let startDate = new Date(); if(period === 'daily') startDate.setDate(startDate.getDate() - 1); else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7); else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1);
+            let inPallets = 0, outPallets = 0; globalHistory.forEach(log => { if(new Date(log.created_at) >= startDate) { if(log.action_type === '입고') inPallets++; if(log.action_type === '출고') outPallets++; } }); document.getElementById('dash-in').innerText = inPallets + ' 파레트'; document.getElementById('dash-out').innerText = outPallets + ' 파레트';
+            let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0; const occMap = {}; globalOccupancy.forEach(item => occMap[item.location_id] = true);
+            layoutRoom.forEach(col => { if(col.cols) { totalRoom += col.cols * 2; for(let r=1; r<=col.cols; r++) { if(occMap[`${col.id}-${r.toString().padStart(2, '0')}`]) occRoom++; if(occMap[`${col.id}-${r.toString().padStart(2, '0')}-2F`]) occRoom++; } } }); totalRoom += 20; for(let c=1; c<=10; c++) { if(occMap[`K-${c.toString().padStart(2, '0')}`]) occRoom++; if(occMap[`K-${c.toString().padStart(2, '0')}-2F`]) occRoom++; }
+            layoutCold.forEach(col => { if(col.cols) { totalCold += col.cols * 2; for(let r=1; r<=col.cols; r++) { if(occMap[`${col.id}-${r.toString().padStart(2, '0')}`]) occCold++; if(occMap[`${col.id}-${r.toString().padStart(2, '0')}-2F`]) occCold++; } } }); totalCold += 16; for(let c=1; c<=8; c++) { if(occMap[`I-${c.toString().padStart(2, '0')}`]) occCold++; if(occMap[`I-${c.toString().padStart(2, '0')}-2F`]) occCold++; }
+            let totalAll = totalRoom + totalCold; let occAll = occRoom + occCold; let capRate = totalAll > 0 ? Math.round((occAll / totalAll) * 100) : 0;
+            document.getElementById('dash-cap-percent').innerText = capRate + '%'; document.getElementById('dash-cap-text').innerText = `${occAll} / ${totalAll} 파레트`; document.getElementById('dash-donut').style.background = `conic-gradient(#10b981 0% ${capRate}%, #e2e8f0 ${capRate}% 100%)`;
+            document.getElementById('dash-room-total').innerText = totalRoom; document.getElementById('dash-room-occ').innerText = occRoom; document.getElementById('dash-room-empty').innerText = totalRoom - occRoom; document.getElementById('dash-room-percent').innerText = totalRoom > 0 ? Math.round((occRoom/totalRoom)*100) + '%' : '0%';
+            document.getElementById('dash-cold-total').innerText = totalCold; document.getElementById('dash-cold-occ').innerText = occCold; document.getElementById('dash-cold-empty').innerText = totalCold - occCold; document.getElementById('dash-cold-percent').innerText = totalCold > 0 ? Math.round((occCold/totalCold)*100) + '%' : '0%';
+            document.getElementById('admin-dashboard-panel').innerHTML = isAdmin ? `<div class="mt-8 p-6 bg-rose-50 border border-rose-200 rounded-2xl"><h3 class="text-rose-800 font-black text-lg mb-4 flex items-center">🚨 시스템 관리자 전용 구역</h3><div class="flex space-x-4"><button onclick="clearData('inventory')" class="bg-white border border-rose-300 text-rose-600 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-rose-100 transition-colors">📦 창고 재고 전체 삭제</button><button onclick="clearData('history')" class="bg-white border border-rose-300 text-rose-600 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-rose-100 transition-colors">📝 히스토리 내역 전체 삭제</button></div></div>` : '';
+        }
+
+        async function clearData(target) { if(!confirm(`정말 삭제하시겠습니까?`)) return; try { await fetch(`/api/clear_data?target=${target}`, { method: 'DELETE' }); alert("초기화 완료"); load(); } catch(e) {} }
+        
+        function highlightFIFO() { const eggs = globalOccupancy.filter(x => x.production_date); if(eggs.length === 0) return alert("데이터 없음"); eggs.sort((a, b) => new Date(a.production_date) - new Date(b.production_date)); const oldestDate = eggs[0].production_date; alert(`오래된 산란일: ${oldestDate}\\n깜빡입니다!`); eggs.filter(x => x.production_date === oldestDate).map(x => x.location_id).forEach(loc => { let match = loc.match(/([A-Z])-([0-9]+)/) || loc.match(/(FL-[CR]-[0-9]+)/); if(match) { let elId = match[0].startsWith('FL') ? `cell-${match[0]}` : `cell-${match[1]}${parseInt(match[2])}`; let el = document.getElementById(elId); if(el) el.classList.add('highlight-pulse'); } }); }
+
+        load(); showView('dashboard');
     </script>
 </body>
 </html>
@@ -581,18 +469,17 @@ async def get_products():
 @app.post("/api/products")
 async def add_product(data: ProductData):
     async with httpx.AsyncClient() as client:
-        res = await client.post(f"{SUPABASE_URL}/rest/v1/products", json={"category": data.category, "item_name": data.item_name, "daily_usage": data.daily_usage}, headers=HEADERS)
+        res = await client.post(f"{SUPABASE_URL}/rest/v1/products", json={"category": data.category, "item_name": data.item_name, "daily_usage": data.daily_usage, "unit_price": data.unit_price}, headers=HEADERS)
         if res.status_code in [200, 201, 204]: return {"status": "success"}
         return {"status": "error", "message": res.text}
 
-# 🚀 품목 마스터 대량(엑셀) 업로드 (중복 무시 로직 적용)
 @app.post("/api/products_batch")
 async def products_batch(rows: List[dict]):
     async with httpx.AsyncClient() as client:
-        payloads = [{"category": r.get("카테고리", "미분류"), "item_name": r.get("품목명", ""), "daily_usage": int(r.get("일간소모량", 0))} for r in rows if r.get("품목명")]
+        payloads = [{"category": r.get("카테고리", "미분류"), "item_name": r.get("품목명", ""), "daily_usage": int(r.get("일간소모량", 0)), "unit_price": int(r.get("단가(비용)", 0))} for r in rows if r.get("품목명")]
         if payloads:
             headers = HEADERS.copy()
-            headers["Prefer"] = "resolution=ignore-duplicates" # 중복된 이름이 들어오면 에러 안 내고 그냥 스킵!
+            headers["Prefer"] = "resolution=ignore-duplicates"
             await client.post(f"{SUPABASE_URL}/rest/v1/products", json=payloads, headers=headers)
         return {"status": "success"}
 
@@ -618,8 +505,9 @@ async def get_history():
 async def inbound_stock(data: InboundData):
     async with httpx.AsyncClient() as client:
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "production_date": data.production_date if data.production_date else None, "remarks": data.remarks}
-        res1 = await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
-        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "production_date": data.production_date if data.production_date else None, "remarks": data.remarks}
+        await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
+        log_payload = inv_payload.copy()
+        log_payload["action_type"] = "입고"
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
         return {"status": "success"}
 
@@ -629,10 +517,8 @@ async def outbound_stock(data: OutboundData):
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
         inv = r.json()
         current_qty = inv[0]['quantity']
-        if data.quantity >= current_qty:
-            await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        else:
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity}, headers=HEADERS)
+        if data.quantity >= current_qty: await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
+        else: await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity}, headers=HEADERS)
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "출고", "item_name": data.item_name, "quantity": data.quantity}, headers=HEADERS)
         return {"status": "success"}
 
@@ -643,14 +529,12 @@ async def transfer_stock(data: TransferData):
         inv = r.json()
         item_data = inv[0]
         current_qty = item_data['quantity']
-        if data.quantity >= current_qty:
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": data.to_location}, headers=HEADERS)
+        if data.quantity >= current_qty: await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": data.to_location}, headers=HEADERS)
         else:
             await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity}, headers=HEADERS)
             new_row = item_data.copy()
             del new_row['id']; del new_row['created_at']
-            new_row['location_id'] = data.to_location
-            new_row['quantity'] = data.quantity
+            new_row['location_id'] = data.to_location; new_row['quantity'] = data.quantity
             await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=new_row, headers=HEADERS)
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.to_location, "action_type": "이동", "item_name": data.item_name, "quantity": data.quantity, "remarks": f"From {data.from_location}"}, headers=HEADERS)
         return {"status": "success"}
@@ -665,16 +549,13 @@ async def adjust_stock(data: AdjustData):
 @app.post("/api/inbound_batch")
 async def inbound_batch(rows: List[dict]):
     async with httpx.AsyncClient() as client:
-        payloads = [{"location_id": r.get("렉 위치", ""), "category": r.get("카테고리", "미분류"), "item_name": r.get("품목명", ""), "quantity": int(r.get("수량", 1)), "production_date": r.get("산란일", None) if r.get("산란일") else None} for r in rows]
+        payloads = [{"location_id": r.get("렉 위치", ""), "category": r.get("카테고리", "미분류"), "item_name": r.get("품목명", ""), "quantity": int(r.get("수량", 1)), "production_date": r.get("산란일", None) if r.get("산란일") else None, "remarks": r.get("입고처(비고)", "")} for r in rows]
         if payloads: await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=payloads, headers=HEADERS)
         return {"status": "success"}
 
-# 🚨 관리자 전용 데이터 초기화 API
 @app.delete("/api/clear_data")
 async def clear_data(target: str):
     async with httpx.AsyncClient() as client:
-        if target == 'inventory':
-            await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?location_id=not.is.null", headers=HEADERS)
-        elif target == 'history':
-            await client.delete(f"{SUPABASE_URL}/rest/v1/history_log?location_id=not.is.null", headers=HEADERS)
+        if target == 'inventory': await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?location_id=not.is.null", headers=HEADERS)
+        elif target == 'history': await client.delete(f"{SUPABASE_URL}/rest/v1/history_log?location_id=not.is.null", headers=HEADERS)
     return {"status": "success"}
