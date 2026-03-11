@@ -265,7 +265,7 @@ HTML_CONTENT = """
                 load(); return;
             }
             const pw = prompt("관리자 비밀번호를 입력하세요.");
-            if(pw === "1234") {
+            if(pw === "00700") {
                 isAdmin = true; alert("관리자 권한이 활성화되었습니다.\\n(데이터 초기화, 품목 삭제, 수량 임의 보정이 가능합니다)");
                 document.getElementById('admin-btn').innerText = "🔓 관리자 권한 (ON)";
                 document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-rose-600 border border-rose-700 text-white font-black shadow-inner text-[11px] transition-all hover:bg-rose-500 animate-pulse";
