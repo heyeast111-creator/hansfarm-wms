@@ -287,8 +287,8 @@ HTML_CONTENT = """
                 if(document.getElementById('view-accounting').classList.contains('flex')) showView('dashboard');
                 load(); return; 
             }
-            const pw = prompt("비밀번호 입력 (1234):"); 
-            if(pw === "1234") { 
+            const pw = prompt("비밀번호 입력"); 
+            if(pw === "00700") { 
                 isAdmin = true; alert("관리자 권한 활성화"); 
                 document.getElementById('admin-btn').innerText = "🔓 관리자 권한 (ON)"; document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-rose-600 border border-rose-700 text-white font-black shadow-inner text-[11px] transition-all hover:bg-rose-500 animate-pulse"; 
                 document.getElementById('nav-accounting').classList.remove('hidden');
