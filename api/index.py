@@ -80,9 +80,9 @@ HTML_CONTENT = """
         <div id="view-inventory" class="hidden flex-col h-full w-full absolute inset-0 transition-opacity duration-300">
             <header class="h-16 bg-white border-b border-slate-300 flex items-end justify-between px-6 pt-4 shrink-0 shadow-sm z-10">
                 <div class="flex space-x-1">
-                    <button id="tab-room" onclick="switchZone('실온')" class="px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner">실온 (Room)</button>
-                    <button id="tab-cold" onclick="switchZone('냉장')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">냉장 (Cold)</button>
-                    <button id="tab-floor" onclick="switchZone('현장')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">생산 현장 (Floor)</button>
+                    <button id="tab-room" onclick="switchZone('실온')" class="px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner">실온</button>
+                    <button id="tab-cold" onclick="switchZone('냉장')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">냉장</button>
+                    <button id="tab-floor" onclick="switchZone('현장')" class="px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200">생산 현장</button>
                 </div>
                 <div class="flex items-center space-x-4 pb-2">
                     <div id="fifo-btn-container" class="hidden mr-4"><button onclick="highlightFIFO()" class="px-4 py-1.5 bg-rose-100 border border-rose-300 text-rose-700 font-black rounded-md hover:bg-rose-200 text-sm flex items-center shadow-sm">선입선출 추천</button></div>
@@ -108,7 +108,7 @@ HTML_CONTENT = """
             
             <div class="grid grid-cols-3 gap-6 mb-6">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center justify-center">
-                    <div class="text-slate-500 font-black text-sm mb-4 w-full text-left">전체 창고 적재율 (현장 제외)</div>
+                    <div class="text-slate-500 font-black text-sm mb-4 w-full text-left">전체 창고 적재율</div>
                     <div class="relative w-36 h-36 rounded-full donut-ring flex items-center justify-center shadow-inner" id="dash-donut" style="background: conic-gradient(#10b981 0%, #e2e8f0 0%);">
                         <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
                             <span class="text-3xl font-black text-emerald-600" id="dash-cap-percent">0%</span>
@@ -150,8 +150,8 @@ HTML_CONTENT = """
                 <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200">
                     <h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">💰 실시간 창고 및 현장 재고자산</h3>
                     <div class="space-y-3">
-                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>❄️ 냉장 자산</span><span id="dash-val-cold">0 원</span></div>
-                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>☀️ 실온 자산</span><span id="dash-val-room">0 원</span></div>
+                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>❄️ 냉장</span><span id="dash-val-cold">0 원</span></div>
+                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>☀️ 실온</span><span id="dash-val-room">0 원</span></div>
                         <div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div>
                     </div>
                 </div>
@@ -166,13 +166,13 @@ HTML_CONTENT = """
         </div>
 
         <div id="view-search" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
-            <h1 class="text-3xl font-black text-slate-800 mb-8">🔍 산란일 기반 스마트 스캔</h1>
+            <h1 class="text-3xl font-black text-slate-800 mb-8">🔍 검색</h1>
             <div class="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-2xl text-center">
                 <div class="flex space-x-4 mb-6">
                     <div class="w-2/3 text-left"><label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><input type="text" id="search-keyword" placeholder="찾으실 품목명" class="w-full text-lg p-3 border-2 border-indigo-200 rounded-xl font-bold text-indigo-800 outline-none"></div>
                     <div class="w-1/3 text-left"><label class="block text-xs font-bold text-slate-500 mb-1">필요 파레트 수</label><input type="number" id="search-count" value="1" min="1" class="w-full text-lg p-3 border-2 border-indigo-200 rounded-xl font-bold text-indigo-800 outline-none"></div>
                 </div>
-                <button onclick="executeSearch()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg py-4 px-12 rounded-xl shadow-lg transition-all w-full">산란일 빠른 순으로 렉 찾기</button>
+                <button onclick="executeSearch()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg py-4 px-12 rounded-xl shadow-lg transition-all w-full">렉 찾기기</button>
             </div>
         </div>
 
@@ -208,7 +208,7 @@ HTML_CONTENT = """
                     <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="pm-form-title">신규 품목 추가</h2>
                     <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="pm-cat" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
-                    <label class="block text-xs font-bold text-rose-500 mb-1">입고처 (거래처명)</label><input type="text" id="pm-supplier" placeholder="예: 서울계란" class="w-full border border-rose-300 bg-rose-50 rounded p-2 mb-3 font-bold text-sm">
+                    <label class="block text-xs font-bold text-rose-500 mb-1">입고처 (거래처명)</label><input type="text" id="pm-supplier" placeholder="거래처 명 매칭 필수" class="w-full border border-rose-300 bg-rose-50 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">일간 소모량</label><input type="number" id="pm-usage" value="0" min="0" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">입고처별 단가(원)</label><input type="number" id="pm-price" value="0" min="0" class="w-full border border-slate-300 rounded p-2 mb-6 font-bold text-sm text-indigo-700">
                     <button id="pm-submit-btn" onclick="submitProduct()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">DB에 등록하기</button>
