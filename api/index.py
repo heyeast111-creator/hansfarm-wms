@@ -100,7 +100,6 @@ HTML_CONTENT = """
                 <h1 class="text-3xl font-black text-slate-800">📊 한스팜 물류 대시보드</h1>
                 <select id="dash-period" onchange="updateDashboard()" class="border-2 border-indigo-200 rounded-lg p-2 font-bold text-indigo-700 bg-white outline-none"><option value="daily">일간 (Daily)</option><option value="weekly">주간 (Weekly)</option><option value="monthly">월간 (Monthly)</option></select>
             </div>
-            
             <div class="grid grid-cols-3 gap-6 mb-6">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center justify-center">
                     <div class="text-slate-500 font-black text-sm mb-4 w-full text-left">전체 창고 적재율 (현장 제외)</div>
@@ -140,7 +139,6 @@ HTML_CONTENT = """
                     <div class="text-4xl font-black text-rose-600 mt-2" id="dash-out">0 P</div>
                 </div>
             </div>
-
             <div id="admin-finance-panel" class="hidden grid grid-cols-2 gap-6 mb-6">
                 <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200">
                     <h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">💰 실시간 창고 및 현장 재고자산</h3>
@@ -204,7 +202,7 @@ HTML_CONTENT = """
                     <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-rose-500 mb-1">입고처 (거래처명)</label><input type="text" id="pm-supplier" placeholder="예: 서울계란" class="w-full border border-rose-300 bg-rose-50 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">일간 소모량 (EA)</label><input type="number" id="pm-usage" value="0" min="0" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
-                    <label class="block text-xs font-bold text-indigo-600 mb-1">1 파레트당 적재 수량 (EA) - 부피 자동계산용</label><input type="number" id="pm-pallet-ea" value="1" min="1" class="w-full border border-indigo-300 bg-indigo-50 rounded p-2 mb-3 font-bold text-sm text-indigo-700">
+                    <label class="block text-xs font-bold text-indigo-600 mb-1">1 파레트당 적재 수량 (EA)</label><input type="number" id="pm-pallet-ea" value="1" min="1" class="w-full border border-indigo-300 bg-indigo-50 rounded p-2 mb-3 font-bold text-sm text-indigo-700">
                     <label class="block text-xs font-bold text-slate-500 mb-1">단가(원) - 비용계산용</label><input type="number" id="pm-price" value="0" min="0" class="w-full border border-slate-300 rounded p-2 mb-6 font-bold text-sm text-slate-700">
                     <button id="pm-submit-btn" onclick="submitProduct()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">DB에 등록하기</button>
                     <button id="pm-cancel-btn" onclick="cancelEdit()" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">수정 취소</button>
@@ -245,42 +243,17 @@ HTML_CONTENT = """
     </aside>
 
     <script>
-        let globalOccupancy = []; 
-        let productMaster = []; 
-        let globalHistory = []; 
-        let currentZone = '실온'; 
-        let selectedCellId = null; 
-        let isAdmin = false;
-        let editingProductOriginalName = null; 
-        let editingProductOriginalSupplier = null;
+        let globalOccupancy = []; let productMaster = []; let globalHistory = []; let currentZone = '실온'; let selectedCellId = null; let isAdmin = false;
+        let editingProductOriginalName = null; let editingProductOriginalSupplier = null;
         
-        // 🚨 렉 레이아웃 (실온/냉장에 R-, C- 접두어 강제 부여)
+        // 🚨 10칸/12칸 완벽 교체
         const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
         const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
         const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료 / 냉장)', cols: 20 }, { aisle: true, text: '==================== 생산 조립 라인 ====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재 / 실온)', cols: 20 } ];
 
         function adminLogin() {
-            if(isAdmin) { 
-                isAdmin = false; alert("관리자 모드 해제"); 
-                document.getElementById('admin-btn').innerText = "🔒 관리자 로그인"; 
-                document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-slate-800 border border-slate-900 text-slate-300 font-black shadow-inner text-[11px] transition-all hover:bg-slate-700 hover:text-white"; 
-                document.getElementById('nav-accounting').classList.add('hidden'); 
-                document.getElementById('admin-finance-panel').classList.add('hidden'); 
-                document.getElementById('pm-wipe-btn').classList.add('hidden'); 
-                if(document.getElementById('view-accounting').classList.contains('flex')) showView('dashboard'); 
-                load(); return; 
-            }
-            const pw = prompt("비밀번호 입력 (1234):"); 
-            if(pw === "1234") { 
-                isAdmin = true; alert("관리자 권한 활성화"); 
-                document.getElementById('admin-btn').innerText = "🔓 관리자 권한 (ON)"; 
-                document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-rose-600 border border-rose-700 text-white font-black shadow-inner text-[11px] transition-all hover:bg-rose-500 animate-pulse"; 
-                document.getElementById('nav-accounting').classList.remove('hidden'); 
-                document.getElementById('admin-finance-panel').classList.remove('hidden'); 
-                document.getElementById('pm-wipe-btn').classList.remove('hidden'); 
-                let today = new Date(); document.getElementById('acc-month').value = today.toISOString().substring(0, 7); 
-                load(); 
-            }
+            if(isAdmin) { isAdmin = false; alert("관리자 모드 해제"); document.getElementById('admin-btn').innerText = "🔒 관리자 로그인"; document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-slate-800 border border-slate-900 text-slate-300 font-black shadow-inner text-[11px] transition-all hover:bg-slate-700 hover:text-white"; document.getElementById('nav-accounting').classList.add('hidden'); document.getElementById('admin-finance-panel').classList.add('hidden'); document.getElementById('pm-wipe-btn').classList.add('hidden'); if(document.getElementById('view-accounting').classList.contains('flex')) showView('dashboard'); load(); return; }
+            const pw = prompt("비밀번호 입력 (1234):"); if(pw === "1234") { isAdmin = true; alert("관리자 권한 활성화"); document.getElementById('admin-btn').innerText = "🔓 관리자 권한 (ON)"; document.getElementById('admin-btn').className = "w-full py-3 rounded-md bg-rose-600 border border-rose-700 text-white font-black shadow-inner text-[11px] transition-all hover:bg-rose-500 animate-pulse"; document.getElementById('nav-accounting').classList.remove('hidden'); document.getElementById('admin-finance-panel').classList.remove('hidden'); document.getElementById('pm-wipe-btn').classList.remove('hidden'); let today = new Date(); document.getElementById('acc-month').value = today.toISOString().substring(0, 7); load(); }
         }
 
         async function load() {
@@ -295,35 +268,11 @@ HTML_CONTENT = """
         function showView(viewName) {
             document.querySelectorAll('.nav-btn').forEach(btn => btn.className = "nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all");
             let targetBtn = document.getElementById('nav-' + viewName);
-            if(targetBtn) {
-                targetBtn.className = "nav-btn w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all" + (viewName==='safety' ? ' text-rose-600 border-rose-200 bg-rose-50' : '') + (viewName==='accounting' ? ' text-yellow-700 border-yellow-300 bg-yellow-50' : '');
-            }
-            
-            ['view-inventory', 'view-dashboard', 'view-search', 'view-products', 'view-safety', 'view-accounting'].forEach(id => { 
-                document.getElementById(id).classList.add('hidden'); 
-                document.getElementById(id).classList.remove('flex'); 
-            });
-            
-            document.getElementById('right-sidebar').classList.add('hidden'); 
-            document.getElementById('view-' + viewName).classList.remove('hidden'); 
-            document.getElementById('view-' + viewName).classList.add('flex');
-            
-            if(viewName === 'inventory') { 
-                document.getElementById('right-sidebar').classList.remove('hidden'); 
-                document.getElementById('right-sidebar').classList.add('flex'); 
-                renderMap(); 
-            }
-            else if(viewName === 'products') renderProductMaster(); 
-            else if(viewName === 'dashboard') updateDashboard(); 
-            else if(viewName === 'safety') renderSafetyStock(); 
-            else if(viewName === 'accounting') renderAccounting();
-        }
-
-        // 🚨 시트 분리용 ID 맵핑 헬퍼 함수
-        function getRealLocId(displayId, isCold) {
-            if(displayId.startsWith('FL-')) return displayId; // 현장은 그대로
-            const prefix = isCold ? 'C-' : 'R-'; // 냉장 C-, 실온 R-
-            return prefix + displayId;
+            if(targetBtn) { targetBtn.className = "nav-btn w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all" + (viewName==='safety' ? ' text-rose-600 border-rose-200 bg-rose-50' : '') + (viewName==='accounting' ? ' text-yellow-700 border-yellow-300 bg-yellow-50' : ''); }
+            ['view-inventory', 'view-dashboard', 'view-search', 'view-products', 'view-safety', 'view-accounting'].forEach(id => { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); });
+            document.getElementById('right-sidebar').classList.add('hidden'); document.getElementById('view-' + viewName).classList.remove('hidden'); document.getElementById('view-' + viewName).classList.add('flex');
+            if(viewName === 'inventory') { document.getElementById('right-sidebar').classList.remove('hidden'); document.getElementById('right-sidebar').classList.add('flex'); renderMap(); }
+            else if(viewName === 'products') renderProductMaster(); else if(viewName === 'dashboard') updateDashboard(); else if(viewName === 'safety') renderSafetyStock(); else if(viewName === 'accounting') renderAccounting();
         }
 
         function generateLocations(zone) {
@@ -338,8 +287,7 @@ HTML_CONTENT = """
                 for(let c=1; c<=20; c++) locs.push(`FL-C-${c.toString().padStart(2, '0')}`);
                 for(let c=1; c<=20; c++) locs.push(`FL-R-${c.toString().padStart(2, '0')}`);
             }
-            locs.sort((a, b) => a.localeCompare(b)); 
-            return locs;
+            locs.sort((a, b) => a.localeCompare(b)); return locs;
         }
 
         function exportPhysicalCountExcel() {
@@ -349,142 +297,92 @@ HTML_CONTENT = """
                 const locs = generateLocations(zone); const wsData = [];
                 locs.forEach(locId => {
                     const items = globalOccupancy.filter(x => x.location_id === locId);
-                    // 엑셀에는 보기 좋게 R-, C- 접두어를 떼고 보여줌
                     let displayLocId = locId.replace(/^(R-|C-)/, '');
-                    
-                    if (items.length > 0) { 
-                        items.forEach(item => { 
-                            wsData.push({ "구역": zone, "렉 위치": displayLocId, "카테고리": item.category, "품목명": item.item_name, "입고처(비고)": item.remarks || "", "전산 현재고": item.quantity, "➕신규 입고수량(EA)": "", "산란일/입고일": item.production_date || "" }); 
-                        }); 
-                    } else { 
-                        wsData.push({ "구역": zone, "렉 위치": displayLocId, "카테고리": "", "품목명": "", "입고처(비고)": "", "전산 현재고": 0, "➕신규 입고수량(EA)": "", "산란일/입고일": "" }); 
-                    }
+                    if (items.length > 0) { items.forEach(item => { wsData.push({ "구역": zone, "렉 위치": displayLocId, "카테고리": item.category, "품목명": item.item_name, "입고처(비고)": item.remarks || "", "전산 현재고": item.quantity, "➕신규 입고수량(EA)": "", "산란일/입고일": item.production_date || "" }); }); } 
+                    else { wsData.push({ "구역": zone, "렉 위치": displayLocId, "카테고리": "", "품목명": "", "입고처(비고)": "", "전산 현재고": 0, "➕신규 입고수량(EA)": "", "산란일/입고일": "" }); }
                 });
-                const ws = XLSX.utils.json_to_sheet(wsData); 
-                ws['!cols'] = [ {wch: 10}, {wch: 15}, {wch: 15}, {wch: 25}, {wch: 15}, {wch: 12}, {wch: 20}, {wch: 15} ]; 
-                XLSX.utils.book_append_sheet(wb, ws, zone); 
+                const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [ {wch: 10}, {wch: 15}, {wch: 15}, {wch: 25}, {wch: 15}, {wch: 12}, {wch: 20}, {wch: 15} ]; XLSX.utils.book_append_sheet(wb, ws, zone); 
             });
             const refData = productMaster.map(p => ({ "복사용_카테고리": p.category, "복사용_품목명": p.item_name, "복사용_입고처": p.supplier, "1P_EA기준": p.pallet_ea }));
-            const wsRef = XLSX.utils.json_to_sheet(refData); 
-            wsRef['!cols'] = [ {wch: 15}, {wch: 25}, {wch: 15}, {wch: 12} ]; 
-            XLSX.utils.book_append_sheet(wb, wsRef, "품목DB(참조용)");
+            const wsRef = XLSX.utils.json_to_sheet(refData); wsRef['!cols'] = [ {wch: 15}, {wch: 25}, {wch: 15}, {wch: 12} ]; XLSX.utils.book_append_sheet(wb, wsRef, "품목DB(참조용)");
             XLSX.writeFile(wb, "한스팜_재고실사및입고양식.xlsx");
         }
 
-        // 🚨 엑셀 대량 업로드 (거짓말 차단 및 이중 렉 방지 로직)
         function importExcel(e) { 
-            const file = e.target.files[0]; 
-            if(!file) return; 
-            const reader = new FileReader(); 
+            const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
             reader.onload = async function(ev) { 
                 try {
-                    const data = new Uint8Array(ev.target.result); 
-                    const workbook = XLSX.read(data, {type: 'array'}); 
-                    let allRows = [];
-                    
-                    // 🚨 핵심: 업로드 시 엑셀의 '구역' 텍스트를 보고 R-, C- 접두어를 다시 붙여서 올림
-                    workbook.SheetNames.forEach(sheetName => {
-                        if(sheetName !== "품목DB(참조용)") {
-                            const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false, defval: "" });
+                    const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); let allRows = [];
+                    workbook.SheetNames.forEach(sheetName => { 
+                        if(sheetName !== "품목DB(참조용)") { 
+                            const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { raw: false, defval: "" }); 
                             json.forEach(row => {
                                 if(row["구역"] === "실온" && !row["렉 위치"].startsWith("FL-")) row["렉 위치"] = "R-" + row["렉 위치"];
                                 else if(row["구역"] === "냉장" && !row["렉 위치"].startsWith("FL-")) row["렉 위치"] = "C-" + row["렉 위치"];
                                 allRows.push(row);
                             });
-                        }
+                        } 
                     });
-
                     if(allRows.length > 0) { 
                         const res = await fetch('/api/inbound_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(allRows) }); 
                         const result = await res.json();
-                        if(result.status === 'success') {
-                            alert(`업로드 성공! 총 ${result.count}건의 신규 입고 데이터가 반영되었습니다.`);
-                            load();
-                        } else {
-                            alert(`업로드 실패 (서버 에러): ${result.message}`);
-                        }
-                    } else {
-                        alert("업로드할 데이터가 비어있습니다.");
-                    }
-                } catch(err) {
-                    console.error(err);
-                    alert("엑셀 파일 양식에 문제가 있습니다. 날짜나 숫자 형식을 확인해주세요!");
-                }
+                        if(result.status === 'success') { alert(`업로드 성공! 총 ${result.count}건의 신규 입고 데이터가 반영되었습니다.`); load(); }
+                        else { alert(`업로드 실패 (서버 에러): ${result.message}`); }
+                    } else { alert("업로드할 데이터가 비어있습니다."); }
+                } catch(err) { alert("엑셀 파일 양식에 문제가 있습니다. 날짜나 숫자 형식을 확인해주세요!"); }
             }; 
-            reader.readAsArrayBuffer(file); 
-            e.target.value = ''; 
+            reader.readAsArrayBuffer(file); e.target.value = ''; 
         }
 
         function renderProductMaster() { document.getElementById('pm-list').innerHTML = productMaster.map(p => { let delBtn = isAdmin ? `<button onclick="deleteProduct('${p.item_name}', '${p.supplier}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>` : ''; return `<div class="flex justify-between items-center bg-slate-50 p-3 rounded-lg border border-slate-200"><div><span class="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded mr-1">${p.category}</span><span class="font-bold text-sm text-slate-800">${p.item_name}</span> <span class="text-xs font-bold text-rose-600">[${p.supplier}]</span><div class="text-[10px] text-slate-500 mt-1">1P기준: <b class="text-indigo-600">${p.pallet_ea} EA</b> | 소모량: ${p.daily_usage} EA | 단가: ${p.unit_price.toLocaleString()}원</div></div><div class="flex space-x-1"><button onclick="editProductSetup('${p.category}', '${p.item_name}', '${p.supplier}', ${p.daily_usage}, ${p.unit_price}, ${p.pallet_ea})" class="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>${delBtn}</div></div>`; }).join(''); }
         function editProductSetup(cat, name, supplier, usage, price, ea) { editingProductOriginalName = name; editingProductOriginalSupplier = supplier; document.getElementById('pm-cat').value = cat; document.getElementById('pm-name').value = name; document.getElementById('pm-supplier').value = supplier; document.getElementById('pm-usage').value = usage; document.getElementById('pm-price').value = price; document.getElementById('pm-pallet-ea').value = ea || 1; document.getElementById('pm-form-title').innerText = "기존 품목 수정 모드"; document.getElementById('pm-submit-btn').innerText = "✅ 변경사항 저장"; document.getElementById('pm-submit-btn').classList.replace('bg-indigo-600', 'bg-emerald-600'); document.getElementById('pm-submit-btn').classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); document.getElementById('pm-cancel-btn').classList.remove('hidden'); }
         function cancelEdit() { editingProductOriginalName = null; editingProductOriginalSupplier = null; document.getElementById('pm-cat').value = ''; document.getElementById('pm-name').value = ''; document.getElementById('pm-supplier').value = ''; document.getElementById('pm-usage').value = '0'; document.getElementById('pm-price').value = '0'; document.getElementById('pm-pallet-ea').value = '1'; document.getElementById('pm-form-title').innerText = "신규 품목 추가"; document.getElementById('pm-submit-btn').innerText = "DB에 등록하기"; document.getElementById('pm-submit-btn').classList.replace('bg-emerald-600', 'bg-indigo-600'); document.getElementById('pm-submit-btn').classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700'); document.getElementById('pm-cancel-btn').classList.add('hidden'); }
-        async function submitProduct() { const cat = document.getElementById('pm-cat').value.trim(); const name = document.getElementById('pm-name').value.trim(); const supplier = document.getElementById('pm-supplier').value.trim() || '기본입고처'; const usage = parseInt(document.getElementById('pm-usage').value) || 0; const price = parseInt(document.getElementById('pm-price').value) || 0; const ea = parseInt(document.getElementById('pm-pallet-ea').value) || 1; if(!cat || !name) return alert("카테고리와 품목명은 필수입니다."); try { if(editingProductOriginalName) { await fetch(`/api/products?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); alert("수정 완료"); cancelEdit(); } else { await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); alert("등록 완료"); document.getElementById('pm-name').value = ''; document.getElementById('pm-supplier').value = ''; } load(); } catch(e) { alert("서버 통신 실패"); } }
-        async function deleteProduct(name, supplier) { if(!confirm(`[${name} - ${supplier}] 품목을 개별 삭제하시겠습니까?`)) return; try { await fetch(`/api/products?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); load(); } catch(e) {} }
-        async function deleteAllProducts() { if(!confirm("⚠️ 정말 모든 품목 마스터를 일괄 삭제하시겠습니까?")) return; const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); try { await fetch('/api/products_all', { method: 'DELETE' }); alert("일괄 삭제 완료!"); load(); } catch(e) { alert("삭제 실패!"); } }
-        function exportProductsExcel() { try { let wsData = []; if (productMaster.length === 0) { wsData = [{ "카테고리": "", "품목명": "", "입고처(공급사)": "", "일간소모량(EA)": "", "단가(비용)": "", "1P기준수량(EA)": "" }]; } else { wsData = productMaster.map(p => ({ "카테고리": p.category || "미분류", "품목명": p.item_name || "", "입고처(공급사)": p.supplier || "기본입고처", "일간소모량(EA)": p.daily_usage || 0, "단가(비용)": p.unit_price || 0, "1P기준수량(EA)": p.pallet_ea || 1 })); } const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "품목마스터"); XLSX.writeFile(wb, "품목마스터_양식(기존데이터포함).xlsx"); } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); } }
-        function importProductsExcel(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = async function(ev) { try { const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]); if(json.length > 0) { await fetch('/api/products_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); alert("품목 대량 업로드 완료!"); load(); } } catch(err) { console.error(err); alert("업로드 처리 중 오류 발생: 양식을 다시 확인해주세요."); } }; reader.readAsArrayBuffer(file); e.target.value = ''; }
+        async function submitProduct() { const cat = document.getElementById('pm-cat').value.trim(); const name = document.getElementById('pm-name').value.trim(); const supplier = document.getElementById('pm-supplier').value.trim() || '기본입고처'; const usage = parseInt(document.getElementById('pm-usage').value) || 0; const price = parseInt(document.getElementById('pm-price').value) || 0; const ea = parseInt(document.getElementById('pm-pallet-ea').value) || 1; if(!cat || !name) return alert("필수입력 누락"); try { if(editingProductOriginalName) { await fetch(`/api/products?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); alert("수정 완료"); cancelEdit(); } else { await fetch('/api/products', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); alert("등록 완료"); document.getElementById('pm-name').value = ''; document.getElementById('pm-supplier').value = ''; } load(); } catch(e) { alert("서버 통신 실패"); } }
+        async function deleteProduct(name, supplier) { if(!confirm(`[${name} - ${supplier}] 삭제?`)) return; try { await fetch(`/api/products?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); load(); } catch(e) {} }
+        async function deleteAllProducts() { if(!confirm("⚠️ 일괄 삭제하시겠습니까?")) return; const pw = prompt("비번(1234):"); if(pw !== "1234") return; try { await fetch('/api/products_all', { method: 'DELETE' }); alert("일괄 삭제 완료!"); load(); } catch(e) {} }
+        function exportProductsExcel() { try { let wsData = []; if (productMaster.length === 0) { wsData = [{ "카테고리": "", "품목명": "", "입고처(공급사)": "", "일간소모량(EA)": "", "단가(비용)": "", "1P기준수량(EA)": "" }]; } else { wsData = productMaster.map(p => ({ "카테고리": p.category || "미분류", "품목명": p.item_name || "", "입고처(공급사)": p.supplier || "기본입고처", "일간소모량(EA)": p.daily_usage || 0, "단가(비용)": p.unit_price || 0, "1P기준수량(EA)": p.pallet_ea || 1 })); } const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "품목마스터"); XLSX.writeFile(wb, "품목마스터_양식(기존데이터포함).xlsx"); } catch (error) { alert("다운로드 오류"); } }
+        function importProductsExcel(e) { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = async function(ev) { try { const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]); if(json.length > 0) { await fetch('/api/products_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); alert("품목 대량 업로드 완료!"); load(); } } catch(err) { alert("업로드 처리 중 오류 발생"); } }; reader.readAsArrayBuffer(file); e.target.value = ''; }
         function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`[${supplier}] 수량(EA):`, "1000개"); if(!moq) return; const leadTime = prompt(`납기일:`, "최대한 빠르게"); const text = `[발주 요청서]\\n수신: ${supplier}\\n\\n안녕하세요, 한스팜입니다.\\n아래 품목 발주 요청드립니다.\\n\\n- 품목명: ${itemName}\\n- 발주수량: ${moq}\\n- 납기요청: ${leadTime}\\n\\n확인 후 회신 부탁드립니다. 감사합니다.`; navigator.clipboard.writeText(text.replace(/\\n/g, '\\n')).then(() => { alert("복사 완료"); }); }
         function renderSafetyStock() { const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 품목이 없습니다.</td></tr>`; } else { monitoredProducts.forEach(p => { let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 카톡 발주 복사</button>` : ''; let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-black text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-xs">🟢 여유</span>`; html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-4 text-slate-500 text-sm font-bold">${p.category}</td><td class="p-4 text-slate-800 font-black">${p.item_name} <span class="text-rose-600 text-xs">[${p.supplier}]</span></td><td class="p-4 text-right font-bold text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-4 text-right font-bold text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 max-w-[150px] mx-auto overflow-hidden"><div class="h-2.5 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-4 text-center">${statusHtml}</td></tr>`; }); } document.getElementById('safety-list').innerHTML = html; }
 
-        function switchZone(zone) { 
-            currentZone = zone; selectedCellId = null; clearInfo(); 
-            ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => { document.getElementById(id).className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; }); 
-            if(zone === '실온') { document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } 
-            else if(zone === '냉장') { document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.remove('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } 
-            else if(zone === '현장') { document.getElementById('tab-floor').className = "px-8 py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.add('hidden'); document.getElementById('floor-select-label').classList.add('hidden'); } 
-            renderMap(); 
-        }
-
-        // 🚨 렉맵 렌더링 시 R- / C- 접두어 적용
+        function switchZone(zone) { currentZone = zone; selectedCellId = null; clearInfo(); ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => { document.getElementById(id).className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; }); if(zone === '실온') { document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } else if(zone === '냉장') { document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.remove('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } else if(zone === '현장') { document.getElementById('tab-floor').className = "px-8 py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.add('hidden'); document.getElementById('floor-select-label').classList.add('hidden'); } renderMap(); }
         function renderMap() { 
             const floor = document.getElementById('floor-select').value; const vContainer = document.getElementById('vertical-racks'); const hContainer = document.getElementById('horizontal-rack'); 
             const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + (item.pallet_count || 1); }); 
             let vHtml = ''; hContainer.innerHTML = ''; 
-            
             if(currentZone === '현장') { 
                 document.getElementById('aisle-text').classList.add('hidden'); vHtml += `<div class="w-full min-w-[700px]">`; 
                 layoutFloor.forEach(col => { 
                     if(col.aisle) { vHtml += `<div class="w-full h-10 bg-yellow-50/50 flex items-center justify-center border-y-2 border-yellow-300 shadow-inner my-6 rounded-lg"><span class="text-yellow-600 font-black tracking-widest text-sm">${col.text}</span></div>`; } 
                     else { 
-                        let colorClass = col.id === 'FL-C' ? 'text-indigo-800 bg-indigo-50 border-indigo-200' : 'text-orange-800 bg-orange-50 border-orange-200'; 
-                        vHtml += `<div class="mb-4 bg-white p-5 rounded-2xl shadow-md border border-slate-200"><div class="text-lg font-black ${colorClass} p-3 rounded-lg border mb-4 shadow-sm inline-block">${col.title}</div><div class="grid grid-cols-10 gap-3">`; 
+                        let colorClass = col.id === 'FL-C' ? 'text-indigo-800 bg-indigo-50 border-indigo-200' : 'text-orange-800 bg-orange-50 border-orange-200'; vHtml += `<div class="mb-4 bg-white p-5 rounded-2xl shadow-md border border-slate-200"><div class="text-lg font-black ${colorClass} p-3 rounded-lg border mb-4 shadow-sm inline-block">${col.title}</div><div class="grid grid-cols-10 gap-3">`; 
                         for (let r = 1; r <= col.cols; r++) { 
-                            let dbId = `${col.id}-${r.toString().padStart(2, '0')}`; let searchId = dbId; let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === dbId) cellState = 'cell-active'; 
-                            let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md z-10 animate-bounce">${pCount.toFixed(1)}P</div>` : ''; 
+                            let dbId = `${col.id}-${r.toString().padStart(2, '0')}`; let searchId = dbId; let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === dbId) cellState = 'cell-active'; let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md z-10 animate-bounce">${pCount.toFixed(1)}P</div>` : ''; 
                             vHtml += `<div id="cell-${dbId}" onclick="clickCell('${dbId}', '${searchId}')" class="h-16 rounded-xl border-2 flex flex-col items-center justify-center text-[11px] font-black cursor-pointer rack-cell ${cellState} shadow-sm hover:scale-105 transition-all">${badge}<span class="${hasItem?'text-slate-700':'text-slate-400'}">${r}번 칸</span></div>`; 
                         } 
                         vHtml += `</div></div>`; 
                     } 
                 }); vHtml += `</div>`; vContainer.innerHTML = vHtml; return; 
             } 
-            
             document.getElementById('aisle-text').classList.remove('hidden'); document.getElementById('aisle-text').innerText = "통로 (Aisle)"; 
             const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold; 
-            const prefix = currentZone === '실온' ? 'R-' : 'C-'; // 💡 핵심: 렉 ID 접두어
-
+            const prefix = currentZone === '실온' ? 'R-' : 'C-'; 
             activeLayout.forEach(col => { 
                 if (col.aisle) { vHtml += `<div class="w-14 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1"><span class="text-yellow-600 font-black tracking-widest text-xs" style="writing-mode: vertical-rl;">통로</span></div>`; } 
                 else if (col.gap) { vHtml += `<div class="w-4"></div>`; } 
                 else { 
                     vHtml += `<div class="flex flex-col w-14 space-y-1 justify-end"><div class="text-center font-black text-2xl text-slate-800 pb-2">${col.id}</div>`; 
                     for (let r = col.cols; r >= 1; r--) { 
-                        let displayId = `${col.id}${r}`;
-                        let dbId = `${prefix}${col.id}-${r.toString().padStart(2, '0')}`; let searchId = floor === "1" ? dbId : `${dbId}-2F`; 
-                        let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === displayId) cellState = 'cell-active'; 
-                        let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1 rounded-full shadow-sm z-10">${pCount.toFixed(1)}P</div>` : ''; 
+                        let displayId = `${col.id}${r}`; let dbId = `${prefix}${col.id}-${r.toString().padStart(2, '0')}`; let searchId = floor === "1" ? dbId : `${dbId}-2F`; let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === displayId) cellState = 'cell-active'; let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1 rounded-full shadow-sm z-10">${pCount.toFixed(1)}P</div>` : ''; 
                         vHtml += `<div id="cell-${displayId}" onclick="clickCell('${displayId}', '${searchId}')" class="h-8 rounded-[3px] flex items-center justify-center text-[10px] font-bold cursor-pointer rack-cell ${cellState} shadow-sm">${badge}${displayId}</div>`; 
                     } 
                     vHtml += `</div>`; 
                 } 
             }); 
             vContainer.innerHTML = vHtml; 
-            
             let hHtml = `<div class="flex space-x-1">`; let hPrefix = currentZone === '실온' ? 'K' : 'I'; let hCols = currentZone === '실온' ? 12 : 8; 
             for (let c = hCols; c >= 1; c--) { 
-                let displayId = `${hPrefix}${c}`; 
-                let dbId = `${prefix}${hPrefix}-${c.toString().padStart(2, '0')}`; let searchId = floor === "1" ? dbId : `${dbId}-2F`; 
-                let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === displayId) cellState = 'cell-active'; 
-                let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1 rounded-full shadow-sm z-10">${pCount.toFixed(1)}P</div>` : ''; 
+                let displayId = `${hPrefix}${c}`; let dbId = `${prefix}${hPrefix}-${c.toString().padStart(2, '0')}`; let searchId = floor === "1" ? dbId : `${dbId}-2F`; let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === displayId) cellState = 'cell-active'; let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1 rounded-full shadow-sm z-10">${pCount.toFixed(1)}P</div>` : ''; 
                 hHtml += `<div id="cell-${displayId}" onclick="clickCell('${displayId}', '${searchId}')" class="w-14 h-10 rounded-[3px] flex items-center justify-center text-[11px] font-bold cursor-pointer rack-cell ${cellState} shadow-sm">${badge}${displayId}</div>`; 
             } 
             hHtml += `</div>`; hContainer.innerHTML = hHtml; 
@@ -492,22 +390,13 @@ HTML_CONTENT = """
         
         async function clickCell(displayId, searchId) { 
             selectedCellId = displayId; 
-            if(!searchId) { 
-                const floor = document.getElementById('floor-select').value; 
-                const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : '');
-                const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`); 
-                searchId = floor === "1" ? baseId : `${baseId}-2F`; 
-            } 
-            renderMap(); 
-            const panel = document.getElementById('info-panel'); const floorName = currentZone === '현장' ? '생산현장' : document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text; const items = globalOccupancy.filter(x => x.location_id === searchId); let dateLabel = currentZone === '냉장' ? '산란일' : '입고일'; 
+            if(!searchId) { const floor = document.getElementById('floor-select').value; const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`); searchId = floor === "1" ? baseId : `${baseId}-2F`; } 
+            renderMap(); const panel = document.getElementById('info-panel'); const floorName = currentZone === '현장' ? '생산현장' : document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text; const items = globalOccupancy.filter(x => x.location_id === searchId); let dateLabel = currentZone === '냉장' ? '산란일' : '입고일'; 
             let panelHtml = `<div class="bg-indigo-50 p-4 rounded-lg border border-indigo-200 mb-4"><div class="flex justify-between items-start"><div><div class="text-[10px] text-indigo-500 font-bold mb-1">선택된 위치</div><div class="text-3xl font-black text-indigo-900">${displayId}</div></div><div class="text-right"><span class="inline-block bg-white text-indigo-700 text-xs font-bold px-2 py-1 rounded shadow-sm border border-indigo-100">${floorName}</span></div></div></div>`; 
             if(items.length > 0) { 
                 panelHtml += `<div class="mb-2 text-xs font-bold text-slate-500">적재 목록 (${items.length}건)</div>`; 
                 items.forEach(item => { 
-                    let dateHtml = item.production_date ? `<div class="text-xs text-rose-600 font-bold mt-1">${dateLabel}: ${item.production_date}</div>` : ''; 
-                    let pInfo = productMaster.find(p => p.item_name === item.item_name && p.supplier === item.remarks); let cost = pInfo ? (pInfo.unit_price * item.quantity).toLocaleString() : '0'; 
-                    let adjustBtn = isAdmin ? `<button onclick="processAdjust('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="text-[9px] text-slate-400 font-normal underline hover:text-indigo-600 ml-2">수량 보정</button>` : ''; 
-                    let palletDisplay = item.pallet_count ? `<span class="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[10px] ml-1 font-black">${item.pallet_count.toFixed(1)} P</span>` : ''; 
+                    let dateHtml = item.production_date ? `<div class="text-xs text-rose-600 font-bold mt-1">${dateLabel}: ${item.production_date}</div>` : ''; let pInfo = productMaster.find(p => p.item_name === item.item_name && p.supplier === item.remarks); let cost = pInfo ? (pInfo.unit_price * item.quantity).toLocaleString() : '0'; let adjustBtn = isAdmin ? `<button onclick="processAdjust('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="text-[9px] text-slate-400 font-normal underline hover:text-indigo-600 ml-2">수량 보정</button>` : ''; let palletDisplay = item.pallet_count ? `<span class="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[10px] ml-1 font-black">${item.pallet_count.toFixed(1)} P</span>` : ''; 
                     panelHtml += `<div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mb-3"><div class="flex justify-between items-start mb-2"><div><span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span><div class="font-black text-sm text-slate-800 mt-1">${item.item_name}${adjustBtn}</div><div class="text-[10px] text-slate-400 font-bold text-rose-600">입고처: ${item.remarks||'기본'} (총액: ${cost}원)</div></div><div class="text-right"><div class="text-sm font-bold text-indigo-600">${item.quantity.toLocaleString()} EA ${palletDisplay}</div></div></div>${dateHtml}<div class="flex space-x-2 mt-3 border-t pt-2"><button onclick="processTransfer('${item.id}', '${item.item_name}', ${item.quantity}, ${item.pallet_count||1}, '${searchId}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[11px] font-bold transition-colors">위치 이동</button><button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${item.pallet_count||1}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[11px] font-bold transition-colors">선택 출고</button></div></div>`; 
                 }); 
             } else { panelHtml += `<div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 mb-4"><b class="text-emerald-600 inline-block">비어있습니다 (Empty)</b></div>`; } 
@@ -515,7 +404,6 @@ HTML_CONTENT = """
             panelHtml += `<div class="mt-4 pt-4 border-t border-slate-200"><h3 class="text-sm font-black text-slate-700 mb-3 flex items-center"><svg class="w-4 h-4 mr-1 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 신규 입고</h3><div class="space-y-2"><div class="flex space-x-2"><div class="w-1/3"><label class="block text-[10px] font-bold text-slate-400 mb-1">카테고리</label><select id="in-cat" onchange="updateProductDropdown()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="">선택</option>${catOptions}</select></div><div class="w-2/3"><label class="block text-[10px] font-bold text-slate-400 mb-1">품목명</label><select id="in-item" onchange="updateSupplierDropdown()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="">선택 대기</option></select></div></div><div class="flex space-x-2"><div class="w-1/2"><label class="block text-[10px] font-bold text-rose-500 mb-1">입고처 (단가 매칭용)</label><select id="in-supplier" class="w-full border border-rose-300 bg-rose-50 rounded p-1.5 text-xs font-bold"><option value="">품목 선택</option></select></div><div class="w-1/2"><label class="block text-[10px] font-bold text-slate-400 mb-1">${dateLabel}</label><input type="date" id="in-date" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"></div></div><div><label class="block text-[10px] font-bold text-indigo-600 mb-1">수량 (EA)</label><input type="number" id="in-qty" value="1" min="1" class="w-full border border-indigo-300 bg-indigo-50 rounded p-1.5 text-xs font-black text-indigo-700"></div><p class="text-[9px] text-slate-400 text-center mb-1">* 파레트 부피(P)는 품목 마스터 정보를 바탕으로 자동 계산됩니다.</p><button onclick="processInbound('${searchId}')" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-2 rounded-lg font-black shadow-md transition-colors text-sm mt-1">입고 처리</button></div></div>`; 
             let locHistory = globalHistory.filter(h => h.location_id === searchId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5); let histHtml = '<div class="mt-6 pt-4 border-t border-slate-200"><h3 class="text-sm font-black text-slate-700 mb-3 flex items-center"><svg class="w-4 h-4 mr-1 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg> 최근 내역 (최대 5건)</h3><div class="space-y-2">'; if(locHistory.length > 0) { locHistory.forEach(h => { let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : 'text-blue-600'); let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); histHtml += `<div class="bg-white p-2 border border-slate-200 rounded text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`; }); } else { histHtml += `<div class="text-xs text-slate-400 text-center py-4">기록이 없습니다.</div>`; } histHtml += '</div></div>'; panelHtml += histHtml; panel.innerHTML = panelHtml; 
         }
-
         function clearInfo() { document.getElementById('info-panel').innerHTML = `<div class="text-center text-slate-400 py-10 mt-10">도면에서 위치를 선택해주세요</div>`; }
         function updateProductDropdown() { const cat = document.getElementById('in-cat').value; const items = [...new Set(productMaster.filter(p => p.category === cat).map(p => p.item_name))]; document.getElementById('in-item').innerHTML = items.map(name => `<option value="${name}">${name}</option>`).join(''); updateSupplierDropdown(); }
         function updateSupplierDropdown() { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const suppliers = productMaster.filter(p => p.category === cat && p.item_name === item).map(p => p.supplier); document.getElementById('in-supplier').innerHTML = suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); }
@@ -523,14 +411,7 @@ HTML_CONTENT = """
         function updateDashboard() { 
             const period = document.getElementById('dash-period').value; let startDate = new Date(); if(period === 'daily') startDate.setDate(startDate.getDate() - 1); else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7); else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1); 
             let inPallets = 0, outPallets = 0, productionCost = 0; globalHistory.forEach(log => { if(new Date(log.created_at) >= startDate) { if(log.action_type === '입고') inPallets += (log.pallet_count || 1); if(log.action_type === '출고') { outPallets += (log.pallet_count || 1); let pInfo = productMaster.find(p => p.item_name === log.item_name); if(pInfo) productionCost += (pInfo.unit_price * log.quantity); } } }); document.getElementById('dash-in').innerText = inPallets.toFixed(1) + ' P'; document.getElementById('dash-out').innerText = outPallets.toFixed(1) + ' P'; if(isAdmin) document.getElementById('dash-cost-out').innerText = productionCost.toLocaleString() + ' 원'; 
-            let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0; let valRoom = 0, valCold = 0; const occMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; }); 
-            globalOccupancy.forEach(item => { 
-                let p = item.pallet_count || 1; let pInfo = productMaster.find(prod => prod.item_name === item.item_name && prod.supplier === item.remarks); let val = pInfo ? pInfo.unit_price * item.quantity : 0; 
-                // 🚨 R- 이면 실온, C- 이면 냉장으로 완벽 분리 합산
-                if(item.location_id.startsWith('R-')) { occRoom += p; valRoom += val; } 
-                else if(item.location_id.startsWith('C-')) { occCold += p; valCold += val; } 
-                else { valRoom += val; } 
-            }); 
+            let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0; let valRoom = 0, valCold = 0; const occMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; }); globalOccupancy.forEach(item => { let p = item.pallet_count || 1; let pInfo = productMaster.find(prod => prod.item_name === item.item_name && prod.supplier === item.remarks); let val = pInfo ? pInfo.unit_price * item.quantity : 0; if(item.location_id.startsWith('R-')) { occRoom += p; valRoom += val; } else if(item.location_id.startsWith('C-')) { occCold += p; valCold += val; } else { valRoom += val; } }); 
             layoutRoom.forEach(col => { if(col.cols) totalRoom += col.cols * 2; }); totalRoom += 24; layoutCold.forEach(col => { if(col.cols) totalCold += col.cols * 2; }); totalCold += 16; let totalAll = totalRoom + totalCold; let occAll = occRoom + occCold; let capRate = totalAll > 0 ? Math.round((occAll / totalAll) * 100) : 0; document.getElementById('dash-cap-percent').innerText = capRate + '%'; document.getElementById('dash-cap-text').innerText = `${occAll.toFixed(1)} / ${totalAll} 파레트`; let color = capRate > 100 ? '#e11d48' : '#10b981'; document.getElementById('dash-donut').style.background = `conic-gradient(${color} 0% ${Math.min(capRate, 100)}%, #e2e8f0 ${Math.min(capRate, 100)}% 100%)`; document.getElementById('dash-room-total').innerText = totalRoom; document.getElementById('dash-room-occ').innerText = occRoom.toFixed(1); document.getElementById('dash-room-empty').innerText = Math.max(0, totalRoom - Math.floor(occRoom)); document.getElementById('dash-room-percent').innerText = totalRoom > 0 ? Math.round((occRoom/totalRoom)*100) + '%' : '0%'; document.getElementById('dash-cold-total').innerText = totalCold; document.getElementById('dash-cold-occ').innerText = occCold.toFixed(1); document.getElementById('dash-cold-empty').innerText = Math.max(0, totalCold - Math.floor(occCold)); document.getElementById('dash-cold-percent').innerText = totalCold > 0 ? Math.round((occCold/totalCold)*100) + '%' : '0%'; if(isAdmin) { document.getElementById('dash-val-room').innerText = valRoom.toLocaleString() + ' 원'; document.getElementById('dash-val-cold').innerText = valCold.toLocaleString() + ' 원'; document.getElementById('dash-val-total').innerText = (valRoom + valCold).toLocaleString() + ' 원'; document.getElementById('admin-dashboard-panel').innerHTML = `<div class="mt-8 p-6 bg-rose-50 border border-rose-200 rounded-2xl"><h3 class="text-rose-800 font-black text-lg mb-4 flex items-center">🚨 시스템 관리자 전용 구역</h3><div class="flex space-x-4"><button onclick="clearData('inventory')" class="bg-white border border-rose-300 text-rose-600 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-rose-100 transition-colors">📦 창고 재고 전체 삭제</button><button onclick="clearData('history')" class="bg-white border border-rose-300 text-rose-600 font-bold py-3 px-6 rounded-lg shadow-sm hover:bg-rose-100 transition-colors">📝 히스토리 내역 전체 삭제</button></div></div>`; } else { document.getElementById('admin-dashboard-panel').innerHTML = ''; } 
         }
 
@@ -540,6 +421,7 @@ HTML_CONTENT = """
         async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const outPallet = (qty / maxQty) * currentPallet; try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); alert("출고 완료!"); load(); } catch(e) {} }
         async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = (qty / maxQty) * currentPallet; try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); alert("이동 완료!"); load(); } catch(e) {} }
         async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty} EA)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); alert("보정 완료!"); load(); } catch(e) {} }
+        
         function executeSearch() { const keyword = document.getElementById('search-keyword').value.trim(); const countStr = document.getElementById('search-count').value; const count = parseInt(countStr); if(!keyword || isNaN(count) || count < 1) return alert("입력 확인 요망"); let matches = globalOccupancy.filter(x => x.item_name.includes(keyword) && x.production_date); if(matches.length === 0) return alert("데이터 없음"); matches.sort((a, b) => new Date(a.production_date) - new Date(b.production_date)); let targets = matches.slice(0, count); document.getElementById('nav-inventory').click(); alert(`날짜 가장 빠른 렉 ${targets.length}개 발견`); document.querySelectorAll('.highlight-pulse').forEach(el => el.classList.remove('highlight-pulse')); targets.forEach(item => { let displayId = item.location_id.replace(/^(R-|C-)/, ''); let match = displayId.match(/([A-Z])-([0-9]+)/) || displayId.match(/(FL-[CR]-[0-9]+)/); if(match) { let elId = match[0].startsWith('FL') ? `cell-${match[0]}` : `cell-${match[1]}${parseInt(match[2])}`; let el = document.getElementById(elId); if(el) el.classList.add('highlight-pulse'); } }); }
         function highlightFIFO() { const eggs = globalOccupancy.filter(x => x.production_date && x.location_id.startsWith('C-')); if(eggs.length === 0) return alert("냉장 창고에 산란일 데이터 없음"); eggs.sort((a, b) => new Date(a.production_date) - new Date(b.production_date)); const oldestDate = eggs[0].production_date; alert(`가장 오래된 산란일: ${oldestDate}\\n깜빡입니다!`); eggs.filter(x => x.production_date === oldestDate).map(x => x.location_id).forEach(loc => { let displayId = loc.replace('C-', ''); let match = displayId.match(/([A-Z])-([0-9]+)/); if(match) { let elId = `cell-${match[1]}${parseInt(match[2])}`; let el = document.getElementById(elId); if(el) el.classList.add('highlight-pulse'); } }); }
         async function clearData(target) { if(!confirm(`정말 삭제하시겠습니까?`)) return; try { await fetch(`/api/clear_data?target=${target}`, { method: 'DELETE' }); alert("초기화 완료"); load(); } catch(e) {} }
@@ -685,7 +567,6 @@ async def inbound_batch(rows: List[dict]):
             if qty <= 0: continue
 
             supplier = str(r_data.get("입고처(비고)", "")).strip()
-            # 💡 공백 완벽 제거 후 매칭!
             p_info = next((p for p in pm_list if p["item_name"].strip() == name and p["supplier"].strip() == supplier), None)
             pallet_ea = p_info["pallet_ea"] if p_info and p_info.get("pallet_ea", 0) > 0 else 1
             calculated_pallet = qty / pallet_ea
@@ -701,7 +582,6 @@ async def inbound_batch(rows: List[dict]):
                     prod_date = raw_date.replace('/','-').replace('.','-')
                     if " " in prod_date: prod_date = prod_date.split(" ")[0]
 
-            # 💡 DB에는 분리된 ID(R-, C-)로 저장하되, 엑셀에서 받아올 땐 다시 붙임
             loc_id = str(r_data.get("렉 위치", "")).strip()
             zone = str(r_data.get("구역", "")).strip()
             if zone == "실온" and not loc_id.startswith("FL-"): loc_id = "R-" + loc_id
