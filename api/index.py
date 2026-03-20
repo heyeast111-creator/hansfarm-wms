@@ -222,7 +222,6 @@ HTML_CONTENT = """
                     <button id="pm-submit-btn" onclick="submitProduct()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">DB에 등록하기</button>
                     <button id="pm-cancel-btn" onclick="cancelEdit()" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">수정 취소</button>
                 </div>
-                
                 <div class="col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col">
                     <div class="flex justify-between items-center mb-4 border-b pb-3 shrink-0">
                         <h2 class="font-black text-lg text-slate-700">등록된 품목 리스트</h2>
@@ -321,7 +320,6 @@ HTML_CONTENT = """
                 const [occRes, prodRes, histRes] = await Promise.all([ fetch('/api/inventory'), fetch('/api/products'), fetch('/api/history') ]);
                 globalOccupancy = await occRes.json(); productMaster = await prodRes.json(); globalHistory = await histRes.json();
                 
-                // 💡 데이터 로드 직후 검색 드롭다운 세팅
                 updateSearchCategoryDropdown(); 
                 
                 renderMap(); renderProductMaster(); updateDashboard(); renderSafetyStock(); if(isAdmin) renderAccounting();
@@ -356,7 +354,6 @@ HTML_CONTENT = """
             else if(viewName === 'accounting') renderAccounting();
         }
 
-        // 💡 [신규] 검색 탭 콤보박스 (카테고리 연동)
         function updateSearchCategoryDropdown() {
             const categories = [...new Set(productMaster.map(p => p.category))];
             const catSelect = document.getElementById('search-category');
@@ -377,7 +374,6 @@ HTML_CONTENT = """
             const uniqueItems = [...new Set(items.map(p => p.item_name))];
             const datalist = document.getElementById('search-item-list');
             if(datalist) {
-                // 💡 datalist에 아이템들을 넣어주면 자동완성(포함검색)이 즉시 가능해짐
                 datalist.innerHTML = uniqueItems.map(name => `<option value="${name}">`).join('');
             }
             document.getElementById('search-keyword').value = '';
@@ -477,7 +473,6 @@ HTML_CONTENT = """
             e.target.value = ''; 
         }
 
-        // 💡 [신규] 테이블 형태 및 검색기능 포함 품목 렌더러
         function renderProductMaster() { 
             const searchInput = document.getElementById('pm-search');
             const keyword = searchInput ? searchInput.value.toLowerCase().trim() : '';
@@ -648,7 +643,7 @@ HTML_CONTENT = """
         async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = getDynamicPalletCount(itemName, null, qty); try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); alert("이동 완료!"); load(); } catch(e) {} }
         async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty} EA)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); alert("보정 완료!"); load(); } catch(e) {} }
         
-        // 💡 [신규] 검색 로직 (카테고리 연동)
+        // 💡 [수정] 검색 로직 (날짜 없어도 검색되게 예외 처리)
         function executeSearch() { 
             const catSelect = document.getElementById('search-category').value;
             const keyword = document.getElementById('search-keyword').value.trim().toLowerCase(); 
@@ -656,16 +651,23 @@ HTML_CONTENT = """
             const count = parseInt(countStr); 
             if(catSelect === 'ALL' && !keyword) return alert("카테고리를 선택하거나 검색할 단어를 입력해주세요."); 
             
-            // 💡 산란일/입고일 순서대로 렉 정렬
-            let matches = globalOccupancy.filter(x => x.production_date); 
+            // 날짜 유무 상관없이 일단 전체 재고에서 조건 검사
+            let matches = globalOccupancy; 
             if(catSelect !== 'ALL') matches = matches.filter(x => x.category === catSelect);
             if(keyword) matches = matches.filter(x => x.item_name.toLowerCase().includes(keyword));
             
             if(matches.length === 0) return alert("조건에 맞는 품목이 창고에 없습니다."); 
-            matches.sort((a, b) => new Date(a.production_date) - new Date(b.production_date)); 
+            
+            // 날짜가 있으면 선입선출, 없으면 뒤로 빼기 (Infinity)
+            matches.sort((a, b) => {
+                let tA = a.production_date ? new Date(a.production_date).getTime() : Infinity;
+                let tB = b.production_date ? new Date(b.production_date).getTime() : Infinity;
+                return tA - tB;
+            }); 
+            
             let targets = matches.slice(0, count); 
             document.getElementById('nav-inventory').click(); 
-            alert(`가장 오래된 재고(FIFO) ${targets.length}개 렉을 깜빡이로 표시합니다!`); 
+            alert(`조건에 맞는 ${targets.length}개 렉을 찾아 깜빡이로 표시합니다!`); 
             document.querySelectorAll('.highlight-pulse').forEach(el => el.classList.remove('highlight-pulse')); 
             targets.forEach(item => { 
                 let displayId = item.location_id.replace(/^(R-|C-)/, ''); 
@@ -677,6 +679,7 @@ HTML_CONTENT = """
                 } 
             }); 
         }
+
         function highlightFIFO() { const eggs = globalOccupancy.filter(x => x.production_date && x.location_id.startsWith('C-')); if(eggs.length === 0) return alert("냉장 창고에 산란일 데이터 없음"); eggs.sort((a, b) => new Date(a.production_date) - new Date(b.production_date)); const oldestDate = eggs[0].production_date; alert(`가장 오래된 산란일: ${oldestDate}\\n깜빡입니다!`); eggs.filter(x => x.production_date === oldestDate).map(x => x.location_id).forEach(loc => { let displayId = loc.replace('C-', ''); let match = displayId.match(/([A-Z])-([0-9]+)/); if(match) { let elId = `cell-${match[1]}${parseInt(match[2])}`; let el = document.getElementById(elId); if(el) el.classList.add('highlight-pulse'); } }); }
         async function clearData(target) { if(!confirm(`정말 삭제하시겠습니까?`)) return; try { await fetch(`/api/clear_data?target=${target}`, { method: 'DELETE' }); alert("초기화 완료"); load(); } catch(e) {} }
 
