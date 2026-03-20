@@ -23,10 +23,6 @@ class AdjustData(BaseModel):
     inventory_id: str; location_id: str; item_name: str; new_quantity: int
 class PaymentUpdate(BaseModel):
     payment_status: str
-class BomData(BaseModel):
-    finished_product: str
-    material_product: str
-    require_qty: float
 
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -441,7 +437,6 @@ HTML_CONTENT = """
             if(tab === 'bom') { updateBomDropdowns(); renderBomMaster(); }
         }
 
-        // 💡 엑셀 처리 로직 분리 (에러 얼럿 추가!)
         function exportProductsExcel(targetType) { 
             try { 
                 let wsData = []; let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster; let sheetName = targetType === 'finished' ? "제품마스터" : "자재마스터"; let fileName = targetType === 'finished' ? "한스팜_제품마스터_양식.xlsx" : "한스팜_자재마스터_양식.xlsx";
@@ -463,7 +458,7 @@ HTML_CONTENT = """
                         const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
                         const result = await res.json();
                         if(result.status === 'success') { alert(`${msg} 대량 업로드 완료!`); load(); } 
-                        else { alert(`업로드 실패: ${result.message}`); } // 💡 여기서 진짜 에러가 뜸!
+                        else { alert(`업로드 실패: 중복된 데이터가 있거나 양식이 맞지 않습니다. (${result.message})`); }
                     } else { alert("업로드할 데이터가 없습니다."); }
                 } catch(err) { console.error(err); alert("업로드 처리 중 오류 발생: 엑셀 양식을 다시 확인해주세요."); } 
             }; reader.readAsArrayBuffer(file); e.target.value = ''; 
@@ -791,11 +786,11 @@ HTML_CONTENT = """
         }
 
         function renderAccounting() { const selMonth = document.getElementById('acc-month').value; if(!selMonth) return; let suppliers = [...new Set(globalHistory.filter(h => h.action_type === '입고').map(h => h.remarks || '기본입고처'))]; let supSelect = document.getElementById('acc-supplier'); let currentSel = supSelect.value; supSelect.innerHTML = `<option value="ALL">전체 매입처 보기</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); if(suppliers.includes(currentSel)) supSelect.value = currentSel; const selectedSup = supSelect.value; let totalAcc = 0, unpaidAcc = 0, paidAcc = 0; let html = ''; let filtered = globalHistory.filter(h => { let hMonth = h.created_at.substring(0, 7); let hSup = h.remarks || '기본입고처'; return h.action_type === '입고' && hMonth === selMonth && (selectedSup === 'ALL' || selectedSup === hSup); }); filtered.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); filtered.forEach(h => { let allItems = [...finishedProductMaster, ...productMaster]; let pInfo = allItems.find(p => p.item_name === h.item_name && p.supplier === (h.remarks || '기본입고처')); let price = pInfo ? pInfo.unit_price : 0; let cost = price * h.quantity; totalAcc += cost; let isPaid = h.payment_status === '결제완료'; if(isPaid) paidAcc += cost; else unpaidAcc += cost; let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); let btnHtml = isPaid ? `<button onclick="togglePayment('${h.id}', '미지급')" class="bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded text-[10px] hover:bg-slate-200">취소</button>` : `<button onclick="togglePayment('${h.id}', '결제완료')" class="bg-blue-500 text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-blue-600 shadow-sm">결제완료 처리</button>`; let statusTag = isPaid ? `<span class="text-blue-600 font-black text-xs mr-2">✅ 완료</span>` : `<span class="text-rose-500 font-black text-xs mr-2">⏳ 미지급</span>`; html += `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 text-slate-500">${dateStr}</td><td class="p-3 font-bold text-slate-700">${h.remarks || '기본'}</td><td class="p-3 font-black text-slate-800">${h.item_name}</td><td class="p-3 text-right font-bold text-indigo-600">${h.quantity.toLocaleString()}</td><td class="p-3 text-right text-slate-500">${price.toLocaleString()}</td><td class="p-3 text-right font-black text-slate-800">${cost.toLocaleString()}</td><td class="p-3 text-center flex items-center justify-center">${statusTag} ${btnHtml}</td></tr>`; }); document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-bold">해당 월에 입고(매입) 내역이 없습니다.</td></tr>`; document.getElementById('acc-total').innerText = totalAcc.toLocaleString() + ' 원'; document.getElementById('acc-unpaid').innerText = unpaidAcc.toLocaleString() + ' 원'; document.getElementById('acc-paid').innerText = paidAcc.toLocaleString() + ' 원'; }
-        async function togglePayment(logId, status) { try { await fetch(`/api/history/${logId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({payment_status: status}) }); load(); } catch(e) { alert("상태 변경 실패!"); } }
-        async function processInbound(locId) { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = parseInt(document.getElementById('in-qty').value); let date = document.getElementById('in-date').value; const supplier = document.getElementById('in-supplier').value; if(!cat || !item || isNaN(qty)) return alert("필수값 입력 요망"); if(!date && currentZone !== '냉장') { let t = new Date(); date = t.toISOString().split('T')[0]; } let dynPallet = getDynamicPalletCount(item, supplier, qty); try { const res = await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: qty, pallet_count: dynPallet, production_date: date || null, remarks: supplier }) }); const result = await res.json(); if(result.status === 'success') { alert("입고 완료!"); load(); } else { alert(`입고 실패: ${result.message}`); } } catch(e) {} }
-        async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const outPallet = getDynamicPalletCount(itemName, null, qty); try { const res = await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); const result = await res.json(); if(result.status === 'success') { alert("출고 완료!"); load(); } else { alert(`출고 실패: ${result.message}`); } } catch(e) {} }
-        async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = getDynamicPalletCount(itemName, null, qty); try { const res = await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); const result = await res.json(); if(result.status === 'success') { alert("이동 완료!"); load(); } else { alert(`이동 실패: ${result.message}`); } } catch(e) {} }
-        async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty} EA)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { const res = await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); const result = await res.json(); if(result.status === 'success') { alert("보정 완료!"); load(); } else { alert(`보정 실패: ${result.message}`); } } catch(e) {} }
+        async function togglePayment(logId, status) { try { await fetch(`/api/history/${logId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({payment_status: status}) }); load(); } catch(e) {} }
+        async function processInbound(locId) { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = parseInt(document.getElementById('in-qty').value); let date = document.getElementById('in-date').value; const supplier = document.getElementById('in-supplier').value; if(!cat || !item || isNaN(qty)) return alert("필수값 입력 요망"); if(!date && currentZone !== '냉장') { let t = new Date(); date = t.toISOString().split('T')[0]; } let dynPallet = getDynamicPalletCount(item, supplier, qty); try { await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: qty, pallet_count: dynPallet, production_date: date || null, remarks: supplier }) }); alert("입고 완료!"); load(); } catch(e) {} }
+        async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const outPallet = getDynamicPalletCount(itemName, null, qty); try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); alert("출고 완료!"); load(); } catch(e) {} }
+        async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = getDynamicPalletCount(itemName, null, qty); try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); alert("이동 완료!"); load(); } catch(e) {} }
+        async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty} EA)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); alert("보정 완료!"); load(); } catch(e) {} }
         
         function executeSearch() { 
             const catSelect = document.getElementById('search-category').value;
@@ -877,7 +872,7 @@ async def add_bom(data: dict):
 @app.post("/api/bom_batch")
 async def bom_batch(rows: List[dict]):
     async with httpx.AsyncClient() as client:
-        payloads = []
+        payloads_dict = {}
         for r in rows:
             fin = str(r.get("완제품명", "")).strip()
             mat = str(r.get("부자재명", "")).strip()
@@ -885,8 +880,10 @@ async def bom_batch(rows: List[dict]):
             try: qty = float(str(r.get("소요수량(EA)", "0")).replace(',', ''))
             except: qty = 0
             if qty <= 0: continue
-            payloads.append({"finished_product": fin, "material_product": mat, "require_qty": qty})
+            # 💡 중복 데이터 발생 시 딕셔너리로 마지막 데이터만 유지 (에러 방지)
+            payloads_dict[(fin, mat)] = {"finished_product": fin, "material_product": mat, "require_qty": qty}
         
+        payloads = list(payloads_dict.values())
         if payloads:
             headers = HEADERS.copy(); headers["Prefer"] = "resolution=merge-duplicates"
             res = await client.post(f"{SUPABASE_URL}/rest/v1/bom_master?on_conflict=finished_product,material_product", json=payloads, headers=headers)
@@ -922,7 +919,7 @@ async def update_product(old_name: str, old_supplier: str, data: ProductData):
 @app.post("/api/products_batch")
 async def products_batch(rows: List[dict]):
     async with httpx.AsyncClient() as client:
-        payloads = []
+        payloads_dict = {}
         for r in rows:
             name = str(r.get("품목명", "")).strip()
             if not name: continue
@@ -935,7 +932,15 @@ async def products_batch(rows: List[dict]):
             if ea <= 0: ea = 1 
             supplier = str(r.get("입고처(공급사)", "")).strip()
             if not supplier: supplier = "기본입고처"
-            payloads.append({"category": str(r.get("카테고리", "미분류")).strip(), "item_name": name, "supplier": supplier, "daily_usage": usage, "unit_price": price, "pallet_ea": ea})
+            category = str(r.get("카테고리", "미분류")).strip()
+            
+            # 💡 중복 데이터 발생 시 딕셔너리로 마지막 데이터만 유지 (에러 방지)
+            payloads_dict[(name, supplier)] = {
+                "category": category, "item_name": name, "supplier": supplier, 
+                "daily_usage": usage, "unit_price": price, "pallet_ea": ea
+            }
+            
+        payloads = list(payloads_dict.values())
         if payloads:
             headers = HEADERS.copy(); headers["Prefer"] = "resolution=merge-duplicates" 
             res = await client.post(f"{SUPABASE_URL}/rest/v1/products?on_conflict=item_name,supplier", json=payloads, headers=headers)
@@ -971,20 +976,28 @@ async def update_finished_product(old_name: str, old_supplier: str, data: Produc
 @app.post("/api/finished_products_batch")
 async def finished_products_batch(rows: List[dict]):
     async with httpx.AsyncClient() as client:
-        payloads = []
+        payloads_dict = {}
         for r in rows:
             name = str(r.get("품목명", "")).strip()
             if not name: continue
-            try: usage = int(float(str(r.get("일간소모량(EA)", "0")).replace(',', '')))
+            try: usage = int(float(str(r.get("일간출고량(EA)", str(r.get("일간소모량(EA)", "0")))).replace(',', '')))
             except: usage = 0
-            try: price = int(float(str(r.get("단가(비용)", "0")).replace(',', '')))
+            try: price = int(float(str(r.get("단가(매출)", str(r.get("단가(비용)", "0")))).replace(',', '')))
             except: price = 0
             try: ea = int(float(str(r.get("1P기준수량(EA)", "1")).replace(',', '')))
             except: ea = 1
             if ea <= 0: ea = 1 
-            supplier = str(r.get("입고처(공급사)", "")).strip()
+            supplier = str(r.get("생산처(비고)", str(r.get("입고처(공급사)", "")))).strip()
             if not supplier: supplier = "자체생산"
-            payloads.append({"category": str(r.get("카테고리", "완제품")).strip(), "item_name": name, "supplier": supplier, "daily_usage": usage, "unit_price": price, "pallet_ea": ea})
+            category = str(r.get("카테고리", "완제품")).strip()
+            
+            # 💡 중복 데이터 발생 시 딕셔너리로 마지막 데이터만 유지 (에러 방지)
+            payloads_dict[(name, supplier)] = {
+                "category": category, "item_name": name, "supplier": supplier, 
+                "daily_usage": usage, "unit_price": price, "pallet_ea": ea
+            }
+            
+        payloads = list(payloads_dict.values())
         if payloads:
             headers = HEADERS.copy(); headers["Prefer"] = "resolution=merge-duplicates" 
             res = await client.post(f"{SUPABASE_URL}/rest/v1/finished_products?on_conflict=item_name,supplier", json=payloads, headers=headers)
