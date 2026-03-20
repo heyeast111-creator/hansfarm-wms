@@ -106,7 +106,7 @@ HTML_CONTENT = """
             <div class="grid grid-cols-3 gap-6 mb-6">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center justify-center">
                     <div class="flex justify-between items-center mb-4 w-full">
-                        <div class="text-slate-500 font-black text-sm">창고 적재율 시각화</div>
+                        <div class="text-slate-500 font-black text-sm">창고 적재율</div>
                         <select id="dash-zone-select" onchange="updateDashboard()" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-600 outline-none bg-slate-50">
                             <option value="ALL">전체 창고</option>
                             <option value="ROOM">실온 (Room)</option>
@@ -122,18 +122,18 @@ HTML_CONTENT = """
                 </div>
                 <div class="col-span-2 grid grid-cols-2 gap-4">
                     <div class="bg-indigo-50 p-5 rounded-2xl shadow-sm border border-indigo-100 flex flex-col justify-between">
-                        <div class="flex justify-between items-center mb-2"><div class="font-black text-indigo-800">❄️ 냉장 창고 (Cold)</div><div class="text-indigo-500 font-bold text-sm" id="dash-cold-percent">0%</div></div>
+                        <div class="flex justify-between items-center mb-2"><div class="font-black text-indigo-800">❄️ 냉장 창고</div><div class="text-indigo-500 font-bold text-sm" id="dash-cold-percent">0%</div></div>
                         <div class="space-y-2 text-sm mt-2">
-                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 렉(파레트) 수용량</span><span class="font-black" id="dash-cold-total">0</span></div>
-                            <div class="flex justify-between text-indigo-600"><span class="font-bold">적재된 파레트 볼륨</span><span class="font-black" id="dash-cold-occ">0</span></div>
+                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 파레트 수용량</span><span class="font-black" id="dash-cold-total">0</span></div>
+                            <div class="flex justify-between text-indigo-600"><span class="font-bold">적재된 파레트</span><span class="font-black" id="dash-cold-occ">0</span></div>
                             <div class="flex justify-between text-emerald-600"><span class="font-bold">비어있는 렉 수</span><span class="font-black" id="dash-cold-empty">0</span></div>
                         </div>
                     </div>
                     <div class="bg-orange-50 p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col justify-between">
-                        <div class="flex justify-between items-center mb-2"><div class="font-black text-orange-800">☀️ 실온 창고 (Room)</div><div class="text-orange-500 font-bold text-sm" id="dash-room-percent">0%</div></div>
+                        <div class="flex justify-between items-center mb-2"><div class="font-black text-orange-800">☀️ 실온 창고</div><div class="text-orange-500 font-bold text-sm" id="dash-room-percent">0%</div></div>
                         <div class="space-y-2 text-sm mt-2">
-                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 렉(파레트) 수용량</span><span class="font-black" id="dash-room-total">0</span></div>
-                            <div class="flex justify-between text-orange-600"><span class="font-bold">적재된 파레트 볼륨</span><span class="font-black" id="dash-room-occ">0</span></div>
+                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 파레트 수용량</span><span class="font-black" id="dash-room-total">0</span></div>
+                            <div class="flex justify-between text-orange-600"><span class="font-bold">적재된 파레트</span><span class="font-black" id="dash-room-occ">0</span></div>
                             <div class="flex justify-between text-emerald-600"><span class="font-bold">비어있는 렉 수</span><span class="font-black" id="dash-room-empty">0</span></div>
                         </div>
                     </div>
@@ -141,11 +141,11 @@ HTML_CONTENT = """
             </div>
             <div class="grid grid-cols-2 gap-6 mb-6">
                 <div class="bg-white p-6 rounded-2xl shadow-md border-l-4 border-blue-500">
-                    <div class="text-slate-500 font-bold text-sm mb-1 flex items-center justify-between"><span>기간 내 총 입고량 (IN)</span><span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded font-black">파레트 볼륨 합산</span></div>
+                    <div class="text-slate-500 font-bold text-sm mb-1 flex items-center justify-between"><span>기간 내 총 입고량 (IN)</span><span class="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded font-black">파레트 합산</span></div>
                     <div class="text-4xl font-black text-blue-600 mt-2" id="dash-in">0 P</div>
                 </div>
                 <div class="bg-white p-6 rounded-2xl shadow-md border-l-4 border-rose-500">
-                    <div class="text-slate-500 font-bold text-sm mb-1 flex items-center justify-between"><span>기간 내 총 출고량 (OUT)</span><span class="bg-rose-100 text-rose-600 text-[10px] px-2 py-0.5 rounded font-black">파레트 볼륨 합산</span></div>
+                    <div class="text-slate-500 font-bold text-sm mb-1 flex items-center justify-between"><span>기간 내 총 출고량 (OUT)</span><span class="bg-rose-100 text-rose-600 text-[10px] px-2 py-0.5 rounded font-black">파레트 합산</span></div>
                     <div class="text-4xl font-black text-rose-600 mt-2" id="dash-out">0 P</div>
                 </div>
             </div>
@@ -168,7 +168,7 @@ HTML_CONTENT = """
         </div>
 
         <div id="view-search" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
-            <h1 class="text-3xl font-black text-slate-800 mb-8">🔍 스마트 재고 위치 스캔</h1>
+            <h1 class="text-3xl font-black text-slate-800 mb-8">🔍 재고 위치 검색</h1>
             <div class="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-3xl text-center">
                 <div class="flex space-x-4 mb-6">
                     <div class="w-1/4 text-left">
@@ -183,11 +183,11 @@ HTML_CONTENT = """
                         <datalist id="search-item-list"></datalist>
                     </div>
                     <div class="w-1/4 text-left">
-                        <label class="block text-xs font-bold text-slate-500 mb-1">찾을 개수 (렉 수)</label>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">찾을 개수 (파레트 수)</label>
                         <input type="number" id="search-count" value="1" min="1" class="w-full text-lg p-3 border-2 border-indigo-200 rounded-xl font-bold text-indigo-800 outline-none">
                     </div>
                 </div>
-                <button onclick="executeSearch()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg py-4 px-12 rounded-xl shadow-lg transition-all w-full">선입선출(FIFO) 조건으로 찾기</button>
+                <button onclick="executeSearch()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black text-lg py-4 px-12 rounded-xl shadow-lg transition-all w-full">찾기</button>
             </div>
         </div>
 
@@ -197,7 +197,7 @@ HTML_CONTENT = """
                     <h1 class="text-3xl font-black text-slate-800 flex items-center"><svg class="w-8 h-8 mr-3 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg> 자동 발주/안전재고</h1>
                 </div>
                 <div class="flex items-center space-x-3 bg-white p-3 rounded-xl shadow-sm border border-slate-200">
-                    <label class="font-bold text-slate-600">일괄 안전재고 기준:</label>
+                    <label class="font-bold text-slate-600">안전재고 기준:</label>
                     <div class="relative"><input type="number" id="safe-days-target" value="7" min="1" onchange="renderSafetyStock()" class="w-20 border-2 border-indigo-200 rounded-lg p-2 font-black text-indigo-700 text-center outline-none"><span class="absolute right-3 top-2.5 font-bold text-slate-400">일</span></div>
                 </div>
             </div>
@@ -212,9 +212,9 @@ HTML_CONTENT = """
         <div id="view-products" class="hidden flex-col h-full w-full absolute inset-0 p-8 overflow-auto z-10 bg-slate-100">
             <div class="flex justify-between items-center mb-6 border-b pb-4 shrink-0">
                 <div class="flex space-x-4">
-                    <button onclick="switchProductTab('fp')" id="tab-btn-fp" class="text-2xl font-black text-indigo-700 border-b-4 border-indigo-700 pb-1 px-2 transition-colors">📦 제품 마스터 DB</button>
-                    <button onclick="switchProductTab('pm')" id="tab-btn-pm" class="text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">✂️ 자재 마스터 DB</button>
-                    <button onclick="switchProductTab('bom')" id="tab-btn-bom" class="text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">📜 BOM (레시피) 설정</button>
+                    <button onclick="switchProductTab('fp')" id="tab-btn-fp" class="text-2xl font-black text-indigo-700 border-b-4 border-indigo-700 pb-1 px-2 transition-colors">📦 제품 DB</button>
+                    <button onclick="switchProductTab('pm')" id="tab-btn-pm" class="text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">✂️ 자재 DB</button>
+                    <button onclick="switchProductTab('bom')" id="tab-btn-bom" class="text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">📜 BOM 설정</button>
                 </div>
                 
                 <div id="fp-header-btns" class="flex space-x-2">
@@ -238,7 +238,7 @@ HTML_CONTENT = """
             
             <div id="subview-fp" class="grid grid-cols-3 gap-8 flex-1 min-h-0">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit overflow-auto">
-                    <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="fp-form-title">신규 제품(완제품) 추가</h2>
+                    <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="fp-form-title">신규 제품 추가</h2>
                     <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="fp-cat" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">제품명</label><input type="text" id="fp-name" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-rose-500 mb-1">생산처/비고</label><input type="text" id="fp-supplier" placeholder="예: 자체생산" class="w-full border border-rose-300 bg-rose-50 rounded p-2 mb-3 font-bold text-sm">
@@ -271,7 +271,7 @@ HTML_CONTENT = """
 
             <div id="subview-pm" class="hidden grid-cols-3 gap-8 flex-1 min-h-0">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit overflow-auto">
-                    <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="pm-form-title">신규 자재(부자재) 추가</h2>
+                    <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="pm-form-title">신규 자재 추가</h2>
                     <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="pm-cat" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-slate-500 mb-1">자재명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-2 mb-3 font-bold text-sm">
                     <label class="block text-xs font-bold text-rose-500 mb-1">입고처 (거래처명)</label><input type="text" id="pm-supplier" placeholder="예: 한스패키지" class="w-full border border-rose-300 bg-rose-50 rounded p-2 mb-3 font-bold text-sm">
@@ -305,7 +305,7 @@ HTML_CONTENT = """
             <div id="subview-bom" class="hidden grid-cols-3 gap-8 flex-1 min-h-0">
                 <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit">
                     <h2 class="font-black text-lg text-emerald-700 mb-4 border-b pb-2 flex items-center">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg> 신규 레시피 등록
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg> 신규 BOM 등록
                     </h2>
                     <label class="block text-xs font-bold text-slate-500 mb-1">① 완제품 선택 (제품 DB 연동)</label>
                     <select id="bom-finished" class="w-full border border-slate-300 rounded p-2 mb-4 font-bold text-sm outline-none bg-white"></select>
@@ -322,7 +322,7 @@ HTML_CONTENT = """
                 
                 <div class="col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col">
                     <div class="flex justify-between items-center mb-4 border-b pb-3 shrink-0">
-                        <h2 class="font-black text-lg text-slate-700">현재 등록된 BOM (레시피)</h2>
+                        <h2 class="font-black text-lg text-slate-700">현재 등록된 BOM</h2>
                     </div>
                     <div class="overflow-y-auto flex-1 custom-scrollbar pr-2 h-[50vh]">
                         <table class="w-full text-left border-collapse text-sm">
@@ -466,7 +466,7 @@ HTML_CONTENT = """
 
         function exportBomExcel() {
             let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
-            const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
+            const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOMBOM_양식.xlsx");
         }
 
         function importBomExcel(e) {
@@ -494,7 +494,7 @@ HTML_CONTENT = """
 
         function renderBomMaster() {
             const tbody = document.getElementById('bom-list');
-            if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
+            if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 BOM이 없습니다.</td></tr>`; return; }
             bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
             tbody.innerHTML = bomMaster.map(b => {
                 let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors" title="삭제"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>` : '';
@@ -509,13 +509,13 @@ HTML_CONTENT = """
             try { 
                 const res = await fetch('/api/bom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ finished_product: finished, material_product: material, require_qty: qty }) }); 
                 const result = await res.json();
-                if(result.status === 'success') { alert("레시피 연결 완료!"); document.getElementById('bom-qty').value = 1; load(); }
+                if(result.status === 'success') { alert("BOM 연결 완료!"); document.getElementById('bom-qty').value = 1; load(); }
                 else { alert(`등록 실패: ${result.message}`); }
             } catch(e) { alert("서버 통신 실패"); }
         }
 
-        async function deleteBom(id) { if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); load(); } catch(e) { alert("삭제 실패"); } }
-        async function deleteAllBom() { if(!confirm("⚠️ 모든 레시피(BOM)를 일괄 삭제하시겠습니까?")) return; const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); try { await fetch('/api/bom_all', { method: 'DELETE' }); alert("일괄 삭제 완료!"); load(); } catch(e) {} }
+        async function deleteBom(id) { if(!confirm("이 BOM 연결을 삭제하시겠습니까?")) return; try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); load(); } catch(e) { alert("삭제 실패"); } }
+        async function deleteAllBom() { if(!confirm("⚠️ 모든 BOM를 일괄 삭제하시겠습니까?")) return; const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); try { await fetch('/api/bom_all', { method: 'DELETE' }); alert("일괄 삭제 완료!"); load(); } catch(e) {} }
 
         function renderProductMaster(targetType) { 
             const searchInput = document.getElementById(targetType === 'finished' ? 'fp-search' : 'pm-search');
