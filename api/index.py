@@ -62,17 +62,13 @@ HTML_CONTENT = """
         <div class="mb-8 w-full px-4 flex justify-center"><img src="/logo.jpg" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm"></div>
         <div class="flex flex-col space-y-2 w-full px-3 flex-1">
             <button onclick="showView('dashboard')" id="nav-dashboard" class="nav-btn w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all">대시보드</button>
-            
             <button onclick="showView('inventory')" id="nav-inventory" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">렉맵</button>
             <button onclick="showView('search')" id="nav-search" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">재고조회</button>
             <button onclick="showView('production')" id="nav-production" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">생산관리</button>
             <button onclick="showView('outbound')" id="nav-outbound" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">출고관리</button>
-            
             <button onclick="showView('safety')" id="nav-safety" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all text-rose-600">안전재고/발주</button>
             <button onclick="showView('products')" id="nav-products" class="nav-btn w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">품목관리</button>
-            
             <button onclick="showView('accounting')" id="nav-accounting" class="hidden nav-btn w-full py-3 rounded-md border border-slate-200 text-yellow-700 font-black hover:bg-yellow-50 shadow-sm text-sm transition-all">💰 정산/회계</button>
-            
             <div class="my-2 border-b border-slate-200 w-full"></div>
             <button onclick="exportPhysicalCountExcel()" class="w-full py-3 rounded-md bg-blue-50 border border-blue-200 text-blue-700 font-black shadow-inner text-[12px] transition-all hover:bg-blue-100">📋 실사/업로드 양식</button>
             <button onclick="document.getElementById('excel-upload').click()" class="w-full mt-1 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-[12px] transition-all hover:bg-emerald-100">⬆️ 엑셀 대량 입고</button>
@@ -102,11 +98,11 @@ HTML_CONTENT = """
             <div class="flex-1 overflow-auto p-6 relative flex flex-col items-center">
                 <div class="bg-white p-4 rounded-xl shadow-md border border-slate-200 w-full max-w-[800px] mb-6 flex space-x-3 items-end shrink-0">
                     <div class="w-1/4 text-left">
-                        <label class="block text-[10px] font-bold text-slate-500 mb-1">카테고리</label>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">현재 구역 카테고리</label>
                         <select id="map-search-category" onchange="updateMapSearchItemDropdown()" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"><option value="ALL">전체</option></select>
                     </div>
                     <div class="w-2/4 text-left">
-                        <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 (자동완성)</label>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 (현재 탭 기준 필터링됨)</label>
                         <input type="text" id="map-search-keyword" list="map-search-item-list" placeholder="검색어 입력" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none">
                         <datalist id="map-search-item-list"></datalist>
                     </div>
@@ -198,23 +194,32 @@ HTML_CONTENT = """
 
         <div id="view-search" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
             <h1 class="text-3xl font-black text-slate-800 mb-8">📦 실시간 품목별 재고 요약</h1>
-            <div class="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-4xl text-center">
-                <div class="flex space-x-4 mb-6">
-                    <div class="w-1/3 text-left">
-                        <label class="block text-xs font-bold text-slate-500 mb-1">① 입고처(생산처) 선택</label>
-                        <select id="summary-supplier" onchange="updateSummaryCategoryDropdown()" class="w-full text-lg p-3 border-2 border-rose-200 rounded-xl font-bold text-rose-800 outline-none bg-white">
+            <div class="bg-white p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-5xl text-center">
+                <div class="flex space-x-3 mb-6">
+                    <div class="w-1/4 text-left">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">① 관리 유형</label>
+                        <select id="summary-type" onchange="updateSummarySupplierDropdown()" class="w-full text-sm p-3 border-2 border-slate-300 rounded-xl font-bold text-slate-800 outline-none bg-slate-50">
+                            <option value="ALL">전체 유형</option>
+                            <option value="FINISHED">제품 (완제품)</option>
+                            <option value="MATERIAL">자재 (부자재)</option>
+                            <option value="RAW">원란 (냉장)</option>
+                        </select>
+                    </div>
+                    <div class="w-1/4 text-left">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">② 입고처 (생산처)</label>
+                        <select id="summary-supplier" onchange="updateSummaryCategoryDropdown()" class="w-full text-sm p-3 border-2 border-rose-200 rounded-xl font-bold text-rose-800 outline-none bg-white">
                             <option value="ALL">전체 입고처</option>
                         </select>
                     </div>
-                    <div class="w-1/3 text-left">
-                        <label class="block text-xs font-bold text-slate-500 mb-1">② 카테고리 선택</label>
-                        <select id="summary-category" onchange="updateSummaryItemDropdown()" class="w-full text-lg p-3 border-2 border-indigo-200 rounded-xl font-bold text-indigo-800 outline-none bg-white">
+                    <div class="w-1/4 text-left">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">③ 카테고리</label>
+                        <select id="summary-category" onchange="updateSummaryItemDropdown()" class="w-full text-sm p-3 border-2 border-indigo-200 rounded-xl font-bold text-indigo-800 outline-none bg-white">
                             <option value="ALL">전체 카테고리</option>
                         </select>
                     </div>
-                    <div class="w-1/3 text-left">
-                        <label class="block text-xs font-bold text-slate-500 mb-1">③ 품목명/자재명 선택</label>
-                        <select id="summary-item" onchange="calculateSummary()" class="w-full text-lg p-3 border-2 border-emerald-200 rounded-xl font-bold text-emerald-800 outline-none bg-white">
+                    <div class="w-1/4 text-left">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">④ 품목명 확인</label>
+                        <select id="summary-item" onchange="calculateSummary()" class="w-full text-sm p-3 border-2 border-emerald-200 rounded-xl font-bold text-emerald-800 outline-none bg-white">
                             <option value="">앞에서부터 선택해주세요</option>
                         </select>
                     </div>
@@ -628,10 +633,14 @@ HTML_CONTENT = """
             try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); load(); } catch(e) { alert("삭제 실패!"); } 
         }
 
-        // 💡 렉맵 상단 검색용 드롭다운
+        // 💡 맵 탭에서 구역 변경 시 드롭다운 필터 재적용
         function updateMapSearchCategoryDropdown() {
-            let allCategories = [...new Set(finishedProductMaster.map(p => p.category)), ...new Set(productMaster.map(p => p.category))];
-            const categories = [...new Set(allCategories)].filter(Boolean).sort();
+            let sourceItems = [];
+            if (currentZone === '실온') sourceItems = productMaster.filter(p => !p.category.includes('원란'));
+            else if (currentZone === '냉장') sourceItems = productMaster.filter(p => p.category.includes('원란'));
+            else if (currentZone === '현장') sourceItems = finishedProductMaster;
+            
+            const categories = [...new Set(sourceItems.map(p => p.category))].filter(Boolean).sort();
             const catSelect = document.getElementById('map-search-category');
             if (catSelect) { 
                 catSelect.innerHTML = `<option value="ALL">전체</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join(''); 
@@ -640,19 +649,34 @@ HTML_CONTENT = """
         }
 
         function updateMapSearchItemDropdown() {
-            const catSelect = document.getElementById('map-search-category'); if(!catSelect) return;
-            const cat = catSelect.value; let items = [...finishedProductMaster, ...productMaster];
-            if (cat !== 'ALL') { items = items.filter(p => p.category === cat); }
-            const uniqueItems = [...new Set(items.map(p => p.item_name))].filter(Boolean).sort();
+            let sourceItems = [];
+            if (currentZone === '실온') sourceItems = productMaster.filter(p => !p.category.includes('원란'));
+            else if (currentZone === '냉장') sourceItems = productMaster.filter(p => p.category.includes('원란'));
+            else if (currentZone === '현장') sourceItems = finishedProductMaster;
+
+            const catSelect = document.getElementById('map-search-category'); 
+            if (catSelect && catSelect.value !== 'ALL') { 
+                sourceItems = sourceItems.filter(p => p.category === catSelect.value); 
+            }
+            
+            const uniqueItems = [...new Set(sourceItems.map(p => p.item_name))].filter(Boolean).sort();
             const datalist = document.getElementById('map-search-item-list');
             if(datalist) { datalist.innerHTML = uniqueItems.map(name => `<option value="${name}">`).join(''); }
             document.getElementById('map-search-keyword').value = '';
         }
         
-        // 💡 재고조회(요약 탭) 3단 필터 (입고처 -> 카테고리 -> 품목)
+        // 💡 재고조회(요약 탭) 4단 필터
+        function getSummarySourceItems() {
+            const type = document.getElementById('summary-type').value;
+            if (type === 'FINISHED') return finishedProductMaster;
+            if (type === 'MATERIAL') return productMaster.filter(p => !p.category.includes('원란'));
+            if (type === 'RAW') return productMaster.filter(p => p.category.includes('원란'));
+            return [...finishedProductMaster, ...productMaster];
+        }
+
         function updateSummarySupplierDropdown() {
-            let allItems = [...finishedProductMaster, ...productMaster];
-            let suppliers = [...new Set(allItems.map(p => p.supplier))].filter(Boolean).sort();
+            let items = getSummarySourceItems();
+            let suppliers = [...new Set(items.map(p => p.supplier))].filter(Boolean).sort();
             const supSelect = document.getElementById('summary-supplier');
             if (supSelect) {
                 supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -661,15 +685,15 @@ HTML_CONTENT = """
         }
 
         function updateSummaryCategoryDropdown() {
-            let allItems = [...finishedProductMaster, ...productMaster];
+            let items = getSummarySourceItems();
             const supSelect = document.getElementById('summary-supplier');
             const supplier = supSelect ? supSelect.value : 'ALL';
             
             if (supplier !== 'ALL') {
-                allItems = allItems.filter(p => p.supplier === supplier);
+                items = items.filter(p => p.supplier === supplier);
             }
             
-            let categories = [...new Set(allItems.map(p => p.category))].filter(Boolean).sort();
+            let categories = [...new Set(items.map(p => p.category))].filter(Boolean).sort();
             const catSelect = document.getElementById('summary-category');
             if (catSelect) { 
                 catSelect.innerHTML = `<option value="ALL">전체 카테고리</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join(''); 
@@ -678,17 +702,17 @@ HTML_CONTENT = """
         }
         
         function updateSummaryItemDropdown() {
-            let allItems = [...finishedProductMaster, ...productMaster];
+            let items = getSummarySourceItems();
             const supSelect = document.getElementById('summary-supplier');
             const catSelect = document.getElementById('summary-category');
             
             const supplier = supSelect ? supSelect.value : 'ALL';
             const cat = catSelect ? catSelect.value : 'ALL';
             
-            if (supplier !== 'ALL') allItems = allItems.filter(p => p.supplier === supplier);
-            if (cat !== 'ALL') allItems = allItems.filter(p => p.category === cat);
+            if (supplier !== 'ALL') items = items.filter(p => p.supplier === supplier);
+            if (cat !== 'ALL') items = items.filter(p => p.category === cat);
             
-            const uniqueItems = [...new Set(allItems.map(p => p.item_name))].filter(Boolean).sort();
+            const uniqueItems = [...new Set(items.map(p => p.item_name))].filter(Boolean).sort();
             const itemSelect = document.getElementById('summary-item');
             if(itemSelect) { 
                 itemSelect.innerHTML = `<option value="">품목을 선택하세요</option>` + uniqueItems.map(name => `<option value="${name}">${name}</option>`).join(''); 
@@ -709,7 +733,9 @@ HTML_CONTENT = """
                     if(item.item_name === itemName) {
                         if (supplier === 'ALL' || itemSupplier === supplier) {
                             totalQty += item.quantity;
-                            totalPallet += getDynamicPalletCount(item.item_name, item.remarks, item.quantity);
+                            // 💡 부피 계산 에러 차단: DB 수량 의존
+                            let dynP = getDynamicPalletCount(item);
+                            totalPallet += dynP;
                         }
                     }
                 });
@@ -718,14 +744,24 @@ HTML_CONTENT = """
             document.getElementById('summary-pallet').innerText = `${totalPallet.toFixed(1)} P (적재 부피 합산)`;
         }
 
-        function getDynamicPalletCount(itemName, supplier, quantity) {
+        // 💡 [핵심] 안전한 파레트 계산 (마스터에 없으면 기존 업로드된 pallet_count 강제 적용)
+        function getDynamicPalletCount(itemObj) {
+            if(!itemObj) return 0;
+            let itemName = itemObj.item_name;
+            let supplier = itemObj.remarks;
+            let quantity = itemObj.quantity;
+
             let targetSup = supplier ? supplier.trim() : "기본입고처";
             let pInfo = finishedProductMaster.find(p => p.item_name.trim() === itemName.trim() && p.supplier.trim() === targetSup) ||
                         productMaster.find(p => p.item_name.trim() === itemName.trim() && p.supplier.trim() === targetSup) ||
                         finishedProductMaster.find(p => p.item_name.trim() === itemName.trim()) ||
                         productMaster.find(p => p.item_name.trim() === itemName.trim());
-            let ea = (pInfo && pInfo.pallet_ea > 0) ? pInfo.pallet_ea : 1;
-            return quantity / ea;
+            
+            if (pInfo && pInfo.pallet_ea > 0) {
+                return quantity / pInfo.pallet_ea;
+            }
+            // 마스터에 없는 유령 재고는 무조건 기존 업로드된 pallet_count 사용 (2640P 폭발 방지)
+            return itemObj.pallet_count || 1;
         }
 
         function generateLocations(zone) {
@@ -792,16 +828,18 @@ HTML_CONTENT = """
         
         function renderSafetyStock() { const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다.</td></tr>`; } else { monitoredProducts.forEach(p => { let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 카톡 발주 복사</button>` : ''; let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-black text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-xs">🟢 여유</span>`; html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-4 text-slate-500 text-sm font-bold">${p.category}</td><td class="p-4 text-slate-800 font-black">${p.item_name} <span class="text-rose-600 text-xs">[${p.supplier}]</span></td><td class="p-4 text-right font-bold text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-4 text-right font-bold text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 max-w-[150px] mx-auto overflow-hidden"><div class="h-2.5 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-4 text-center">${statusHtml}</td></tr>`; }); } document.getElementById('safety-list').innerHTML = html; }
 
-        // 💡 [수정] 탭 변경 시 검색 타겟 초기화 연동
+        // 💡 [수정] 탭 변경 시 렉맵 검색 필터 연동
         function updateZoneTabs() {
             ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => { document.getElementById(id).className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; }); 
             if(currentZone === '실온') { document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } 
             else if(currentZone === '냉장') { document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.remove('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } 
             else if(currentZone === '현장') { document.getElementById('tab-floor').className = "px-8 py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.add('hidden'); document.getElementById('floor-select-label').classList.add('hidden'); } 
+            
+            updateMapSearchCategoryDropdown(); // 구역 변경 시 드롭다운 다시 로드!
         }
 
         function switchZone(zone) { 
-            globalSearchTargets = []; // 수동 이동 시 검색 깜빡이 초기화
+            globalSearchTargets = []; 
             currentZone = zone; selectedCellId = null; clearInfo(); 
             updateZoneTabs();
             renderMap(); 
@@ -812,10 +850,9 @@ HTML_CONTENT = """
             renderMap();
         }
 
-        // 💡 [핵심] 렉맵 렌더링 내 층간 타겟 알림 뱃지 적용
         function renderMap() { 
             const floor = document.getElementById('floor-select').value; const vContainer = document.getElementById('vertical-racks'); const hContainer = document.getElementById('horizontal-rack'); 
-            const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item.item_name, item.remarks, item.quantity); }); 
+            const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item); }); 
             let vHtml = ''; hContainer.innerHTML = ''; 
             
             if(currentZone === '현장') { 
@@ -854,7 +891,6 @@ HTML_CONTENT = """
                         let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === displayId) cellState = 'cell-active'; 
                         let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1 rounded-full shadow-sm z-10">${pCount.toFixed(1)}P</div>` : ''; 
                         
-                        // 💡 층간 타겟 체크 로직
                         let isTarget = globalSearchTargets.includes(searchId);
                         let pulseClass = isTarget ? 'highlight-pulse' : '';
                         let crossFloorBadge = '';
@@ -878,7 +914,6 @@ HTML_CONTENT = """
                 let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === displayId) cellState = 'cell-active'; 
                 let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1 rounded-full shadow-sm z-10">${pCount.toFixed(1)}P</div>` : ''; 
                 
-                // 💡 층간 타겟 체크 로직 (가로 렉)
                 let isTarget = globalSearchTargets.includes(searchId);
                 let pulseClass = isTarget ? 'highlight-pulse' : '';
                 let crossFloorBadge = '';
@@ -913,7 +948,7 @@ HTML_CONTENT = """
                     let cost = pInfo ? (pInfo.unit_price * item.quantity).toLocaleString() : '0'; 
                     let adjustBtn = isAdmin ? `<button onclick="processAdjust('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}')" class="text-[9px] text-slate-400 font-normal underline hover:text-indigo-600 ml-2">수량 보정</button>` : ''; 
                     
-                    let dynPallet = getDynamicPalletCount(item.item_name, item.remarks, item.quantity);
+                    let dynPallet = getDynamicPalletCount(item);
                     let palletDisplay = dynPallet > 0 ? `<span class="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[10px] ml-1 font-black">${dynPallet.toFixed(1)} P</span>` : ''; 
                     
                     panelHtml += `<div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mb-3"><div class="flex justify-between items-start mb-2"><div><span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span><div class="font-black text-sm text-slate-800 mt-1">${item.item_name}${adjustBtn}</div><div class="text-[10px] text-slate-400 font-bold text-rose-600">입고처: ${item.remarks||'기본'} (총액: ${cost}원)</div></div><div class="text-right"><div class="text-sm font-bold text-indigo-600">${item.quantity.toLocaleString()} EA ${palletDisplay}</div></div></div>${dateHtml}<div class="flex space-x-2 mt-3 border-t pt-2"><button onclick="processTransfer('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[11px] font-bold transition-colors">위치 이동</button><button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[11px] font-bold transition-colors">선택 출고</button></div></div>`; 
@@ -938,7 +973,7 @@ HTML_CONTENT = """
             document.getElementById('dash-in').innerText = inPallets.toFixed(1) + ' P'; document.getElementById('dash-out').innerText = outPallets.toFixed(1) + ' P'; if(isAdmin) document.getElementById('dash-cost-out').innerText = productionCost.toLocaleString() + ' 원'; 
             let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0; let valRoom = 0, valCold = 0; 
             globalOccupancy.forEach(item => { 
-                let dynP = getDynamicPalletCount(item.item_name, item.remarks, item.quantity); let pInfo = allItems.find(prod => prod.item_name === item.item_name && prod.supplier === item.remarks); let val = pInfo ? pInfo.unit_price * item.quantity : 0; 
+                let dynP = getDynamicPalletCount(item); let pInfo = allItems.find(prod => prod.item_name === item.item_name && prod.supplier === item.remarks); let val = pInfo ? pInfo.unit_price * item.quantity : 0; 
                 if(item.location_id.startsWith('R-')) { occRoom += dynP; valRoom += val; } else if(item.location_id.startsWith('C-')) { occCold += dynP; valCold += val; } else { valRoom += val; } 
             }); 
             layoutRoom.forEach(col => { if(col.cols) totalRoom += col.cols * 2; }); totalRoom += 20; layoutCold.forEach(col => { if(col.cols) totalCold += col.cols * 2; }); totalCold += 16; let totalAll = totalRoom + totalCold; let occAll = occRoom + occCold; 
@@ -949,12 +984,12 @@ HTML_CONTENT = """
 
         function renderAccounting() { const selMonth = document.getElementById('acc-month').value; if(!selMonth) return; let suppliers = [...new Set(globalHistory.filter(h => h.action_type === '입고').map(h => h.remarks || '기본입고처'))]; let supSelect = document.getElementById('acc-supplier'); let currentSel = supSelect.value; supSelect.innerHTML = `<option value="ALL">전체 매입처 보기</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); if(suppliers.includes(currentSel)) supSelect.value = currentSel; const selectedSup = supSelect.value; let totalAcc = 0, unpaidAcc = 0, paidAcc = 0; let html = ''; let filtered = globalHistory.filter(h => { let hMonth = h.created_at.substring(0, 7); let hSup = h.remarks || '기본입고처'; return h.action_type === '입고' && hMonth === selMonth && (selectedSup === 'ALL' || selectedSup === hSup); }); filtered.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); filtered.forEach(h => { let allItems = [...finishedProductMaster, ...productMaster]; let pInfo = allItems.find(p => p.item_name === h.item_name && p.supplier === (h.remarks || '기본입고처')); let price = pInfo ? pInfo.unit_price : 0; let cost = price * h.quantity; totalAcc += cost; let isPaid = h.payment_status === '결제완료'; if(isPaid) paidAcc += cost; else unpaidAcc += cost; let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); let btnHtml = isPaid ? `<button onclick="togglePayment('${h.id}', '미지급')" class="bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded text-[10px] hover:bg-slate-200">취소</button>` : `<button onclick="togglePayment('${h.id}', '결제완료')" class="bg-blue-500 text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-blue-600 shadow-sm">결제완료 처리</button>`; let statusTag = isPaid ? `<span class="text-blue-600 font-black text-xs mr-2">✅ 완료</span>` : `<span class="text-rose-500 font-black text-xs mr-2">⏳ 미지급</span>`; html += `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 text-slate-500">${dateStr}</td><td class="p-3 font-bold text-slate-700">${h.remarks || '기본'}</td><td class="p-3 font-black text-slate-800">${h.item_name}</td><td class="p-3 text-right font-bold text-indigo-600">${h.quantity.toLocaleString()}</td><td class="p-3 text-right text-slate-500">${price.toLocaleString()}</td><td class="p-3 text-right font-black text-slate-800">${cost.toLocaleString()}</td><td class="p-3 text-center flex items-center justify-center">${statusTag} ${btnHtml}</td></tr>`; }); document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-bold">해당 월에 입고(매입) 내역이 없습니다.</td></tr>`; document.getElementById('acc-total').innerText = totalAcc.toLocaleString() + ' 원'; document.getElementById('acc-unpaid').innerText = unpaidAcc.toLocaleString() + ' 원'; document.getElementById('acc-paid').innerText = paidAcc.toLocaleString() + ' 원'; }
         async function togglePayment(logId, status) { try { await fetch(`/api/history/${logId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({payment_status: status}) }); load(); } catch(e) { alert("상태 변경 실패!"); } }
-        async function processInbound(locId) { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = parseInt(document.getElementById('in-qty').value); let date = document.getElementById('in-date').value; const supplier = document.getElementById('in-supplier').value; if(!cat || !item || isNaN(qty)) return alert("필수값 입력 요망"); if(!date && currentZone !== '냉장') { let t = new Date(); date = t.toISOString().split('T')[0]; } let dynPallet = getDynamicPalletCount(item, supplier, qty); try { const res = await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: qty, pallet_count: dynPallet, production_date: date || null, remarks: supplier }) }); const result = await res.json(); if(result.status === 'success') { alert("입고 완료!"); load(); } else { alert(`입고 실패: ${result.message}`); } } catch(e) {} }
-        async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const outPallet = getDynamicPalletCount(itemName, null, qty); try { const res = await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); const result = await res.json(); if(result.status === 'success') { alert("출고 완료!"); load(); } else { alert(`출고 실패: ${result.message}`); } } catch(e) {} }
-        async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = getDynamicPalletCount(itemName, null, qty); try { const res = await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); const result = await res.json(); if(result.status === 'success') { alert("이동 완료!"); load(); } else { alert(`이동 실패: ${result.message}`); } } catch(e) {} }
+        async function processInbound(locId) { const cat = document.getElementById('in-cat').value; const item = document.getElementById('in-item').value; const qty = parseInt(document.getElementById('in-qty').value); let date = document.getElementById('in-date').value; const supplier = document.getElementById('in-supplier').value; if(!cat || !item || isNaN(qty)) return alert("필수값 입력 요망"); if(!date && currentZone !== '냉장') { let t = new Date(); date = t.toISOString().split('T')[0]; } let dynPallet = getDynamicPalletCount({item_name: item, remarks: supplier, quantity: qty}); try { const res = await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ location_id: locId, category: cat, item_name: item, quantity: qty, pallet_count: dynPallet, production_date: date || null, remarks: supplier }) }); const result = await res.json(); if(result.status === 'success') { alert("입고 완료!"); load(); } else { alert(`입고 실패: ${result.message}`); } } catch(e) {} }
+        async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const outPallet = getDynamicPalletCount({item_name: itemName, remarks: null, quantity: qty}); try { const res = await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); const result = await res.json(); if(result.status === 'success') { alert("출고 완료!"); load(); } else { alert(`출고 실패: ${result.message}`); } } catch(e) {} }
+        async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = getDynamicPalletCount({item_name: itemName, remarks: null, quantity: qty}); try { const res = await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); const result = await res.json(); if(result.status === 'success') { alert("이동 완료!"); load(); } else { alert(`이동 실패: ${result.message}`); } } catch(e) {} }
         async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty} EA)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { const res = await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); const result = await res.json(); if(result.status === 'success') { alert("보정 완료!"); load(); } else { alert(`보정 실패: ${result.message}`); } } catch(e) {} }
         
-        // 💡 [핵심] 렉맵 내 검색 자동 층 이동 및 뱃지 표시
+        // 💡 맵 화면 안의 스캔 기능 (층간 타겟 알림 및 자동이동)
         function executeMapSearch() { 
             const catSelect = document.getElementById('map-search-category').value;
             const keyword = document.getElementById('map-search-keyword').value.trim().toLowerCase(); 
@@ -966,7 +1001,7 @@ HTML_CONTENT = """
             if(catSelect !== 'ALL') matches = matches.filter(x => x.category === catSelect);
             if(keyword) matches = matches.filter(x => x.item_name.toLowerCase().includes(keyword));
             
-            if(matches.length === 0) return alert("조건에 맞는 품목이 창고에 없습니다."); 
+            if(matches.length === 0) return alert("조건에 맞는 품목이 현재 구역에 없습니다."); 
             
             matches.sort((a, b) => {
                 let tA = a.production_date ? new Date(a.production_date).getTime() : Infinity;
@@ -977,17 +1012,10 @@ HTML_CONTENT = """
             let targets = matches.slice(0, count); 
             globalSearchTargets = targets.map(t => t.location_id);
             
-            // 타겟이 있는 층/구역으로 자동 이동
             let firstLoc = globalSearchTargets[0];
-            if (firstLoc.startsWith('FL-')) {
-                currentZone = '현장';
-            } else if (firstLoc.startsWith('C-')) {
-                currentZone = '냉장';
-                document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1";
-            } else {
-                currentZone = '실온';
-                document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1";
-            }
+            if (firstLoc.startsWith('FL-')) { currentZone = '현장'; } 
+            else if (firstLoc.startsWith('C-')) { currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; } 
+            else { currentZone = '실온'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; }
             
             updateZoneTabs();
             renderMap(); 
@@ -1001,13 +1029,12 @@ HTML_CONTENT = """
             let targets = eggs.filter(x => x.production_date === oldestDate);
             globalSearchTargets = targets.map(t => t.location_id);
             
-            // 타겟이 있는 층으로 이동
             let firstLoc = globalSearchTargets[0];
             currentZone = '냉장';
             document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1";
             updateZoneTabs();
             renderMap();
-            alert(`가장 오래된 산란일: ${oldestDate}\\n해당 위치를 표시합니다.`); 
+            alert(`가장 오래된 산란일: ${oldestDate}\\n해당 위치를 깜빡이로 표시합니다.`); 
         }
 
         async function clearData(target) { if(!confirm(`정말 삭제하시겠습니까?`)) return; try { await fetch(`/api/clear_data?target=${target}`, { method: 'DELETE' }); alert("초기화 완료"); load(); } catch(e) {} }
