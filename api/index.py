@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
+import datetime
 
 app = FastAPI()
 
@@ -98,11 +99,11 @@ HTML_CONTENT = """
             <div class="flex-1 overflow-auto p-6 relative flex flex-col items-center">
                 <div class="bg-white p-4 rounded-xl shadow-md border border-slate-200 w-full max-w-[800px] mb-6 flex space-x-3 items-end shrink-0">
                     <div class="w-1/4 text-left">
-                        <label class="block text-[10px] font-bold text-slate-500 mb-1">현재 구역 카테고리</label>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">카테고리</label>
                         <select id="map-search-category" onchange="updateMapSearchItemDropdown()" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"><option value="ALL">전체</option></select>
                     </div>
                     <div class="w-2/4 text-left">
-                        <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 (현재 탭 기준 필터링됨)</label>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 (자동완성)</label>
                         <input type="text" id="map-search-keyword" list="map-search-item-list" placeholder="검색어 입력" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none">
                         <datalist id="map-search-item-list"></datalist>
                     </div>
@@ -420,7 +421,7 @@ HTML_CONTENT = """
 
     <script>
         let globalOccupancy = []; let productMaster = []; let finishedProductMaster = []; let globalHistory = []; let bomMaster = []; 
-        let globalSearchTargets = []; // 💡 크로스 플로어 뱃지를 위한 전역 변수
+        let globalSearchTargets = []; 
         let currentZone = '실온'; let selectedCellId = null; let isAdmin = false;
         let editingProductOriginalName = null; let editingProductOriginalSupplier = null;
         
@@ -633,9 +634,37 @@ HTML_CONTENT = """
             try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); load(); } catch(e) { alert("삭제 실패!"); } 
         }
 
-        // 💡 맵 탭에서 구역 변경 시 드롭다운 필터 재적용
+        function exportProductsExcel(targetType) { 
+            try { 
+                let wsData = []; let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster; let sheetName = targetType === 'finished' ? "제품마스터" : "자재마스터"; let fileName = targetType === 'finished' ? "한스팜_제품마스터_양식.xlsx" : "한스팜_자재마스터_양식.xlsx";
+                if (dataArray.length === 0) { wsData = [{ "카테고리": "", "품목명": "", "입고처(공급사)": "", "일간소모량(EA)": "0", "단가(비용)": "0", "1P기준수량(EA)": "1" }]; } 
+                else { wsData = dataArray.map(p => ({ "카테고리": p.category || "미분류", "품목명": p.item_name || "", "입고처(공급사)": p.supplier || "", "일간소모량(EA)": p.daily_usage || 0, "단가(비용)": p.unit_price || 0, "1P기준수량(EA)": p.pallet_ea || 1 })); } 
+                const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, sheetName); XLSX.writeFile(wb, fileName); 
+            } catch (error) { alert("다운로드 중 오류"); } 
+        }
+
+        function importProductsExcel(e, targetType) { 
+            const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
+            const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
+            const msg = targetType === 'finished' ? "제품" : "자재";
+            reader.onload = async function(ev) { 
+                try { 
+                    const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); 
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]); 
+                    if(json.length > 0) { 
+                        const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
+                        const result = await res.json();
+                        if(result.status === 'success') { alert(`${msg} 대량 업로드 완료!`); load(); } 
+                        else { alert(`업로드 실패: ${result.message}`); }
+                    } else { alert("업로드할 데이터가 없습니다."); }
+                } catch(err) { console.error(err); alert("업로드 처리 중 오류 발생"); } 
+            }; reader.readAsArrayBuffer(file); e.target.value = ''; 
+        }
+
+        // 💡 맵 탭에서 구역 변경 시 드롭다운 필터 적용 (현재 구역에 맞는 품목만)
         function updateMapSearchCategoryDropdown() {
             let sourceItems = [];
+            // 실온: 자재(원란 제외), 냉장: 자재(원란 포함), 현장: 제품
             if (currentZone === '실온') sourceItems = productMaster.filter(p => !p.category.includes('원란'));
             else if (currentZone === '냉장') sourceItems = productMaster.filter(p => p.category.includes('원란'));
             else if (currentZone === '현장') sourceItems = finishedProductMaster;
@@ -665,7 +694,7 @@ HTML_CONTENT = """
             document.getElementById('map-search-keyword').value = '';
         }
         
-        // 💡 재고조회(요약 탭) 4단 필터
+        // 💡 재고조회(요약 탭) 4단 필터 로직
         function getSummarySourceItems() {
             const type = document.getElementById('summary-type').value;
             if (type === 'FINISHED') return finishedProductMaster;
@@ -733,7 +762,7 @@ HTML_CONTENT = """
                     if(item.item_name === itemName) {
                         if (supplier === 'ALL' || itemSupplier === supplier) {
                             totalQty += item.quantity;
-                            // 💡 부피 계산 에러 차단: DB 수량 의존
+                            // 부피 계산 시 마스터 정보를 우선으로
                             let dynP = getDynamicPalletCount(item);
                             totalPallet += dynP;
                         }
@@ -744,7 +773,7 @@ HTML_CONTENT = """
             document.getElementById('summary-pallet').innerText = `${totalPallet.toFixed(1)} P (적재 부피 합산)`;
         }
 
-        // 💡 [핵심] 안전한 파레트 계산 (마스터에 없으면 기존 업로드된 pallet_count 강제 적용)
+        // 💡 [버그 수정] 대시보드 및 맵 계산용: 마스터DB에 없으면 기존 업로드된 부피 사용
         function getDynamicPalletCount(itemObj) {
             if(!itemObj) return 0;
             let itemName = itemObj.item_name;
@@ -760,7 +789,7 @@ HTML_CONTENT = """
             if (pInfo && pInfo.pallet_ea > 0) {
                 return quantity / pInfo.pallet_ea;
             }
-            // 마스터에 없는 유령 재고는 무조건 기존 업로드된 pallet_count 사용 (2640P 폭발 방지)
+            // 마스터에 없는 유령 재고(예: 원란 20만 알)는 무조건 기존 업로드된 pallet_count를 따름!
             return itemObj.pallet_count || 1;
         }
 
@@ -825,17 +854,15 @@ HTML_CONTENT = """
         }
 
         function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`[${supplier}] 수량(EA):`, "1000개"); if(!moq) return; const leadTime = prompt(`납기일:`, "최대한 빠르게"); const text = `[발주 요청서]\\n수신: ${supplier}\\n\\n안녕하세요, 한스팜입니다.\\n아래 품목 발주 요청드립니다.\\n\\n- 품목명: ${itemName}\\n- 발주수량: ${moq}\\n- 납기요청: ${leadTime}\\n\\n확인 후 회신 부탁드립니다. 감사합니다.`; navigator.clipboard.writeText(text.replace(/\\n/g, '\\n')).then(() => { alert("복사 완료"); }); }
-        
         function renderSafetyStock() { const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다.</td></tr>`; } else { monitoredProducts.forEach(p => { let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 카톡 발주 복사</button>` : ''; let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-3 py-1 rounded-full font-black text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-black text-xs">🟢 여유</span>`; html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-4 text-slate-500 text-sm font-bold">${p.category}</td><td class="p-4 text-slate-800 font-black">${p.item_name} <span class="text-rose-600 text-xs">[${p.supplier}]</span></td><td class="p-4 text-right font-bold text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-4 text-right font-bold text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2.5 mb-1 max-w-[150px] mx-auto overflow-hidden"><div class="h-2.5 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-4 text-center">${statusHtml}</td></tr>`; }); } document.getElementById('safety-list').innerHTML = html; }
 
-        // 💡 [수정] 탭 변경 시 렉맵 검색 필터 연동
         function updateZoneTabs() {
             ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => { document.getElementById(id).className = "px-8 py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200"; }); 
             if(currentZone === '실온') { document.getElementById('tab-room').className = "px-8 py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } 
             else if(currentZone === '냉장') { document.getElementById('tab-cold').className = "px-8 py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.remove('hidden'); document.getElementById('floor-select').classList.remove('hidden'); document.getElementById('floor-select-label').classList.remove('hidden'); } 
             else if(currentZone === '현장') { document.getElementById('tab-floor').className = "px-8 py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner"; document.getElementById('fifo-btn-container').classList.add('hidden'); document.getElementById('floor-select').classList.add('hidden'); document.getElementById('floor-select-label').classList.add('hidden'); } 
             
-            updateMapSearchCategoryDropdown(); // 구역 변경 시 드롭다운 다시 로드!
+            updateMapSearchCategoryDropdown(); 
         }
 
         function switchZone(zone) { 
@@ -847,6 +874,7 @@ HTML_CONTENT = """
 
         function clearSearchTargets() {
             globalSearchTargets = [];
+            document.getElementById('map-search-keyword').value = '';
             renderMap();
         }
 
@@ -989,7 +1017,6 @@ HTML_CONTENT = """
         async function processTransfer(invId, itemName, maxQty, currentPallet, fromLoc) { const qtyStr = prompt(`[${itemName}] 이동시킬 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr); if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); const toLoc = prompt(`[${itemName}] ${qty}EA를 이동할 목적지를 입력하세요\\n(창고 예시: C-B-02-1F, 현장 예시: FL-C-01)`, "FL-C-01"); if(!toLoc) return; const movePallet = getDynamicPalletCount({item_name: itemName, remarks: null, quantity: qty}); try { const res = await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc.toUpperCase(), item_name: itemName, quantity: qty, pallet_count: movePallet }) }); const result = await res.json(); if(result.status === 'success') { alert("이동 완료!"); load(); } else { alert(`이동 실패: ${result.message}`); } } catch(e) {} }
         async function processAdjust(invId, itemName, currentQty, locId) { const qtyStr = prompt(`실제 전산 수량을 보정합니다.\\n(현재: ${currentQty} EA)`); if(!qtyStr) return; const newQty = parseInt(qtyStr); if(isNaN(newQty) || newQty < 0) return; try { const res = await fetch('/api/adjust', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, new_quantity: newQty }) }); const result = await res.json(); if(result.status === 'success') { alert("보정 완료!"); load(); } else { alert(`보정 실패: ${result.message}`); } } catch(e) {} }
         
-        // 💡 맵 화면 안의 스캔 기능 (층간 타겟 알림 및 자동이동)
         function executeMapSearch() { 
             const catSelect = document.getElementById('map-search-category').value;
             const keyword = document.getElementById('map-search-keyword').value.trim().toLowerCase(); 
@@ -1237,8 +1264,10 @@ async def get_history():
 
 @app.post("/api/inbound")
 async def inbound_stock(data: InboundData):
+    import datetime
     async with httpx.AsyncClient() as client:
-        inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": data.production_date if data.production_date else None, "remarks": data.remarks}
+        p_date = data.production_date if data.production_date else datetime.datetime.now().strftime('%Y-%m-%d')
+        inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": p_date, "remarks": data.remarks}
         res1 = await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
         if res1.status_code not in [200, 201, 204]: return {"status": "error", "message": f"DB 에러: {res1.text}"}
         log_payload = inv_payload.copy(); log_payload["action_type"] = "입고"; log_payload["payment_status"] = "미지급"
@@ -1289,6 +1318,7 @@ async def update_history_payment(log_id: str, data: PaymentUpdate):
 
 @app.post("/api/inbound_batch")
 async def inbound_batch(rows: List[dict]):
+    import datetime
     async with httpx.AsyncClient() as client:
         r_prod = await client.get(f"{SUPABASE_URL}/rest/v1/products?select=*", headers=HEADERS)
         r_fin = await client.get(f"{SUPABASE_URL}/rest/v1/finished_products?select=*", headers=HEADERS)
@@ -1324,12 +1354,15 @@ async def inbound_batch(rows: List[dict]):
             prod_date = None
             if raw_date and raw_date != "None" and raw_date != "undefined":
                 if raw_date.replace('.','').isdigit() and float(raw_date) > 30000:
-                    import datetime
                     try: prod_date = (datetime.datetime(1899, 12, 30) + datetime.timedelta(days=float(raw_date))).strftime('%Y-%m-%d')
                     except: prod_date = None
                 else:
                     prod_date = raw_date.replace('/','-').replace('.','-')
                     if " " in prod_date: prod_date = prod_date.split(" ")[0]
+            
+            # 💡 엑셀 빈 날짜 오늘 날짜로 덮어씌우기
+            if not prod_date:
+                prod_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
             loc_id = str(r_data.get("렉 위치", "")).strip()
             zone = str(r_data.get("구역", "")).strip()
