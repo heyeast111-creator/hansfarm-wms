@@ -1,12 +1,21 @@
 import os
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import datetime
 
 app = FastAPI()
+
+# 💡 [핵심 버그 픽스] API 응답 캐싱(기억) 완전 차단! (수정 즉시 반영되도록 강제)
+@app.middleware("http")
+async def add_cache_control_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
 
 SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
@@ -316,7 +325,7 @@ HTML_CONTENT = """
                 <div class="w-full md:w-1/3"><label class="block text-xs font-bold text-slate-500 mb-1">월 선택</label><input type="month" id="acc-month" onchange="renderAccounting()" class="w-full border border-slate-300 rounded p-2 text-sm font-bold"></div>
                 <div class="w-full md:w-2/3"><label class="block text-xs font-bold text-slate-500 mb-1">매입처 선택</label><select id="acc-supplier" onchange="renderAccounting()" class="w-full border border-slate-300 rounded p-2 text-sm font-bold"><option value="ALL">전체 매입처 보기</option></select></div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-3 gap-4 mb-6">
                 <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-slate-700"><div class="text-xs text-slate-500 font-bold mb-1">총 매입금액</div><div class="text-xl font-black" id="acc-total">0 원</div></div>
                 <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-rose-500"><div class="text-xs text-rose-500 font-bold mb-1">미지급금</div><div class="text-xl font-black text-rose-600" id="acc-unpaid">0 원</div></div>
                 <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-blue-500"><div class="text-xs text-blue-500 font-bold mb-1">결제 완료</div><div class="text-xl font-black text-blue-600" id="acc-paid">0 원</div></div>
@@ -335,6 +344,7 @@ HTML_CONTENT = """
         <div id="view-outbound" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
             <h1 class="text-3xl font-black text-slate-800 mb-4">🚚 출고 관리 시스템</h1><p class="text-slate-500 font-bold text-center">패킹 리스트 생성 기능 준비중</p>
         </div>
+
     </main>
 
     <aside id="right-sidebar" class="hidden fixed md:relative bottom-16 md:bottom-0 right-0 w-full md:w-80 h-[60vh] md:h-full bg-white border-t md:border-l border-slate-300 flex-col shadow-[0_-10px_20px_rgba(0,0,0,0.15)] md:shadow-lg z-40 shrink-0 transition-all">
@@ -348,17 +358,16 @@ HTML_CONTENT = """
         
         const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
         const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
-        const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료/냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재/실온)', cols: 20 } ];
+        const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료 / 냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재 / 실온)', cols: 20 } ];
 
         async function load() {
             try {
-                const ts = new Date().getTime();
                 const [occRes, prodRes, fpRes, histRes, bomRes] = await Promise.all([ 
-                    fetch('/api/inventory?t=' + ts), 
-                    fetch('/api/products?t=' + ts), 
-                    fetch('/api/finished_products?t=' + ts), 
-                    fetch('/api/history?t=' + ts), 
-                    fetch('/api/bom?t=' + ts) 
+                    fetch('/api/inventory', {cache: 'no-store'}), 
+                    fetch('/api/products', {cache: 'no-store'}), 
+                    fetch('/api/finished_products', {cache: 'no-store'}), 
+                    fetch('/api/history', {cache: 'no-store'}), 
+                    fetch('/api/bom', {cache: 'no-store'}) 
                 ]);
                 globalOccupancy = await occRes.json() || []; productMaster = await prodRes.json() || []; finishedProductMaster = await fpRes.json() || []; globalHistory = await histRes.json() || []; bomMaster = await bomRes.json() || [];
                 
@@ -369,7 +378,6 @@ HTML_CONTENT = """
             } catch (e) { console.error("로딩 에러:", e); }
         }
 
-        // 💡 탭 이동 픽스 (DOM 직접 제어)
         function updateZoneTabs() {
             ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => {
                 let el = document.getElementById(id);
@@ -386,13 +394,16 @@ HTML_CONTENT = """
                 else if(currentZone === '현장') activeEl.className = "whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner text-sm md:text-base";
             }
 
+            let fifoBtn = document.getElementById('fifo-btn-container');
+            let floorSel = document.getElementById('floor-select');
+            
             if(currentZone === '현장') {
-                document.getElementById('fifo-btn-container').classList.add('hidden');
-                document.getElementById('floor-select').classList.add('hidden');
+                if(fifoBtn) fifoBtn.classList.add('hidden');
+                if(floorSel) floorSel.classList.add('hidden');
             } else {
-                if(currentZone === '냉장') document.getElementById('fifo-btn-container').classList.remove('hidden');
-                else document.getElementById('fifo-btn-container').classList.add('hidden');
-                document.getElementById('floor-select').classList.remove('hidden');
+                if(currentZone === '냉장') { if(fifoBtn) fifoBtn.classList.remove('hidden'); }
+                else { if(fifoBtn) fifoBtn.classList.add('hidden'); }
+                if(floorSel) floorSel.classList.remove('hidden');
             }
             updateMapSearchCategoryDropdown();
         }
@@ -433,8 +444,8 @@ HTML_CONTENT = """
         function getDynamicPalletCount(itemObj) {
             if(!itemObj) return 0;
             let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
-            let targetSup = supplier.trim();
-            let pInfo = finishedProductMaster.find(p => (p.item_name||"").trim() === itemName.trim() && (p.supplier||"").trim() === targetSup) || productMaster.find(p => (p.item_name||"").trim() === itemName.trim() && (p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => (p.item_name||"").trim() === itemName.trim()) || productMaster.find(p => (p.item_name||"").trim() === itemName.trim());
+            let targetSup = String(supplier).trim();
+            let pInfo = finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim()) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim());
             if (pInfo && pInfo.pallet_ea > 0) return quantity / pInfo.pallet_ea;
             return itemObj.pallet_count || 1;
         }
@@ -511,7 +522,9 @@ HTML_CONTENT = """
         }
 
         function renderMap() { 
-            const floor = document.getElementById('floor-select').value; const vContainer = document.getElementById('vertical-racks'); const hContainer = document.getElementById('horizontal-rack'); 
+            let floorSelect = document.getElementById('floor-select');
+            const floor = floorSelect ? floorSelect.value : "1"; 
+            const vContainer = document.getElementById('vertical-racks'); const hContainer = document.getElementById('horizontal-rack'); 
             const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item); }); 
             
             let waitHtml = '';
@@ -526,7 +539,8 @@ HTML_CONTENT = """
                     waitHtml += `<div id="cell-${wId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${wId}', '${wId}')" class="bg-white border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center h-16 md:h-20 text-slate-300 font-black text-xs opacity-50">${i}</div>`;
                 }
             }
-            document.getElementById('waiting-grid').innerHTML = waitHtml;
+            let waitingGrid = document.getElementById('waiting-grid');
+            if(waitingGrid) waitingGrid.innerHTML = waitHtml;
 
             let vHtml = ''; hContainer.innerHTML = ''; 
             if(currentZone === '현장') { 
@@ -588,10 +602,13 @@ HTML_CONTENT = """
             } 
             renderMap(); document.getElementById('right-sidebar').classList.remove('hidden'); document.getElementById('right-sidebar').classList.add('flex');
             
-            const panel = document.getElementById('info-panel'); const floorName = searchId.startsWith('W-') ? '입고 대기장' : (currentZone === '현장' ? '생산현장' : document.getElementById('floor-select').options[document.getElementById('floor-select').selectedIndex].text); const items = globalOccupancy.filter(x => x.location_id === searchId); let dateLabel = currentZone === '냉장' ? '산란일' : '입고일'; 
+            const panel = document.getElementById('info-panel'); 
+            let floorSelect = document.getElementById('floor-select');
+            const floorName = searchId.startsWith('W-') ? '입고 대기장' : (currentZone === '현장' ? '생산현장' : (floorSelect ? floorSelect.options[floorSelect.selectedIndex].text : '')); 
+            const items = globalOccupancy.filter(x => x.location_id === searchId); let dateLabel = currentZone === '냉장' ? '산란일' : '입고일'; 
             let panelHtml = `<div class="bg-indigo-50 p-3 md:p-4 rounded-lg border border-indigo-200 mb-4"><div class="flex justify-between items-start"><div><div class="text-[10px] text-indigo-500 font-bold mb-1">선택된 위치</div><div class="text-2xl md:text-3xl font-black text-indigo-900">${displayId}</div></div><div class="text-right"><span class="inline-block bg-white text-indigo-700 text-[10px] md:text-xs font-bold px-2 py-1 rounded shadow-sm border border-indigo-100">${floorName}</span></div></div></div>`; 
             if(items.length > 0) { 
-                panelHtml += `<div class="mb-2 text-[10px] md:text-xs font-bold text-slate-500">적재 목록 (드래그하여 이동)</div>`; 
+                panelHtml += `<div class="mb-2 text-[10px] md:text-xs font-bold text-slate-500">적재 목록 (드래그하여 이동 가능)</div>`; 
                 items.forEach(item => { 
                     let dateHtml = item.production_date ? `<div class="text-[10px] md:text-xs text-rose-600 font-bold mt-1">${dateLabel}: ${item.production_date}</div>` : ''; 
                     let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name && p.supplier === item.remarks) || productMaster.find(p => p.item_name === item.item_name && p.supplier === item.remarks); 
@@ -622,6 +639,58 @@ HTML_CONTENT = """
             if (action === '1') { let newQtyStr = prompt(`새로운 수량(EA)을 입력하세요:\\n(현재 수량: ${qty} EA)`, qty); if(newQtyStr) { let newQty = parseInt(newQtyStr); if(newQty > 0) { let newPallet = getDynamicPalletCount({item_name: itemName, remarks: remarks, quantity: newQty}); await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_QTY', new_quantity: newQty, pallet_count: newPallet }) }); alert("수량 수정 완료!"); load(); } else alert("올바른 수량을 입력하세요."); } } 
             else if (action === '2') { let newDate = prompt(`새로운 날짜를 입력하세요:\\n(형식: YYYY-MM-DD)`, date || ''); if(newDate !== null) { await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_DATE', new_date: newDate }) }); alert("날짜 수정 완료!"); load(); } } 
             else if (action === '3') { if(confirm(`⚠️ 정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\\n(실수로 입고 버튼을 두 번 누른 경우 사용하세요)`)) { await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'DELETE' }) }); alert("재고 삭제 완료!"); load(); } }
+        }
+
+        function updateDashboard() { 
+            try {
+                let dashPeriod = document.getElementById('dash-period');
+                if(!dashPeriod) return;
+                const period = dashPeriod.value; let startDate = new Date(); if(period === 'daily') startDate.setDate(startDate.getDate() - 1); else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7); else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1); 
+                let inPallets = 0, outPallets = 0, productionCost = 0; let allItems = [...finishedProductMaster, ...productMaster];
+                globalHistory.forEach(log => { 
+                    let logDate = new Date(log.production_date ? log.production_date : log.created_at);
+                    if(logDate >= startDate) { 
+                        if(log.action_type === '입고') inPallets += (log.pallet_count || 1); 
+                        if(log.action_type === '출고') { 
+                            outPallets += (log.pallet_count || 1); 
+                            let pInfo = allItems.find(p => String(p.item_name||"").trim() === String(log.item_name||"").trim()); 
+                            if(pInfo) productionCost += (pInfo.unit_price * log.quantity); 
+                        } 
+                    } 
+                }); 
+                let dashIn = document.getElementById('dash-in'); if(dashIn) dashIn.innerText = inPallets.toFixed(1) + ' P'; 
+                let dashOut = document.getElementById('dash-out'); if(dashOut) dashOut.innerText = outPallets.toFixed(1) + ' P'; 
+                let dashCostOut = document.getElementById('dash-cost-out'); if(isAdmin && dashCostOut) dashCostOut.innerText = productionCost.toLocaleString() + ' 원'; 
+                
+                let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0; let valRoom = 0, valCold = 0; 
+                globalOccupancy.forEach(item => { let dynP = getDynamicPalletCount(item); let pInfo = allItems.find(prod => String(prod.item_name||"").trim() === String(item.item_name||"").trim() && String(prod.supplier||"").trim() === String(item.remarks||"").trim()); let val = pInfo ? pInfo.unit_price * item.quantity : 0; if(item.location_id.startsWith('R-')) { occRoom += dynP; valRoom += val; } else if(item.location_id.startsWith('C-')) { occCold += dynP; valCold += val; } else if(!item.location_id.startsWith('W-')) { valRoom += val; } }); 
+                layoutRoom.forEach(col => { if(col.cols) totalRoom += col.cols * 2; }); totalRoom += 20; layoutCold.forEach(col => { if(col.cols) totalCold += col.cols * 2; }); totalCold += 16; let totalAll = totalRoom + totalCold; let occAll = occRoom + occCold; 
+                
+                let dashZoneSel = document.getElementById('dash-zone-select');
+                const dashZone = dashZoneSel ? dashZoneSel.value : 'ALL'; let finalOcc = occAll, finalTotal = totalAll; if(dashZone === 'ROOM') { finalOcc = occRoom; finalTotal = totalRoom; } else if(dashZone === 'COLD') { finalOcc = occCold; finalTotal = totalCold; }
+                let capRate = finalTotal > 0 ? Math.round((finalOcc / finalTotal) * 100) : 0; 
+                
+                let dashCapPer = document.getElementById('dash-cap-percent'); if(dashCapPer) dashCapPer.innerText = capRate + '%'; 
+                let dashCapText = document.getElementById('dash-cap-text'); if(dashCapText) dashCapText.innerText = `${finalOcc.toFixed(1)} / ${finalTotal} 파레트`; 
+                let color = capRate > 100 ? '#e11d48' : '#10b981'; 
+                let dashDonut = document.getElementById('dash-donut'); if(dashDonut) dashDonut.style.background = `conic-gradient(${color} 0% ${Math.min(capRate, 100)}%, #e2e8f0 ${Math.min(capRate, 100)}% 100%)`; 
+                
+                let elRoomTotal = document.getElementById('dash-room-total'); if(elRoomTotal) elRoomTotal.innerText = totalRoom; 
+                let elRoomOcc = document.getElementById('dash-room-occ'); if(elRoomOcc) elRoomOcc.innerText = occRoom.toFixed(1); 
+                let elRoomEmpty = document.getElementById('dash-room-empty'); if(elRoomEmpty) elRoomEmpty.innerText = Math.max(0, totalRoom - Math.floor(occRoom)); 
+                let elRoomPer = document.getElementById('dash-room-percent'); if(elRoomPer) elRoomPer.innerText = totalRoom > 0 ? Math.round((occRoom/totalRoom)*100) + '%' : '0%'; 
+                
+                let elColdTotal = document.getElementById('dash-cold-total'); if(elColdTotal) elColdTotal.innerText = totalCold; 
+                let elColdOcc = document.getElementById('dash-cold-occ'); if(elColdOcc) elColdOcc.innerText = occCold.toFixed(1); 
+                let elColdEmpty = document.getElementById('dash-cold-empty'); if(elColdEmpty) elColdEmpty.innerText = Math.max(0, totalCold - Math.floor(occCold)); 
+                let elColdPer = document.getElementById('dash-cold-percent'); if(elColdPer) elColdPer.innerText = totalCold > 0 ? Math.round((occCold/totalCold)*100) + '%' : '0%'; 
+                
+                if(isAdmin) { 
+                    let vRoom = document.getElementById('dash-val-room'); if(vRoom) vRoom.innerText = valRoom.toLocaleString() + ' 원'; 
+                    let vCold = document.getElementById('dash-val-cold'); if(vCold) vCold.innerText = valCold.toLocaleString() + ' 원'; 
+                    let vTotal = document.getElementById('dash-val-total'); if(vTotal) vTotal.innerText = (valRoom + valCold).toLocaleString() + ' 원'; 
+                } 
+            } catch(e) { console.log('Dashboard render bypassed'); }
         }
 
         window.onload = function() { load(); showView('dashboard'); };
