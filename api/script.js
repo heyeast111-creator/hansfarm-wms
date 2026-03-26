@@ -32,10 +32,17 @@ async function load() {
         updateSummarySupplierDropdown(); 
         populateWaitDropdowns(); 
         
-        // 정산회계 날짜 기본값 세팅 및 필터 연동 시작
+        // 💡 정산회계 날짜 기본값 세팅 (일자별/기간별/월별)
         let t = new Date();
-        document.getElementById('acc-month').value = t.toISOString().substring(0, 7);
-        document.getElementById('acc-date').value = t.toISOString().substring(0, 10);
+        let yyyy = t.getFullYear();
+        let mm = String(t.getMonth() + 1).padStart(2, '0');
+        let dd = String(t.getDate()).padStart(2, '0');
+        
+        document.getElementById('acc-date').value = `${yyyy}-${mm}-${dd}`;
+        document.getElementById('acc-period-start').value = `${yyyy}-${mm}-01`; // 기본: 이달 1일부터
+        document.getElementById('acc-period-end').value = `${yyyy}-${mm}-${dd}`; // 오늘까지
+        document.getElementById('acc-month').value = `${yyyy}-${mm}`;
+        
         updateAccFilters('type');
 
         let viewInv = document.getElementById('view-inventory');
@@ -512,26 +519,48 @@ function updateDashboard() {
 // 💡 [새 기능] 정산/회계 다중 드롭다운 및 필터 연동 로직
 function toggleAccDateInput() {
     let type = document.getElementById('acc-type').value;
-    if(type === 'month') { 
-        document.getElementById('acc-month').classList.remove('hidden'); 
-        document.getElementById('acc-date').classList.add('hidden'); 
-    } else { 
-        document.getElementById('acc-month').classList.add('hidden'); 
+    document.getElementById('acc-date').classList.add('hidden');
+    document.getElementById('acc-period-wrapper').classList.add('hidden');
+    document.getElementById('acc-period-wrapper').classList.remove('flex');
+    document.getElementById('acc-month').classList.add('hidden');
+
+    if(type === 'date') { 
         document.getElementById('acc-date').classList.remove('hidden'); 
+    } else if(type === 'period') { 
+        document.getElementById('acc-period-wrapper').classList.remove('hidden'); 
+        document.getElementById('acc-period-wrapper').classList.add('flex'); 
+    } else if(type === 'month') { 
+        document.getElementById('acc-month').classList.remove('hidden'); 
     }
+}
+
+// 💡 [새 기능] 날짜가 포함되는지 검사하는 도우미 함수
+function isAccDateMatch(hDate) {
+    let type = document.getElementById('acc-type').value;
+    if (type === 'date') {
+        let target = document.getElementById('acc-date').value;
+        if(!target) return false;
+        return hDate === target;
+    } else if (type === 'period') {
+        let start = document.getElementById('acc-period-start').value;
+        let end = document.getElementById('acc-period-end').value;
+        if (!start || !end) return false;
+        return hDate >= start && hDate <= end;
+    } else if (type === 'month') {
+        let target = document.getElementById('acc-month').value;
+        if(!target) return false;
+        return hDate.substring(0, 7) === target;
+    }
+    return false;
 }
 
 function updateAccFilters(changedFilter) {
     try {
-        let type = document.getElementById('acc-type').value;
-        const selDate = type === 'month' ? document.getElementById('acc-month').value : document.getElementById('acc-date').value;
-        if(!selDate) return;
-
-        // 1. 선택된 날짜에 입고된 내역만 추출
+        // 1. 선택된 날짜(기간)에 입고된 내역만 추출
         let inboundLog = globalHistory.filter(h => {
+            if(h.action_type !== '입고') return false;
             let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
-            let targetDate = type === 'month' ? hDate.substring(0, 7) : hDate;
-            return h.action_type === '입고' && targetDate === selDate;
+            return isAccDateMatch(hDate);
         });
 
         let supSelect = document.getElementById('acc-supplier'); 
@@ -564,13 +593,6 @@ function updateAccFilters(changedFilter) {
 
 function renderAccounting() { 
     try {
-        const type = document.getElementById('acc-type').value;
-        const selDate = type === 'month' ? document.getElementById('acc-month').value : document.getElementById('acc-date').value;
-        if(!selDate) {
-            document.getElementById('acc-list').innerHTML = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">날짜를 선택해주세요.</td></tr>`;
-            return;
-        }
-
         const selectedSup = document.getElementById('acc-supplier').value;
         const selectedItem = document.getElementById('acc-item').value;
         const groupMode = document.getElementById('acc-group').value;
@@ -581,8 +603,7 @@ function renderAccounting() {
         // 필터링 적용
         let filtered = inboundLog.filter(h => {
             let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
-            let targetDate = type === 'month' ? hDate.substring(0, 7) : hDate;
-            let matchDate = targetDate === selDate;
+            let matchDate = isAccDateMatch(hDate);
             let matchSup = selectedSup === 'ALL' || (h.remarks || '기본입고처') === selectedSup;
             let matchItem = selectedItem === 'ALL' || h.item_name === selectedItem;
             return matchDate && matchSup && matchItem;
@@ -837,6 +858,9 @@ function highlightFIFO() {
     updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 깜빡이로 표시합니다.`); 
 }
 
+async function togglePayment(logId, status) { try { await fetch(`/api/history/${logId}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({payment_status: status}) }); await load(); } catch(e) { alert("상태 변경 실패!"); } }
+async function clearData(target) { if(!confirm(`정말 삭제하시겠습니까?`)) return; try { await fetch(`/api/clear_data?target=${target}`, { method: 'DELETE' }); alert("초기화 완료"); await load(); } catch(e) {} }
+
 function switchProductTab(tab) {
     ['fp', 'pm', 'bom'].forEach(t => {
         document.getElementById(`tab-btn-${t}`).className = "whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors";
@@ -852,145 +876,22 @@ function switchProductTab(tab) {
     if(tab === 'bom') { updateBomDropdowns(); renderBomMaster(); }
 }
 
-function exportProductsExcel(targetType) { 
-    try { 
-        let wsData = []; let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster; let sheetName = targetType === 'finished' ? "제품마스터" : "자재마스터"; let fileName = targetType === 'finished' ? "한스팜_제품마스터_양식.xlsx" : "한스팜_자재마스터_양식.xlsx";
-        if (dataArray.length === 0) { wsData = [{ "카테고리": "", "품목명": "", "입고처(공급사)": "", "일간소모량(EA)": "0", "단가(비용)": "0", "1P기준수량(EA)": "1" }]; } 
-        else { wsData = dataArray.map(p => ({ "카테고리": p.category || "미분류", "품목명": p.item_name || "", "입고처(공급사)": p.supplier || "", "일간소모량(EA)": p.daily_usage || 0, "단가(비용)": p.unit_price || 0, "1P기준수량(EA)": p.pallet_ea || 1 })); } 
-        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, sheetName); XLSX.writeFile(wb, fileName); 
-    } catch (error) { alert("다운로드 중 오류"); } 
+function renderSafetyStock() { 
+    const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; 
+    globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); 
+    let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); 
+    if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다.</td></tr>`; } 
+    else { 
+        monitoredProducts.forEach(p => { 
+            let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; 
+            let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 발주 복사</button>` : ''; 
+            let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">🟢 여유</span>`; 
+            html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-2 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td><td class="p-2 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td><td class="p-2 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-2 md:p-4 text-right font-bold text-xs md:text-sm text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-2 md:p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2 mb-1 max-w-[100px] md:max-w-[150px] mx-auto overflow-hidden"><div class="h-2 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-[10px] md:text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-2 md:p-4 text-center">${statusHtml}</td></tr>`; 
+        }); 
+    } 
+    document.getElementById('safety-list').innerHTML = html; 
 }
 
-function importProductsExcel(e, targetType) { 
-    const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
-    const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
-    const msg = targetType === 'finished' ? "제품" : "자재";
-    reader.onload = async function(ev) { 
-        try { 
-            const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); 
-            const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]); 
-            if(json.length > 0) { 
-                const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
-                const result = await res.json();
-                if(result.status === 'success') { alert(`${msg} 대량 업로드 완료!`); await load(); } 
-                else { alert(`업로드 실패: 중복된 데이터가 있거나 양식이 맞지 않습니다. (${result.message})`); }
-            } else { alert("업로드할 데이터가 없습니다."); }
-        } catch(err) { console.error(err); alert("업로드 처리 중 오류 발생: 엑셀 양식을 다시 확인해주세요."); } 
-    }; reader.readAsArrayBuffer(file); e.target.value = ''; 
-}
-
-function exportBomExcel() {
-    let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
-    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
-}
-
-function importBomExcel(e) {
-    const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
-    reader.onload = async function(ev) {
-        try {
-            const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-            if(json.length > 0) { 
-                const res = await fetch('/api/bom_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
-                const result = await res.json();
-                if(result.status === 'success') { alert("BOM 대량 업로드 완료!"); await load(); } 
-                else { alert(`업로드 실패: ${result.message}`); }
-            }
-        } catch(err) { alert("업로드 처리 중 오류 발생"); }
-    }; reader.readAsArrayBuffer(file); e.target.value = '';
-}
-
-function updateBomDropdowns() {
-    const fNames = [...new Set(finishedProductMaster.map(p => p.item_name))].filter(Boolean).sort();
-    const mNames = [...new Set(productMaster.map(p => p.item_name))].filter(Boolean).sort();
-    const fOptions = fNames.length > 0 ? fNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
-    const mOptions = mNames.length > 0 ? mNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[자재 마스터]에 자재를 등록해주세요</option>`;
-    document.getElementById('bom-finished').innerHTML = fOptions; document.getElementById('bom-material').innerHTML = mOptions;
-}
-
-function renderBomMaster() {
-    const tbody = document.getElementById('bom-list');
-    if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
-    bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
-    tbody.innerHTML = bomMaster.map(b => {
-        let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors" title="삭제">❌</button>` : '';
-        return `<tr class="hover:bg-slate-50 transition-colors"><td class="p-2 border-b border-slate-100 font-black text-emerald-800 text-xs md:text-sm">${b.finished_product}</td><td class="p-2 border-b border-slate-100 text-center text-slate-400">➡️</td><td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-xs md:text-sm">${b.material_product}</td><td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-xs md:text-sm">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td><td class="p-2 border-b border-slate-100 text-center">${delBtn}</td></tr>`;
-    }).join('');
-}
-
-async function submitBom() {
-    const finished = document.getElementById('bom-finished').value; const material = document.getElementById('bom-material').value; const qty = parseFloat(document.getElementById('bom-qty').value);
-    if(!finished || !material || isNaN(qty) || qty <= 0) return alert("입력값을 확인해주세요.");
-    if(finished === material) return alert("완제품과 자재가 같을 수 없습니다!");
-    try { 
-        const res = await fetch('/api/bom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ finished_product: finished, material_product: material, require_qty: qty }) }); 
-        const result = await res.json();
-        if(result.status === 'success') { alert("레시피 연결 완료!"); document.getElementById('bom-qty').value = 1; await load(); }
-        else { alert(`등록 실패: ${result.message}`); }
-    } catch(e) { alert("서버 통신 실패"); }
-}
-
-async function deleteBom(id) { if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } }
-
-function renderProductMaster(targetType) { 
-    const searchInput = document.getElementById(targetType === 'finished' ? 'fp-search' : 'pm-search');
-    const keyword = searchInput ? searchInput.value.toLowerCase().trim() : '';
-    let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
-    let filtered = dataArray;
-    if (keyword) { filtered = dataArray.filter(p => (p.item_name||"").toLowerCase().includes(keyword) || (p.category||"").toLowerCase().includes(keyword) || (p.supplier||"").toLowerCase().includes(keyword)); }
-    const listHtml = filtered.map(p => { 
-        let delBtn = isAdmin ? `<button onclick="deleteProduct('${p.item_name}', '${p.supplier}', '${targetType}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors" title="삭제">❌</button>` : ''; 
-        let badgeColor = targetType === 'finished' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600';
-        return `<tr class="hover:bg-slate-50 transition-colors"><td class="p-2 border-b border-slate-100"><span class="text-[10px] ${badgeColor} px-1.5 py-0.5 rounded font-bold">${p.category}</span></td><td class="p-2 border-b border-slate-100 font-bold text-slate-800 text-xs md:text-sm">${p.item_name}</td><td class="p-2 border-b border-slate-100 text-[10px] md:text-xs font-bold text-rose-600">${p.supplier}</td><td class="p-2 border-b border-slate-100 text-right font-black text-indigo-600 text-xs md:text-sm">${p.pallet_ea.toLocaleString()} <span class="text-[10px] font-normal">EA</span></td><td class="p-2 border-b border-slate-100 text-right text-[10px] text-slate-500">일 ${p.daily_usage.toLocaleString()} / ${p.unit_price.toLocaleString()}원</td><td class="p-2 border-b border-slate-100 text-center flex justify-center space-x-1"><button onclick="editProductSetup('${p.category}', '${p.item_name}', '${p.supplier}', ${p.daily_usage}, ${p.unit_price}, ${p.pallet_ea}, '${targetType}')" class="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors" title="수정">⚙️</button>${delBtn}</td></tr>`; 
-    }).join(''); 
-    const tbodyId = targetType === 'finished' ? 'fp-list' : 'pm-list'; const tbody = document.getElementById(tbodyId);
-    if(tbody) { if(filtered.length > 0) tbody.innerHTML = listHtml; else tbody.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">검색 결과가 없습니다.</td></tr>`; }
-}
-
-function editProductSetup(cat, name, supplier, usage, price, ea, targetType) { 
-    editingProductOriginalName = name; editingProductOriginalSupplier = supplier; 
-    const prefix = targetType === 'finished' ? 'fp' : 'pm';
-    document.getElementById(`${prefix}-cat`).value = cat; document.getElementById(`${prefix}-name`).value = name; document.getElementById(`${prefix}-supplier`).value = supplier; document.getElementById(`${prefix}-usage`).value = usage; document.getElementById(`${prefix}-price`).value = price; document.getElementById(`${prefix}-pallet-ea`).value = ea || 1; 
-    document.getElementById(`${prefix}-form-title`).innerText = "기존 항목 수정 모드"; document.getElementById(`${prefix}-submit-btn`).innerText = "✅ 저장"; document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-indigo-600', 'bg-emerald-600'); document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); document.getElementById(`${prefix}-cancel-btn`).classList.remove('hidden'); 
-}
-
-function cancelEdit(targetType) { 
-    editingProductOriginalName = null; editingProductOriginalSupplier = null; 
-    const prefix = targetType === 'finished' ? 'fp' : 'pm'; const title = targetType === 'finished' ? '신규 완제품 추가' : '신규 자재 추가';
-    document.getElementById(`${prefix}-cat`).value = ''; document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; document.getElementById(`${prefix}-usage`).value = '0'; document.getElementById(`${prefix}-price`).value = '0'; document.getElementById(`${prefix}-pallet-ea`).value = '1'; 
-    document.getElementById(`${prefix}-form-title`).innerText = title; document.getElementById(`${prefix}-submit-btn`).innerText = "등록하기"; document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-emerald-600', 'bg-indigo-600'); document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700'); document.getElementById(`${prefix}-cancel-btn`).classList.add('hidden'); 
-}
-
-async function submitProduct(targetType) { 
-    const prefix = targetType === 'finished' ? 'fp' : 'pm';
-    const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
-    if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
-    const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-    try { 
-        if(editingProductOriginalName) { 
-            const res = await fetch(`${endpoint}?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-            const result = await res.json();
-            if(result.status === 'success') { alert("수정 완료"); cancelEdit(targetType); } else { alert(`수정 실패: ${result.message}`); }
-        } else { 
-            const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-            const result = await res.json();
-            if(result.status === 'success') { alert("등록 완료"); document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; } else { alert(`등록 실패: ${result.message}`); }
-        } 
-        await load(); 
-    } catch(e) { alert("서버 통신 실패"); } 
-}
-
-async function deleteProduct(name, supplier, targetType) { 
-    if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
-    const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-    try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
-}
-
-async function deleteAllProducts(targetType) { 
-    const msg = targetType === 'finished' ? "제품" : "자재";
-    if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
-    const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
-    const endpoint = targetType === 'finished' ? '/api/finished_products_all' : '/api/products_all';
-    try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); await load(); } catch(e) { alert("삭제 실패!"); } 
-}
+function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`[${supplier}] 수량(EA):`, "1000개"); if(!moq) return; const leadTime = prompt(`납기일:`, "최대한 빠르게"); const text = `[발주 요청서]\n수신: ${supplier}\n\n안녕하세요, 한스팜입니다.\n아래 품목 발주 요청드립니다.\n\n- 품목명: ${itemName}\n- 발주수량: ${moq}\n- 납기요청: ${leadTime}\n\n확인 후 회신 부탁드립니다. 감사합니다.`; navigator.clipboard.writeText(text.replace(/\\n/g, '\n')).then(() => { alert("복사 완료"); }); }
 
 window.onload = function() { load(); showView('dashboard'); };
