@@ -81,9 +81,8 @@ class EditInventoryData(BaseModel):
     new_date: Optional[str] = None
     pallet_count: Optional[float] = None
 
-# 💡 정적 파일(HTML, JS, 이미지) 경로 설정
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+# 💡 정적 파일(HTML, JS, 이미지) 경로를 파이썬과 같은 방(api)으로 강제 고정!
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Vercel이 어떤 경로로 들어오든 무조건 화면을 띄워주는 무적의 라우팅
 @app.get("/")
@@ -91,21 +90,21 @@ PUBLIC_DIR = os.path.join(BASE_DIR, "public")
 @app.get("/api/")
 @app.get("/api/index")
 async def serve_ui():
-    html_path = os.path.join(PUBLIC_DIR, "index.html")
+    html_path = os.path.join(CURRENT_DIR, "index.html")
     if os.path.exists(html_path):
         return FileResponse(html_path)
-    return HTMLResponse(content="<h1>HTML 파일을 찾을 수 없습니다. public 폴더 안에 index.html을 확인해주세요.</h1>", status_code=404)
+    return HTMLResponse(content="<h1>HTML 파일을 찾을 수 없습니다. api 폴더 안에 index.html 파일이 있는지 확인해주세요.</h1>", status_code=404)
 
 @app.get("/script.js")
 async def serve_script():
-    script_path = os.path.join(PUBLIC_DIR, "script.js")
+    script_path = os.path.join(CURRENT_DIR, "script.js")
     if os.path.exists(script_path):
         return FileResponse(script_path)
     return HTMLResponse(content="JS Not Found", status_code=404)
 
 @app.get("/logo.jpg")
 async def serve_logo():
-    logo_path = os.path.join(PUBLIC_DIR, "logo.jpg")
+    logo_path = os.path.join(CURRENT_DIR, "logo.jpg")
     if os.path.exists(logo_path):
         return FileResponse(logo_path)
     return {"error": "Logo not found."}
