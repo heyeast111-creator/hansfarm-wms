@@ -82,23 +82,11 @@
             
             <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
                 <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
-                    <div class="p-3 bg-emerald-50 border-b border-emerald-100 rounded-t-xl font-black text-emerald-800 flex justify-between items-center">
-                        <span class="text-sm">📥 입고 대기장 (가상 렉)</span>
-                        <span class="text-[10px] font-bold text-emerald-600">드래그로 자유 이동!</span>
-                    </div>
+                    <div class="p-3 bg-emerald-50 border-b border-emerald-100 rounded-t-xl font-black text-emerald-800 flex justify-between items-center"><span class="text-sm">📥 입고 대기장 (가상 렉)</span><span class="text-[10px] font-bold text-emerald-600">드래그로 자유 이동!</span></div>
                     <div class="p-3 border-b border-slate-200 space-y-2">
-                        <div class="flex space-x-2">
-                            <select id="wait-cat" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitProductDropdown()"><option value="">카테고리</option></select>
-                            <select id="wait-item" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitSupplierDropdown()"><option value="">품목 선택</option></select>
-                        </div>
-                        <div class="flex space-x-2">
-                            <select id="wait-supplier" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"><option value="">입고처</option></select>
-                            <input type="date" id="wait-date" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none">
-                        </div>
-                        <div class="flex space-x-2">
-                            <input type="number" id="wait-qty" placeholder="총수량(EA)" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none">
-                            <button onclick="createWaitingPallets()" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2 rounded shadow text-xs transition-colors">박스 생성 ➕</button>
-                        </div>
+                        <div class="flex space-x-2"><select id="wait-cat" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitProductDropdown()"><option value="">카테고리</option></select><select id="wait-item" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitSupplierDropdown()"><option value="">품목 선택</option></select></div>
+                        <div class="flex space-x-2"><select id="wait-supplier" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"><option value="">입고처</option></select><input type="date" id="wait-date" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"></div>
+                        <div class="flex space-x-2"><input type="number" id="wait-qty" placeholder="총수량(EA)" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none"><button onclick="createWaitingPallets()" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2 rounded shadow text-xs transition-colors">박스 생성 ➕</button></div>
                     </div>
                     <div class="flex-1 overflow-y-auto p-3 bg-slate-100 grid grid-cols-3 gap-2 content-start custom-scrollbar" id="waiting-grid"></div>
                 </div>
@@ -111,7 +99,6 @@
                         <button onclick="executeMapSearch()" class="hidden md:block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow transition-colors text-sm whitespace-nowrap">FIFO 스캔</button>
                         <button onclick="clearSearchTargets()" class="hidden md:block bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-3 rounded shadow-sm transition-colors text-sm whitespace-nowrap">초기화</button>
                     </div>
-
                     <div class="w-full flex-1 overflow-auto custom-scrollbar p-2 md:p-10">
                         <div class="w-fit min-w-max bg-white p-4 md:p-10 rounded-xl shadow-xl border border-slate-300 transition-all mx-auto" id="map-container">
                             <div id="vertical-racks" class="flex items-end"></div>
@@ -140,7 +127,6 @@
                 <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200"><h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">💰 재고자산</h3><div class="space-y-3"><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>❄️ 냉장 자산</span><span id="dash-val-cold">0 원</span></div><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>☀️ 실온 자산</span><span id="dash-val-room">0 원</span></div><div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div></div></div>
                 <div class="bg-rose-50 p-6 rounded-2xl shadow-md border border-rose-200 flex flex-col justify-center"><h3 class="text-rose-800 font-black text-lg mb-2 flex items-center">💸 소모 원가</h3><div class="text-4xl font-black text-rose-600 text-right" id="dash-cost-out">0 원</div></div>
             </div>
-            <div id="admin-dashboard-panel"></div>
         </div>
 
         <div id="view-search" class="hidden flex-col items-center justify-start md:justify-center h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
@@ -235,53 +221,61 @@
         </div>
 
         <div id="view-accounting" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
-            <h1 class="text-2xl md:text-3xl font-black text-yellow-800 mb-6">💰 매입처 정산/회계</h1>
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl md:text-3xl font-black text-yellow-800">💰 매입처 정산/회계</h1>
+            </div>
             
-            <div class="flex flex-wrap gap-3 mb-6 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
-                <div class="w-full md:w-auto flex-1">
-                    <label class="block text-[10px] font-bold text-slate-500 mb-1">조회 기준</label>
-                    <select id="acc-type" onchange="toggleAccDateInput(); renderAccounting()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold bg-slate-50">
-                        <option value="month">월별 조회</option>
-                        <option value="date">일자별 조회</option>
-                    </select>
+            <div class="flex flex-col space-y-2 mb-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex justify-between items-center mb-2">
+                    <h2 class="text-sm font-black text-slate-700">🔍 정산 조건 필터</h2>
+                    <button onclick="exportAccountingExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded shadow-sm text-xs transition-colors">엑셀 다운로드 ⬇️</button>
                 </div>
-                <div class="w-full md:w-auto flex-1">
-                    <label class="block text-[10px] font-bold text-slate-500 mb-1">날짜/월 선택</label>
-                    <input type="month" id="acc-month" onchange="renderAccounting()" class="w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
-                    <input type="date" id="acc-date" onchange="renderAccounting()" class="hidden w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
-                </div>
-                <div class="w-full md:w-auto flex-1">
-                    <label class="block text-[10px] font-bold text-slate-500 mb-1">매입처</label>
-                    <select id="acc-supplier" onchange="renderAccounting()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="ALL">전체 매입처</option></select>
-                </div>
-                <div class="w-full md:w-auto flex-1">
-                    <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명</label>
-                    <select id="acc-item" onchange="renderAccounting()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="ALL">전체 품목</option></select>
-                </div>
-                <div class="w-full md:w-auto flex-1">
-                    <label class="block text-[10px] font-bold text-rose-500 mb-1">정렬/그룹 방식</label>
-                    <select id="acc-group" onchange="renderAccounting()" class="w-full border border-rose-300 rounded p-1.5 text-xs font-black text-rose-700 bg-rose-50">
-                        <option value="list">상세 내역 (일자순)</option>
-                        <option value="supplier">업체별 요약 묶어보기</option>
-                        <option value="item">품목별 요약 묶어보기</option>
-                    </select>
+                <div class="flex flex-wrap gap-3">
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">조회 기준</label>
+                        <select id="acc-type" onchange="toggleAccDateInput(); updateAccFilters('type')" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold bg-slate-50">
+                            <option value="month">월별 조회</option>
+                            <option value="date">일자별 조회</option>
+                        </select>
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">날짜/월 선택</label>
+                        <input type="month" id="acc-month" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
+                        <input type="date" id="acc-date" onchange="updateAccFilters('date')" class="hidden w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">매입처</label>
+                        <select id="acc-supplier" onchange="updateAccFilters('supplier')" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="ALL">전체 매입처</option></select>
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명</label>
+                        <select id="acc-item" onchange="renderAccounting()" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold"><option value="ALL">전체 품목</option></select>
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-rose-500 mb-1">정렬/그룹 방식</label>
+                        <select id="acc-group" onchange="renderAccounting()" class="w-full border border-rose-300 rounded p-1.5 text-xs font-black text-rose-700 bg-rose-50">
+                            <option value="list">상세 내역 (일자순)</option>
+                            <option value="supplier">업체별 요약 묶어보기</option>
+                            <option value="item">품목별 요약 묶어보기</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-slate-700"><div class="text-[10px] md:text-xs text-slate-500 font-bold mb-1">순 공급가액 (매입금액)</div><div class="text-xl md:text-2xl font-black text-slate-800" id="acc-supply">0 원</div></div>
                 <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-rose-500"><div class="text-[10px] md:text-xs text-rose-500 font-bold mb-1">부가세 (10%)</div><div class="text-xl md:text-2xl font-black text-rose-600" id="acc-tax">0 원</div></div>
                 <div class="bg-white p-4 rounded-xl shadow-md border-l-4 border-blue-500"><div class="text-[10px] md:text-xs text-blue-600 font-bold mb-1">총 합계 (결제 예정액)</div><div class="text-xl md:text-2xl font-black text-blue-700" id="acc-total">0 원</div></div>
             </div>
 
-            <div class="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden overflow-x-auto flex-1 custom-scrollbar">
-                <table class="w-full text-left border-collapse min-w-[800px]">
+            <div class="bg-white rounded-xl shadow-md border border-slate-200 overflow-hidden overflow-x-auto flex-1 custom-scrollbar">
+                <table class="w-full text-left border-collapse min-w-[800px]" id="accounting-table">
                     <thead class="sticky top-0 bg-slate-100 z-10 shadow-sm border-b-2 border-slate-300">
                         <tr class="text-slate-600 text-[10px] md:text-xs">
                             <th class="p-2 font-black">입고 일자</th>
                             <th class="p-2 font-black">매입처</th>
                             <th class="p-2 font-black">품목명</th>
-                            <th class="p-2 font-black text-right">수량(EA)</th>
+                            <th class="p-2 font-black text-right">총 수량(EA)</th>
                             <th class="p-2 font-black text-right">단가(원)</th>
                             <th class="p-2 font-black text-right">공급가액</th>
                             <th class="p-2 font-black text-right">세액(10%)</th>
