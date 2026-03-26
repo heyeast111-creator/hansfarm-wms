@@ -182,11 +182,20 @@
                     <label class="block text-xs font-bold text-slate-500 mb-1">비고(생산처)</label><input type="text" id="fp-supplier" placeholder="자체생산" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
                     <div class="flex space-x-2 mb-4"><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">일간출고량</label><input type="number" id="fp-usage" value="0" class="w-full border border-slate-300 rounded p-2 text-sm"></div><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">1P당 수량</label><input type="number" id="fp-pallet-ea" value="1" class="w-full border border-slate-300 rounded p-2 text-sm"></div></div>
                     <label class="block text-xs font-bold text-slate-500 mb-1">단가(매출)</label><input type="number" id="fp-price" value="0" class="w-full border border-slate-300 rounded p-2 mb-6 text-sm">
-                    <button id="fp-submit-btn" onclick="submitProduct('finished')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">등록하기</button><button id="fp-cancel-btn" onclick="cancelEdit('finished')" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">취소</button>
+                    <button id="fp-submit-btn" onclick="submitProduct('finished')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">등록하기</button><button id="fp-cancel-btn" onclick="cancelEdit('finished')" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">수정 취소</button>
                 </div>
                 <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden">
-                    <input type="text" id="fp-search" onkeyup="renderProductMaster('finished')" placeholder="제품명 검색..." class="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold mb-4 outline-none">
-                    <div class="overflow-y-auto flex-1 custom-scrollbar"><table class="w-full text-left border-collapse text-xs md:text-sm min-w-[500px]"><thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500"><tr><th class="p-2">분류</th><th class="p-2">제품명</th><th class="p-2">비고</th><th class="p-2 text-right">1P수량</th><th class="p-2 text-center">관리</th></tr></thead><tbody id="fp-list" class="divide-y divide-slate-100"></tbody></table></div>
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
+                        <select id="fp-filter-cat" onchange="renderProductMaster('finished')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 카테고리</option></select>
+                        <select id="fp-filter-sup" onchange="renderProductMaster('finished')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 생산처</option></select>
+                        <input type="text" id="fp-search" onkeyup="renderProductMaster('finished')" placeholder="제품명 검색어 입력..." class="w-full sm:w-2/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none">
+                    </div>
+                    <div class="overflow-y-auto flex-1 custom-scrollbar">
+                        <table class="w-full text-left border-collapse text-xs md:text-sm min-w-[600px]">
+                            <thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500"><tr><th class="p-2">카테고리</th><th class="p-2">제품명</th><th class="p-2">생산처</th><th class="p-2 text-right">1P당 수량</th><th class="p-2 text-right">단가/일소모량</th><th class="p-2 text-center">관리</th></tr></thead>
+                            <tbody id="fp-list" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -198,11 +207,20 @@
                     <label class="block text-xs font-bold text-slate-500 mb-1">입고처</label><input type="text" id="pm-supplier" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
                     <div class="flex space-x-2 mb-4"><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">일간소모량</label><input type="number" id="pm-usage" value="0" class="w-full border border-slate-300 rounded p-2 text-sm"></div><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">1P당 수량</label><input type="number" id="pm-pallet-ea" value="1" class="w-full border border-slate-300 rounded p-2 text-sm"></div></div>
                     <label class="block text-xs font-bold text-slate-500 mb-1">단가(매입)</label><input type="number" id="pm-price" value="0" class="w-full border border-slate-300 rounded p-2 mb-6 text-sm">
-                    <button id="pm-submit-btn" onclick="submitProduct('materials')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">등록하기</button><button id="pm-cancel-btn" onclick="cancelEdit('materials')" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">취소</button>
+                    <button id="pm-submit-btn" onclick="submitProduct('materials')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">등록하기</button><button id="pm-cancel-btn" onclick="cancelEdit('materials')" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">수정 취소</button>
                 </div>
                 <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden">
-                    <input type="text" id="pm-search" onkeyup="renderProductMaster('materials')" placeholder="자재명 검색..." class="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold mb-4 outline-none">
-                    <div class="overflow-y-auto flex-1 custom-scrollbar"><table class="w-full text-left border-collapse text-xs md:text-sm min-w-[500px]"><thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500"><tr><th class="p-2">분류</th><th class="p-2">자재명</th><th class="p-2">입고처</th><th class="p-2 text-right">1P수량</th><th class="p-2 text-center">관리</th></tr></thead><tbody id="pm-list" class="divide-y divide-slate-100"></tbody></table></div>
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-4">
+                        <select id="pm-filter-cat" onchange="renderProductMaster('materials')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 카테고리</option></select>
+                        <select id="pm-filter-sup" onchange="renderProductMaster('materials')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 입고처</option></select>
+                        <input type="text" id="pm-search" onkeyup="renderProductMaster('materials')" placeholder="자재명 검색어 입력..." class="w-full sm:w-2/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none">
+                    </div>
+                    <div class="overflow-y-auto flex-1 custom-scrollbar">
+                        <table class="w-full text-left border-collapse text-xs md:text-sm min-w-[600px]">
+                            <thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500"><tr><th class="p-2">카테고리</th><th class="p-2">자재명</th><th class="p-2">입고처</th><th class="p-2 text-right">1P당 수량</th><th class="p-2 text-right">단가/일소모량</th><th class="p-2 text-center">관리</th></tr></thead>
+                            <tbody id="pm-list" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
