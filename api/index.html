@@ -99,6 +99,7 @@
                         <button onclick="executeMapSearch()" class="hidden md:block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow transition-colors text-sm whitespace-nowrap">FIFO 스캔</button>
                         <button onclick="clearSearchTargets()" class="hidden md:block bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-3 rounded shadow-sm transition-colors text-sm whitespace-nowrap">초기화</button>
                     </div>
+
                     <div class="w-full flex-1 overflow-auto custom-scrollbar p-2 md:p-10">
                         <div class="w-fit min-w-max bg-white p-4 md:p-10 rounded-xl shadow-xl border border-slate-300 transition-all mx-auto" id="map-container">
                             <div id="vertical-racks" class="flex items-end"></div>
@@ -234,14 +235,20 @@
                     <div class="w-full md:w-auto flex-1">
                         <label class="block text-[10px] font-bold text-slate-500 mb-1">조회 기준</label>
                         <select id="acc-type" onchange="toggleAccDateInput(); updateAccFilters('type')" class="w-full border border-slate-300 rounded p-1.5 text-xs font-bold bg-slate-50">
-                            <option value="month">월별 조회</option>
                             <option value="date">일자별 조회</option>
+                            <option value="period">기간 조회 (시작~종료)</option>
+                            <option value="month">월별 조회</option>
                         </select>
                     </div>
-                    <div class="w-full md:w-auto flex-1">
-                        <label class="block text-[10px] font-bold text-slate-500 mb-1">날짜/월 선택</label>
-                        <input type="month" id="acc-month" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
-                        <input type="date" id="acc-date" onchange="updateAccFilters('date')" class="hidden w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
+                    <div class="w-full md:w-auto flex-[2]">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">날짜/기간 선택</label>
+                        <input type="date" id="acc-date" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
+                        <div id="acc-period-wrapper" class="hidden items-center space-x-1">
+                            <input type="date" id="acc-period-start" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
+                            <span class="text-slate-500 font-bold">~</span>
+                            <input type="date" id="acc-period-end" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
+                        </div>
+                        <input type="month" id="acc-month" onchange="updateAccFilters('date')" class="hidden w-full border border-indigo-300 rounded p-1.5 text-xs font-black text-indigo-700">
                     </div>
                     <div class="w-full md:w-auto flex-1">
                         <label class="block text-[10px] font-bold text-slate-500 mb-1">매입처</label>
