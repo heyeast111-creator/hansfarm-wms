@@ -81,24 +81,38 @@
             </header>
             
             <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
+                
                 <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
-                    <div class="p-3 bg-emerald-50 border-b border-emerald-100 rounded-t-xl font-black text-emerald-800 flex justify-between items-center"><span class="text-sm">📥 입고 대기장 (가상 렉)</span><span class="text-[10px] font-bold text-emerald-600">드래그로 자유 이동!</span></div>
+                    <div class="p-3 bg-emerald-50 border-b border-emerald-100 rounded-t-xl font-black text-emerald-800 flex justify-between items-center">
+                        <span class="text-sm">📥 입고 대기장 (가상 렉)</span>
+                        <span class="text-[10px] font-bold text-emerald-600">드래그로 자유 이동!</span>
+                    </div>
                     <div class="p-3 border-b border-slate-200 space-y-2">
-                        <div class="flex space-x-2"><select id="wait-cat" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitProductDropdown()"><option value="">카테고리</option></select><select id="wait-item" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitSupplierDropdown()"><option value="">품목 선택</option></select></div>
-                        <div class="flex space-x-2"><select id="wait-supplier" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"><option value="">입고처</option></select><input type="date" id="wait-date" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"></div>
-                        <div class="flex space-x-2"><input type="number" id="wait-qty" placeholder="총수량(EA)" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none"><button onclick="createWaitingPallets()" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2 rounded shadow text-xs transition-colors">박스 생성 ➕</button></div>
+                        <div class="flex space-x-2">
+                            <select id="wait-cat" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitProductDropdown()"><option value="">카테고리</option></select>
+                            <select id="wait-item" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitSupplierDropdown()"><option value="">품목 선택</option></select>
+                        </div>
+                        <div class="flex space-x-2">
+                            <select id="wait-supplier" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"><option value="">입고처</option></select>
+                            <input type="date" id="wait-date" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none">
+                        </div>
+                        <div class="flex space-x-2">
+                            <input type="number" id="wait-qty" placeholder="총수량(EA)" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none">
+                            <button onclick="createWaitingPallets()" class="w-1/2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-2 rounded shadow text-xs transition-colors">박스 생성 ➕</button>
+                        </div>
                     </div>
                     <div class="flex-1 overflow-y-auto p-3 bg-slate-100 grid grid-cols-3 gap-2 content-start custom-scrollbar" id="waiting-grid"></div>
                 </div>
 
                 <div class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-slate-200 h-[50vh] md:h-full relative overflow-hidden">
-                    <div id="map-search-container" class="hidden bg-white p-3 md:p-4 border-b border-slate-200 w-full flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3 items-center md:items-end shrink-0 text-center shadow-sm z-10 relative">
+                    <div id="map-search-container" class="hidden bg-white p-3 md:p-4 border-b border-slate-200 w-full flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3 items-center md:items-end shrink-0 text-center shadow-sm z-10 absolute top-0 left-0">
                         <div class="w-full md:w-1/4 text-left"><label class="block text-[10px] font-bold text-slate-500 mb-1">구역 카테고리</label><select id="map-search-category" onchange="updateMapSearchItemDropdown()" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"><option value="ALL">전체</option></select></div>
                         <div class="w-full md:w-2/4 text-left"><label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 검색</label><input type="text" id="map-search-keyword" list="map-search-item-list" placeholder="검색어 입력" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"><datalist id="map-search-item-list"></datalist></div>
                         <div class="w-full md:w-1/4 text-left flex space-x-2 md:block"><div class="flex-1"><label class="block text-[10px] font-bold text-slate-500 mb-1">찾을 개수(렉)</label><input type="number" id="map-search-count" value="1" min="1" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"></div><div class="flex flex-1 space-x-1 md:mt-2 items-end md:hidden"><button onclick="executeMapSearch()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded shadow text-xs">스캔</button><button onclick="clearSearchTargets()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-2 rounded shadow-sm text-xs">리셋</button></div></div>
                         <button onclick="executeMapSearch()" class="hidden md:block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow transition-colors text-sm whitespace-nowrap">FIFO 스캔</button>
                         <button onclick="clearSearchTargets()" class="hidden md:block bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-3 rounded shadow-sm transition-colors text-sm whitespace-nowrap">초기화</button>
                     </div>
+
                     <div class="w-full flex-1 overflow-auto custom-scrollbar p-2 md:p-10">
                         <div class="w-fit min-w-max bg-white p-4 md:p-10 rounded-xl shadow-xl border border-slate-300 transition-all mx-auto" id="map-container">
                             <div id="vertical-racks" class="flex items-end"></div>
@@ -246,7 +260,6 @@
         <div id="view-outbound" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
             <h1 class="text-3xl font-black text-slate-800 mb-4">🚚 출고 관리 시스템</h1><p class="text-slate-500 font-bold text-center">패킹 리스트 생성 기능 준비중</p>
         </div>
-
     </main>
 
     <aside id="right-sidebar" class="hidden fixed md:relative bottom-16 md:bottom-0 right-0 w-full md:w-80 h-[60vh] md:h-full bg-white border-t md:border-l border-slate-300 flex-col shadow-[0_-10px_20px_rgba(0,0,0,0.15)] md:shadow-lg z-40 shrink-0 transition-all">
@@ -260,28 +273,88 @@
         
         const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
         const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
-        const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료/냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재/실온)', cols: 20 } ];
+        const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료 / 냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재 / 실온)', cols: 20 } ];
 
         async function load() {
             try {
                 const ts = new Date().getTime();
                 const [occRes, prodRes, fpRes, histRes, bomRes] = await Promise.all([ 
-                    fetch('/api/inventory?t=' + ts), 
-                    fetch('/api/products?t=' + ts), 
-                    fetch('/api/finished_products?t=' + ts), 
-                    fetch('/api/history?t=' + ts), 
-                    fetch('/api/bom?t=' + ts) 
+                    fetch('/api/inventory?t=' + ts), fetch('/api/products?t=' + ts), fetch('/api/finished_products?t=' + ts), fetch('/api/history?t=' + ts), fetch('/api/bom?t=' + ts) 
                 ]);
                 globalOccupancy = await occRes.json() || []; productMaster = await prodRes.json() || []; finishedProductMaster = await fpRes.json() || []; globalHistory = await histRes.json() || []; bomMaster = await bomRes.json() || [];
                 
                 updateMapSearchCategoryDropdown(); updateSummarySupplierDropdown(); populateWaitDropdowns(); 
                 
-                if(document.getElementById('view-inventory') && document.getElementById('view-inventory').classList.contains('flex')) renderMap(); 
-                if(document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('flex')) updateDashboard();
-                if(document.getElementById('view-accounting') && document.getElementById('view-accounting').classList.contains('flex')) renderAccounting();
+                let viewInv = document.getElementById('view-inventory');
+                if(viewInv && !viewInv.classList.contains('hidden')) renderMap(); 
+                
+                let viewDash = document.getElementById('view-dashboard');
+                if(viewDash && !viewDash.classList.contains('hidden')) updateDashboard();
+                
+                let viewAcc = document.getElementById('view-accounting');
+                if(viewAcc && !viewAcc.classList.contains('hidden')) renderAccounting();
                 
                 if(selectedCellId) await clickCell(selectedCellId); else clearInfo();
             } catch (e) { console.error("로딩 에러:", e); }
+        }
+
+        // 💡 [누락 복구] 1. 관리자 로그인 기능 
+        function adminLogin() {
+            if(isAdmin) { 
+                isAdmin = false; 
+                alert("관리자 모드 해제"); 
+                document.getElementById('admin-btn-pc').innerText = "🔒 관리자"; 
+                document.getElementById('admin-btn-mo').innerHTML = "🔒<span class='mt-1'>관리자</span>"; 
+                document.getElementById('admin-btn-mo').classList.remove('bg-rose-100', 'text-rose-700', 'border-rose-300'); 
+                document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden')); 
+                let viewAcc = document.getElementById('view-accounting');
+                if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
+                load(); 
+                return; 
+            }
+            const pw = prompt("비밀번호 입력 (1234):"); 
+            if(pw === "1234") { 
+                isAdmin = true; 
+                alert("관리자 권한 활성화"); 
+                document.getElementById('admin-btn-pc').innerText = "🔓 관리자 (ON)"; 
+                document.getElementById('admin-btn-mo').innerHTML = "🔓<span class='mt-1'>관리자</span>"; 
+                document.getElementById('admin-btn-mo').classList.add('bg-rose-100', 'text-rose-700', 'border-rose-300'); 
+                document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
+                load(); 
+            } else if (pw !== null) {
+                alert("비밀번호가 틀렸습니다.");
+            }
+        }
+
+        // 💡 [누락 복구] 2. 실사 양식(Excel) 다운로드 기능
+        function exportPhysicalCountExcel() {
+            try {
+                let wsData = [];
+                if (globalOccupancy.length === 0) {
+                    wsData = [{"위치": "", "카테고리": "", "품목명": "", "입고처": "", "전산수량(EA)": "", "실사수량(EA)": "", "차이": "", "비고": ""}];
+                } else {
+                    let sortedData = [...globalOccupancy].sort((a, b) => a.location_id.localeCompare(b.location_id));
+                    wsData = sortedData.map(item => ({
+                        "위치": item.location_id,
+                        "카테고리": item.category || "",
+                        "품목명": item.item_name || "",
+                        "입고처": item.remarks || "기본입고처",
+                        "전산수량(EA)": item.quantity,
+                        "실사수량(EA)": "",
+                        "차이": "",
+                        "비고": ""
+                    }));
+                }
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.json_to_sheet(wsData);
+                ws['!cols'] = [{wch: 15}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 10}, {wch: 20}];
+                XLSX.utils.book_append_sheet(wb, ws, "재고실사양식");
+                let today = new Date().toISOString().split('T')[0];
+                XLSX.writeFile(wb, `한스팜_재고실사양식_${today}.xlsx`);
+            } catch (error) {
+                console.error(error);
+                alert("양식 다운로드 중 오류가 발생했습니다.");
+            }
         }
 
         function updateZoneTabs() {
@@ -400,7 +473,7 @@
             let movePallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty});
             try { 
                 await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc, item_name: itemName, quantity: qty, pallet_count: movePallet }) }); 
-                await load(); // 💡 무조건 DB 최신화 대기
+                await load(); 
             } catch(e) { alert("서버 통신 오류"); }
         }
 
@@ -448,7 +521,7 @@
                     let promises = payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) })); 
                     await Promise.all(promises); 
                     document.getElementById('wait-qty').value = ''; 
-                    await load(); // 💡 DB 반영 대기
+                    await load(); 
                 } catch(e) { alert("생성 중 오류 발생"); }
             }
         }
@@ -579,7 +652,6 @@
             } catch(e) { console.error("Click Cell Error:", e); }
         }
 
-        // 💡 [핵심 버그 픽스] 수정 완료 후 무조건 최신 데이터를 기다렸다(await load) 띄움
         async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
             let action = prompt(`[${itemName}] 편집 메뉴\\n\\n1: 수량 수정 (EA)\\n2: 날짜 수정 (YYYY-MM-DD)\\n3: 기록 완전 삭제 (오입력 취소)\\n\\n원하시는 작업 번호를 입력하세요:`);
             if (action === '1') { 
@@ -621,10 +693,9 @@
             } catch(e) {} 
         }
 
-        // 💡 대시보드 렌더링 에러 안전장치 적용
         function updateDashboard() { 
             try {
-                const dashPeriod = document.getElementById('dash-period');
+                let dashPeriod = document.getElementById('dash-period');
                 if(!dashPeriod) return;
                 const period = dashPeriod.value; let startDate = new Date(); 
                 if(period === 'daily') startDate.setDate(startDate.getDate() - 1); 
@@ -691,7 +762,6 @@
             } catch(e) { console.error("Dashboard Render Error:", e); }
         }
 
-        // 이하 부가 기능들 모음
         function updateMapSearchCategoryDropdown() {
             let sourceItems = [];
             if (currentZone === '실온') sourceItems = productMaster.filter(p => p.category && !p.category.includes('원란'));
@@ -837,594 +907,54 @@
             if(tab === 'bom') { updateBomDropdowns(); renderBomMaster(); }
         }
 
-        function exportProductsExcel(targetType) { 
-            try { 
-                let wsData = []; let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster; let sheetName = targetType === 'finished' ? "제품마스터" : "자재마스터"; let fileName = targetType === 'finished' ? "한스팜_제품마스터_양식.xlsx" : "한스팜_자재마스터_양식.xlsx";
-                if (dataArray.length === 0) { wsData = [{ "카테고리": "", "품목명": "", "입고처(공급사)": "", "일간소모량(EA)": "0", "단가(비용)": "0", "1P기준수량(EA)": "1" }]; } 
-                else { wsData = dataArray.map(p => ({ "카테고리": p.category || "미분류", "품목명": p.item_name || "", "입고처(공급사)": p.supplier || "", "일간소모량(EA)": p.daily_usage || 0, "단가(비용)": p.unit_price || 0, "1P기준수량(EA)": p.pallet_ea || 1 })); } 
-                const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, sheetName); XLSX.writeFile(wb, fileName); 
-            } catch (error) { alert("다운로드 중 오류"); } 
-        }
-        
-        function importProductsExcel(e, targetType) { 
-            const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
-            const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
-            const msg = targetType === 'finished' ? "제품" : "자재";
-            reader.onload = async function(ev) { 
-                try { 
-                    const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); 
-                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]); 
-                    if(json.length > 0) { 
-                        const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
-                        const result = await res.json();
-                        if(result.status === 'success') { alert(`${msg} 대량 업로드 완료!`); await load(); } 
-                        else { alert(`업로드 실패: 중복된 데이터가 있거나 양식이 맞지 않습니다. (${result.message})`); }
-                    } else { alert("업로드할 데이터가 없습니다."); }
-                } catch(err) { console.error(err); alert("업로드 처리 중 오류 발생: 엑셀 양식을 다시 확인해주세요."); } 
-            }; reader.readAsArrayBuffer(file); e.target.value = ''; 
+        function renderSafetyStock() { 
+            const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; 
+            globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); 
+            let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); 
+            if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다.</td></tr>`; } 
+            else { 
+                monitoredProducts.forEach(p => { 
+                    let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; 
+                    let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 발주 복사</button>` : ''; 
+                    let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">🟢 여유</span>`; 
+                    html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-2 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td><td class="p-2 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td><td class="p-2 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-2 md:p-4 text-right font-bold text-xs md:text-sm text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-2 md:p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2 mb-1 max-w-[100px] md:max-w-[150px] mx-auto overflow-hidden"><div class="h-2 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-[10px] md:text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-2 md:p-4 text-center">${statusHtml}</td></tr>`; 
+                }); 
+            } 
+            document.getElementById('safety-list').innerHTML = html; 
         }
 
-        function exportBomExcel() {
-            let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
-            const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
-        }
+        function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`[${supplier}] 수량(EA):`, "1000개"); if(!moq) return; const leadTime = prompt(`납기일:`, "최대한 빠르게"); const text = `[발주 요청서]\\n수신: ${supplier}\\n\\n안녕하세요, 한스팜입니다.\\n아래 품목 발주 요청드립니다.\\n\\n- 품목명: ${itemName}\\n- 발주수량: ${moq}\\n- 납기요청: ${leadTime}\\n\\n확인 후 회신 부탁드립니다. 감사합니다.`; navigator.clipboard.writeText(text.replace(/\\n/g, '\\n')).then(() => { alert("복사 완료"); }); }
 
-        function importBomExcel(e) {
-            const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
-            reader.onload = async function(ev) {
-                try {
-                    const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-                    if(json.length > 0) { 
-                        const res = await fetch('/api/bom_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
-                        const result = await res.json();
-                        if(result.status === 'success') { alert("BOM 대량 업로드 완료!"); await load(); } 
-                        else { alert(`업로드 실패: ${result.message}`); }
-                    }
-                } catch(err) { alert("업로드 처리 중 오류 발생"); }
-            }; reader.readAsArrayBuffer(file); e.target.value = '';
-        }
-
-        function updateBomDropdowns() {
-            const fNames = [...new Set(finishedProductMaster.map(p => p.item_name))].filter(Boolean).sort();
-            const mNames = [...new Set(productMaster.map(p => p.item_name))].filter(Boolean).sort();
-            const fOptions = fNames.length > 0 ? fNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
-            const mOptions = mNames.length > 0 ? mNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[자재 마스터]에 자재를 등록해주세요</option>`;
-            document.getElementById('bom-finished').innerHTML = fOptions; document.getElementById('bom-material').innerHTML = mOptions;
-        }
-
-        function renderBomMaster() {
-            const tbody = document.getElementById('bom-list');
-            if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
-            bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
-            tbody.innerHTML = bomMaster.map(b => {
-                let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors" title="삭제">❌</button>` : '';
-                return `<tr class="hover:bg-slate-50 transition-colors"><td class="p-2 border-b border-slate-100 font-black text-emerald-800 text-xs md:text-sm">${b.finished_product}</td><td class="p-2 border-b border-slate-100 text-center text-slate-400">➡️</td><td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-xs md:text-sm">${b.material_product}</td><td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-xs md:text-sm">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td><td class="p-2 border-b border-slate-100 text-center">${delBtn}</td></tr>`;
-            }).join('');
-        }
-
-        async function submitBom() {
-            const finished = document.getElementById('bom-finished').value; const material = document.getElementById('bom-material').value; const qty = parseFloat(document.getElementById('bom-qty').value);
-            if(!finished || !material || isNaN(qty) || qty <= 0) return alert("입력값을 확인해주세요.");
-            if(finished === material) return alert("완제품과 자재가 같을 수 없습니다!");
-            try { 
-                const res = await fetch('/api/bom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ finished_product: finished, material_product: material, require_qty: qty }) }); 
-                const result = await res.json();
-                if(result.status === 'success') { alert("레시피 연결 완료!"); document.getElementById('bom-qty').value = 1; await load(); }
-                else { alert(`등록 실패: ${result.message}`); }
-            } catch(e) { alert("서버 통신 실패"); }
-        }
-
-        async function deleteBom(id) { if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } }
-        async function deleteAllBom() { if(!confirm("⚠️ 모든 레시피(BOM)를 일괄 삭제하시겠습니까?")) return; const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); try { await fetch('/api/bom_all', { method: 'DELETE' }); alert("일괄 삭제 완료!"); await load(); } catch(e) {} }
-
-        function renderProductMaster(targetType) { 
-            const searchInput = document.getElementById(targetType === 'finished' ? 'fp-search' : 'pm-search');
-            const keyword = searchInput ? searchInput.value.toLowerCase().trim() : '';
-            let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
-            let filtered = dataArray;
-            if (keyword) { filtered = dataArray.filter(p => (p.item_name||"").toLowerCase().includes(keyword) || (p.category||"").toLowerCase().includes(keyword) || (p.supplier||"").toLowerCase().includes(keyword)); }
-            const listHtml = filtered.map(p => { 
-                let delBtn = isAdmin ? `<button onclick="deleteProduct('${p.item_name}', '${p.supplier}', '${targetType}')" class="text-rose-500 hover:bg-rose-100 p-1.5 rounded transition-colors" title="삭제">❌</button>` : ''; 
-                let badgeColor = targetType === 'finished' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600';
-                return `<tr class="hover:bg-slate-50 transition-colors"><td class="p-2 border-b border-slate-100"><span class="text-[10px] ${badgeColor} px-1.5 py-0.5 rounded font-bold">${p.category}</span></td><td class="p-2 border-b border-slate-100 font-bold text-slate-800 text-xs md:text-sm">${p.item_name}</td><td class="p-2 border-b border-slate-100 text-[10px] md:text-xs font-bold text-rose-600">${p.supplier}</td><td class="p-2 border-b border-slate-100 text-right font-black text-indigo-600 text-xs md:text-sm">${p.pallet_ea.toLocaleString()} <span class="text-[10px] font-normal">EA</span></td><td class="p-2 border-b border-slate-100 text-right text-[10px] text-slate-500">일 ${p.daily_usage.toLocaleString()} / ${p.unit_price.toLocaleString()}원</td><td class="p-2 border-b border-slate-100 text-center flex justify-center space-x-1"><button onclick="editProductSetup('${p.category}', '${p.item_name}', '${p.supplier}', ${p.daily_usage}, ${p.unit_price}, ${p.pallet_ea}, '${targetType}')" class="text-blue-500 hover:bg-blue-100 p-1.5 rounded transition-colors" title="수정">⚙️</button>${delBtn}</td></tr>`; 
-            }).join(''); 
-            const tbodyId = targetType === 'finished' ? 'fp-list' : 'pm-list'; const tbody = document.getElementById(tbodyId);
-            if(tbody) { if(filtered.length > 0) tbody.innerHTML = listHtml; else tbody.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">검색 결과가 없습니다.</td></tr>`; }
-        }
-
-        function editProductSetup(cat, name, supplier, usage, price, ea, targetType) { 
-            editingProductOriginalName = name; editingProductOriginalSupplier = supplier; 
-            const prefix = targetType === 'finished' ? 'fp' : 'pm';
-            document.getElementById(`${prefix}-cat`).value = cat; document.getElementById(`${prefix}-name`).value = name; document.getElementById(`${prefix}-supplier`).value = supplier; document.getElementById(`${prefix}-usage`).value = usage; document.getElementById(`${prefix}-price`).value = price; document.getElementById(`${prefix}-pallet-ea`).value = ea || 1; 
-            document.getElementById(`${prefix}-form-title`).innerText = "기존 항목 수정 모드"; document.getElementById(`${prefix}-submit-btn`).innerText = "✅ 저장"; document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-indigo-600', 'bg-emerald-600'); document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); document.getElementById(`${prefix}-cancel-btn`).classList.remove('hidden'); 
-        }
-
-        function cancelEdit(targetType) { 
-            editingProductOriginalName = null; editingProductOriginalSupplier = null; 
-            const prefix = targetType === 'finished' ? 'fp' : 'pm'; const title = targetType === 'finished' ? '신규 완제품 추가' : '신규 자재 추가';
-            document.getElementById(`${prefix}-cat`).value = ''; document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; document.getElementById(`${prefix}-usage`).value = '0'; document.getElementById(`${prefix}-price`).value = '0'; document.getElementById(`${prefix}-pallet-ea`).value = '1'; 
-            document.getElementById(`${prefix}-form-title`).innerText = title; document.getElementById(`${prefix}-submit-btn`).innerText = "등록하기"; document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-emerald-600', 'bg-indigo-600'); document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700'); document.getElementById(`${prefix}-cancel-btn`).classList.add('hidden'); 
-        }
-
-        async function submitProduct(targetType) { 
-            const prefix = targetType === 'finished' ? 'fp' : 'pm';
-            const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
-            if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
-            const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-            try { 
-                if(editingProductOriginalName) { 
-                    const res = await fetch(`${endpoint}?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-                    const result = await res.json();
-                    if(result.status === 'success') { alert("수정 완료"); cancelEdit(targetType); } else { alert(`수정 실패: ${result.message}`); }
-                } else { 
-                    const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-                    const result = await res.json();
-                    if(result.status === 'success') { alert("등록 완료"); document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; } else { alert(`등록 실패: ${result.message}`); }
-                } 
-                await load(); 
-            } catch(e) { alert("서버 통신 실패"); } 
-        }
-
-        async function deleteProduct(name, supplier, targetType) { 
-            if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
-            const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-            try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
-        }
-
-        async function deleteAllProducts(targetType) { 
-            const msg = targetType === 'finished' ? "제품" : "자재";
-            if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
-            const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
-            const endpoint = targetType === 'finished' ? '/api/finished_products_all' : '/api/products_all';
-            try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); await load(); } catch(e) { alert("삭제 실패!"); } 
+        function renderAccounting() { 
+            const selMonth = document.getElementById('acc-month').value; if(!selMonth) return; 
+            let suppliers = [...new Set(globalHistory.filter(h => h.action_type === '입고').map(h => h.remarks || '기본입고처'))]; 
+            let supSelect = document.getElementById('acc-supplier'); let currentSel = supSelect.value; 
+            supSelect.innerHTML = `<option value="ALL">전체 매입처 보기</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); 
+            if(suppliers.includes(currentSel)) supSelect.value = currentSel; const selectedSup = supSelect.value; 
+            
+            let totalAcc = 0, unpaidAcc = 0, paidAcc = 0; let html = ''; 
+            let filtered = globalHistory.filter(h => { 
+                let hDate = h.production_date ? h.production_date : h.created_at;
+                let hMonth = hDate.substring(0, 7); 
+                let hSup = h.remarks || '기본입고처'; 
+                return h.action_type === '입고' && hMonth === selMonth && (selectedSup === 'ALL' || selectedSup === hSup); 
+            }); 
+            filtered.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
+            
+            filtered.forEach(h => { 
+                let allItems = [...finishedProductMaster, ...productMaster]; let pInfo = allItems.find(p => String(p.item_name||"").trim() === String(h.item_name||"").trim() && String(p.supplier||"").trim() === String(h.remarks || '기본입고처').trim()); 
+                let price = pInfo ? pInfo.unit_price : 0; let cost = price * h.quantity; totalAcc += cost; 
+                let isPaid = h.payment_status === '결제완료'; if(isPaid) paidAcc += cost; else unpaidAcc += cost; 
+                let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
+                let btnHtml = isPaid ? `<button onclick="togglePayment('${h.id}', '미지급')" class="bg-slate-100 text-slate-500 font-bold px-2 py-1 rounded text-[10px] hover:bg-slate-200">취소</button>` : `<button onclick="togglePayment('${h.id}', '결제완료')" class="bg-blue-500 text-white font-bold px-2 py-1 rounded text-[10px] hover:bg-blue-600 shadow-sm">결제완료 처리</button>`; 
+                let statusTag = isPaid ? `<span class="text-blue-600 font-black text-[10px] block mb-1">✅ 완료</span>` : `<span class="text-rose-500 font-black text-[10px] block mb-1">⏳ 미지급</span>`; 
+                html += `<tr class="hover:bg-slate-50 transition-colors"><td class="p-2 md:p-3 text-slate-500 text-[10px] md:text-xs">${dateStr}</td><td class="p-2 md:p-3 font-bold text-slate-700 text-xs md:text-sm">${h.remarks || '기본'}</td><td class="p-2 md:p-3 font-black text-slate-800 text-xs md:text-sm">${h.item_name}</td><td class="p-2 md:p-3 text-right font-bold text-indigo-600 text-xs md:text-sm">${h.quantity.toLocaleString()}</td><td class="p-2 md:p-3 text-right text-slate-500 text-[10px] md:text-xs">${price.toLocaleString()}</td><td class="p-2 md:p-3 text-right font-black text-slate-800 text-xs md:text-sm">${cost.toLocaleString()}</td><td class="p-2 md:p-3 text-center flex flex-col items-center justify-center">${statusTag} ${btnHtml}</td></tr>`; 
+            }); 
+            document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-bold">해당 월에 내역이 없습니다.</td></tr>`; 
+            document.getElementById('acc-total').innerText = totalAcc.toLocaleString() + ' 원'; document.getElementById('acc-unpaid').innerText = unpaidAcc.toLocaleString() + ' 원'; document.getElementById('acc-paid').innerText = paidAcc.toLocaleString() + ' 원'; 
         }
 
         window.onload = function() { load(); showView('dashboard'); };
     </script>
 </body>
 </html>
-"""
-
-@app.get("/")
-async def serve_ui():
-    return HTMLResponse(content=HTML_CONTENT)
-
-@app.get("/logo.jpg")
-async def serve_logo():
-    logo_path = os.path.join("public", "logo.jpg")
-    if os.path.exists(logo_path):
-        return FileResponse(logo_path)
-    return {"error": "Logo not found."}
-
-@app.get("/api/products")
-async def get_products():
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/products?select=*", headers=HEADERS)
-        return r.json() if r.status_code == 200 else []
-
-@app.get("/api/finished_products")
-async def get_finished_products():
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/finished_products?select=*", headers=HEADERS)
-        return r.json() if r.status_code == 200 else []
-
-@app.get("/api/bom")
-async def get_bom():
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/bom_master?select=*", headers=HEADERS)
-        return r.json() if r.status_code == 200 else []
-
-@app.post("/api/bom")
-async def add_bom(data: dict):
-    async with httpx.AsyncClient() as client:
-        res = await client.post(f"{SUPABASE_URL}/rest/v1/bom_master", json=data, headers=HEADERS)
-        if res.status_code in [200, 201, 204]:
-            return {"status": "success"}
-        return {"status": "error", "message": res.text}
-
-@app.post("/api/bom_batch")
-async def bom_batch(rows: List[dict]):
-    async with httpx.AsyncClient() as client:
-        payloads_dict = {}
-        for r in rows:
-            fin = str(r.get("완제품명", "")).strip()
-            mat = str(r.get("부자재명", "")).strip()
-            if not fin or not mat:
-                continue
-            try:
-                qty = float(str(r.get("소요수량(EA)", "0")).replace(',', ''))
-            except Exception:
-                qty = 0
-            if qty <= 0:
-                continue
-            payloads_dict[(fin, mat)] = {"finished_product": fin, "material_product": mat, "require_qty": qty}
-        payloads = list(payloads_dict.values())
-        if payloads:
-            headers = HEADERS.copy()
-            headers["Prefer"] = "resolution=merge-duplicates"
-            res = await client.post(f"{SUPABASE_URL}/rest/v1/bom_master?on_conflict=finished_product,material_product", json=payloads, headers=headers)
-            if res.status_code not in [200, 201, 204]:
-                return {"status": "error", "message": res.text}
-        return {"status": "success"}
-
-@app.delete("/api/bom")
-async def delete_bom(id: str):
-    async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/bom_master?id=eq.{id}", headers=HEADERS)
-        return {"status": "success"}
-
-@app.delete("/api/bom_all")
-async def delete_all_bom():
-    async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/bom_master?id=not.is.null", headers=HEADERS)
-        return {"status": "success"}
-
-@app.post("/api/products")
-async def add_product(data: ProductData):
-    async with httpx.AsyncClient() as client:
-        res = await client.post(f"{SUPABASE_URL}/rest/v1/products", json={"category": data.category, "item_name": data.item_name, "supplier": data.supplier, "daily_usage": data.daily_usage, "unit_price": data.unit_price, "pallet_ea": data.pallet_ea}, headers=HEADERS)
-        if res.status_code in [200, 201, 204]:
-            return {"status": "success"}
-        return {"status": "error", "message": res.text}
-
-@app.put("/api/products")
-async def update_product(old_name: str, old_supplier: str, data: ProductData):
-    async with httpx.AsyncClient() as client:
-        res = await client.patch(f"{SUPABASE_URL}/rest/v1/products?item_name=eq.{old_name}&supplier=eq.{old_supplier}", json={"category": data.category, "item_name": data.item_name, "supplier": data.supplier, "daily_usage": data.daily_usage, "unit_price": data.unit_price, "pallet_ea": data.pallet_ea}, headers=HEADERS)
-        if res.status_code in [200, 201, 204]:
-            return {"status": "success"}
-        return {"status": "error", "message": res.text}
-
-@app.post("/api/products_batch")
-async def products_batch(rows: List[dict]):
-    async with httpx.AsyncClient() as client:
-        payloads_dict = {}
-        for r in rows:
-            name = str(r.get("품목명", "")).strip()
-            if not name:
-                continue
-            try:
-                usage = int(float(str(r.get("일간소모량(EA)", "0")).replace(',', '')))
-            except Exception:
-                usage = 0
-            try:
-                price = int(float(str(r.get("단가(비용)", "0")).replace(',', '')))
-            except Exception:
-                price = 0
-            try:
-                ea = int(float(str(r.get("1P기준수량(EA)", "1")).replace(',', '')))
-            except Exception:
-                ea = 1
-            if ea <= 0:
-                ea = 1 
-            supplier = str(r.get("입고처(공급사)", "")).strip()
-            if not supplier:
-                supplier = "기본입고처"
-            category = str(r.get("카테고리", "미분류")).strip()
-            payloads_dict[(name, supplier)] = { "category": category, "item_name": name, "supplier": supplier, "daily_usage": usage, "unit_price": price, "pallet_ea": ea }
-        payloads = list(payloads_dict.values())
-        if payloads:
-            headers = HEADERS.copy()
-            headers["Prefer"] = "resolution=merge-duplicates" 
-            res = await client.post(f"{SUPABASE_URL}/rest/v1/products?on_conflict=item_name,supplier", json=payloads, headers=headers)
-            if res.status_code not in [200, 201, 204]:
-                return {"status": "error", "message": res.text}
-        return {"status": "success"}
-
-@app.delete("/api/products")
-async def delete_product(item_name: str, supplier: str):
-    async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/products?item_name=eq.{item_name}&supplier=eq.{supplier}", headers=HEADERS)
-        return {"status": "success"}
-
-@app.delete("/api/products_all")
-async def delete_all_products():
-    async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/products?id=not.is.null", headers=HEADERS)
-        return {"status": "success"}
-
-@app.post("/api/finished_products")
-async def add_finished_product(data: ProductData):
-    async with httpx.AsyncClient() as client:
-        res = await client.post(f"{SUPABASE_URL}/rest/v1/finished_products", json={"category": data.category, "item_name": data.item_name, "supplier": data.supplier, "daily_usage": data.daily_usage, "unit_price": data.unit_price, "pallet_ea": data.pallet_ea}, headers=HEADERS)
-        if res.status_code in [200, 201, 204]:
-            return {"status": "success"}
-        return {"status": "error", "message": res.text}
-
-@app.put("/api/finished_products")
-async def update_finished_product(old_name: str, old_supplier: str, data: ProductData):
-    async with httpx.AsyncClient() as client:
-        res = await client.patch(f"{SUPABASE_URL}/rest/v1/finished_products?item_name=eq.{old_name}&supplier=eq.{old_supplier}", json={"category": data.category, "item_name": data.item_name, "supplier": data.supplier, "daily_usage": data.daily_usage, "unit_price": data.unit_price, "pallet_ea": data.pallet_ea}, headers=HEADERS)
-        if res.status_code in [200, 201, 204]:
-            return {"status": "success"}
-        return {"status": "error", "message": res.text}
-
-@app.post("/api/finished_products_batch")
-async def finished_products_batch(rows: List[dict]):
-    async with httpx.AsyncClient() as client:
-        payloads_dict = {}
-        for r in rows:
-            name = str(r.get("품목명", "")).strip()
-            if not name:
-                continue
-            try:
-                usage = int(float(str(r.get("일간출고량(EA)", str(r.get("일간소모량(EA)", "0")))).replace(',', '')))
-            except Exception:
-                usage = 0
-            try:
-                price = int(float(str(r.get("단가(매출)", str(r.get("단가(비용)", "0")))).replace(',', '')))
-            except Exception:
-                price = 0
-            try:
-                ea = int(float(str(r.get("1P기준수량(EA)", "1")).replace(',', '')))
-            except Exception:
-                ea = 1
-            if ea <= 0:
-                ea = 1 
-            supplier = str(r.get("생산처(비고)", str(r.get("입고처(공급사)", "")))).strip()
-            if not supplier:
-                supplier = "자체생산"
-            category = str(r.get("카테고리", "완제품")).strip()
-            payloads_dict[(name, supplier)] = { "category": category, "item_name": name, "supplier": supplier, "daily_usage": usage, "unit_price": price, "pallet_ea": ea }
-        payloads = list(payloads_dict.values())
-        if payloads:
-            headers = HEADERS.copy()
-            headers["Prefer"] = "resolution=merge-duplicates" 
-            res = await client.post(f"{SUPABASE_URL}/rest/v1/finished_products?on_conflict=item_name,supplier", json=payloads, headers=headers)
-            if res.status_code not in [200, 201, 204]:
-                return {"status": "error", "message": res.text}
-        return {"status": "success"}
-
-@app.delete("/api/finished_products")
-async def delete_finished_product(item_name: str, supplier: str):
-    async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/finished_products?item_name=eq.{item_name}&supplier=eq.{supplier}", headers=HEADERS)
-        return {"status": "success"}
-
-@app.delete("/api/finished_products_all")
-async def delete_all_finished_products():
-    async with httpx.AsyncClient() as client:
-        await client.delete(f"{SUPABASE_URL}/rest/v1/finished_products?id=not.is.null", headers=HEADERS)
-        return {"status": "success"}
-
-@app.get("/api/inventory")
-async def get_inventory():
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?select=*", headers=HEADERS)
-        return r.json() if r.status_code == 200 else []
-
-@app.get("/api/history")
-async def get_history():
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/history_log?select=*", headers=HEADERS)
-        return r.json() if r.status_code == 200 else []
-
-@app.post("/api/inbound")
-async def inbound_stock(data: InboundData):
-    import datetime
-    async with httpx.AsyncClient() as client:
-        p_date = data.production_date if data.production_date else datetime.datetime.now().strftime('%Y-%m-%d')
-        inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": p_date, "remarks": data.remarks}
-        res1 = await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
-        if res1.status_code not in [200, 201, 204]:
-            return {"status": "error", "message": f"DB 에러: {res1.text}"}
-        
-        log_payload = {
-            "location_id": data.location_id,
-            "action_type": "입고",
-            "item_name": data.item_name,
-            "quantity": data.quantity,
-            "pallet_count": data.pallet_count,
-            "remarks": data.remarks,
-            "payment_status": "미지급",
-            "production_date": p_date,
-            "created_at": f"{p_date}T00:00:00Z"
-        }
-        await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
-        return {"status": "success"}
-
-@app.post("/api/outbound")
-async def outbound_stock(data: OutboundData):
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        inv = r.json()
-        current_qty = inv[0]['quantity']
-        current_pallet = inv[0].get('pallet_count', 1.0)
-        
-        if data.quantity >= current_qty:
-            await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        else:
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity, "pallet_count": current_pallet - data.pallet_count}, headers=HEADERS)
-            
-        await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "출고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count}, headers=HEADERS)
-        return {"status": "success"}
-
-@app.post("/api/transfer")
-async def transfer_stock(data: TransferData):
-    async with httpx.AsyncClient() as client:
-        r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        inv = r.json()
-        if not inv:
-            return {"status": "error"}
-        
-        item_data = inv[0]
-        current_qty = item_data['quantity']
-        current_pallet = item_data.get('pallet_count', 1.0)
-        
-        to_loc = data.to_location.upper()
-        if not to_loc.startswith("FL-") and not to_loc.startswith("R-") and not to_loc.startswith("C-") and not to_loc.startswith("W-"):
-            if "C-" in data.from_location:
-                to_loc = "C-" + to_loc
-            else:
-                to_loc = "R-" + to_loc
-
-        sup = item_data.get('remarks', '')
-        if sup is None:
-            sup = ''
-            
-        r_dest = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?location_id=eq.{to_loc}&item_name=eq.{data.item_name}", headers=HEADERS)
-        dest_inv = r_dest.json()
-        
-        target_dest = None
-        for d in dest_inv:
-            d_sup = d.get('remarks', '')
-            if d_sup is None:
-                d_sup = ''
-            if d_sup == sup:
-                target_dest = d
-                break
-
-        if target_dest and target_dest['id'] != data.inventory_id:
-            dest_id = target_dest['id']
-            new_dest_qty = target_dest['quantity'] + data.quantity
-            new_dest_pallet = target_dest.get('pallet_count', 0.0) + data.pallet_count
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{dest_id}", json={"quantity": new_dest_qty, "pallet_count": new_dest_pallet}, headers=HEADERS)
-            
-            if data.quantity >= current_qty:
-                await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-            else:
-                await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity, "pallet_count": current_pallet - data.pallet_count}, headers=HEADERS)
-        else:
-            if data.quantity >= current_qty:
-                await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": to_loc}, headers=HEADERS)
-            else:
-                await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity, "pallet_count": current_pallet - data.pallet_count}, headers=HEADERS)
-                new_row = item_data.copy()
-                if 'id' in new_row:
-                    del new_row['id']
-                if 'created_at' in new_row:
-                    del new_row['created_at']
-                new_row['location_id'] = to_loc
-                new_row['quantity'] = data.quantity
-                new_row['pallet_count'] = data.pallet_count
-                await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=new_row, headers=HEADERS)
-                
-        await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": to_loc, "action_type": "이동", "item_name": data.item_name, "quantity": data.quantity, "remarks": f"From {data.from_location}", "pallet_count": data.pallet_count}, headers=HEADERS)
-        return {"status": "success"}
-
-@app.post("/api/inventory_edit")
-async def edit_inventory_item(data: EditInventoryData):
-    async with httpx.AsyncClient() as client:
-        if data.action == "DELETE":
-            await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-            await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "삭제(취소)", "item_name": data.item_name, "quantity": 0, "remarks": "오입력 재고 삭제"}, headers=HEADERS)
-        elif data.action == "UPDATE_QTY":
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": data.new_quantity, "pallet_count": data.pallet_count}, headers=HEADERS)
-            await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "수정", "item_name": data.item_name, "quantity": data.new_quantity, "remarks": "수량 보정"}, headers=HEADERS)
-        elif data.action == "UPDATE_DATE":
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"production_date": data.new_date}, headers=HEADERS)
-            await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "수정", "item_name": data.item_name, "quantity": 0, "remarks": f"날짜 보정 ({data.new_date})"}, headers=HEADERS)
-    return {"status": "success"}
-
-@app.patch("/api/history/{log_id}")
-async def update_history_payment(log_id: str, data: PaymentUpdate):
-    async with httpx.AsyncClient() as client:
-        await client.patch(f"{SUPABASE_URL}/rest/v1/history_log?id=eq.{log_id}", json={"payment_status": data.payment_status}, headers=HEADERS)
-        return {"status": "success"}
-
-@app.post("/api/inbound_batch")
-async def inbound_batch(rows: List[dict]):
-    import datetime
-    async with httpx.AsyncClient() as client:
-        r_prod = await client.get(f"{SUPABASE_URL}/rest/v1/products?select=*", headers=HEADERS)
-        r_fin = await client.get(f"{SUPABASE_URL}/rest/v1/finished_products?select=*", headers=HEADERS)
-        pm_list = (r_prod.json() if r_prod.status_code == 200 else []) + (r_fin.json() if r_fin.status_code == 200 else [])
-        
-        payloads = []
-        history_payloads = []
-        
-        for r_data in rows:
-            if not r_data:
-                continue
-            name = str(r_data.get("품목명", "")).strip()
-            if not name or name == "(빈 칸)" or name == "undefined":
-                continue
-            
-            qty_raw = str(r_data.get("➕신규 입고수량(EA)", "0")).replace(',', '').strip()
-            try:
-                qty = int(float(qty_raw))
-            except Exception:
-                qty = 0
-            if qty <= 0:
-                continue
-
-            supplier = str(r_data.get("입고처(비고)", "")).strip()
-            target_sup = supplier if supplier else "기본입고처"
-            
-            p_info = None
-            for p in pm_list:
-                if p["item_name"].strip() == name and p["supplier"].strip() == target_sup:
-                    p_info = p
-                    break
-            if not p_info:
-                for p in pm_list:
-                    if p["item_name"].strip() == name:
-                        p_info = p
-                        break
-
-            pallet_ea = p_info["pallet_ea"] if p_info and p_info.get("pallet_ea", 0) > 0 else 1
-            calculated_pallet = qty / pallet_ea
-            
-            raw_date = str(r_data.get("산란일/입고일", "")).strip()
-            prod_date = None
-            if raw_date and raw_date != "None" and raw_date != "undefined":
-                if raw_date.replace('.','').isdigit() and float(raw_date) > 30000:
-                    try:
-                        prod_date = (datetime.datetime(1899, 12, 30) + datetime.timedelta(days=float(raw_date))).strftime('%Y-%m-%d')
-                    except Exception:
-                        prod_date = None
-                else:
-                    prod_date = raw_date.replace('/','-').replace('.','-')
-                    if " " in prod_date:
-                        prod_date = prod_date.split(" ")[0]
-                        
-            if not prod_date:
-                prod_date = datetime.datetime.now().strftime('%Y-%m-%d')
-
-            loc_id = str(r_data.get("렉 위치", "")).strip()
-            zone = str(r_data.get("구역", "")).strip()
-            
-            if zone == "실온" and not loc_id.startswith("FL-") and not loc_id.startswith("R-"):
-                loc_id = "R-" + loc_id
-            elif zone == "냉장" and not loc_id.startswith("FL-") and not loc_id.startswith("C-"):
-                loc_id = "C-" + loc_id
-
-            payloads.append({
-                "location_id": loc_id,
-                "category": str(r_data.get("카테고리", "미분류")).strip(),
-                "item_name": name,
-                "quantity": qty,
-                "pallet_count": round(calculated_pallet, 2),
-                "production_date": prod_date,
-                "remarks": supplier
-            })
-            
-            hp = {
-                "location_id": loc_id,
-                "action_type": "입고",
-                "item_name": name,
-                "quantity": qty,
-                "pallet_count": round(calculated_pallet, 2),
-                "remarks": supplier,
-                "payment_status": "미지급",
-                "production_date": prod_date,
-                "created_at": f"{prod_date}T00:00:00Z"
-            }
-            history_payloads.append(hp)
-            
-        if payloads: 
-            res = await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=payloads, headers=HEADERS)
-            if res.status_code not in [200, 201, 204]:
-                return {"status": "error", "message": f"DB 에러: {res.text}"}
-            await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=history_payloads, headers=HEADERS)
-            
-        return {"status": "success", "count": len(payloads)}
-
-@app.delete("/api/clear_data")
-async def clear_data(target: str):
-    async with httpx.AsyncClient() as client:
-        if target == 'inventory':
-            await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?location_id=not.is.null", headers=HEADERS)
-        elif target == 'history':
-            await client.delete(f"{SUPABASE_URL}/rest/v1/history_log?location_id=not.is.null", headers=HEADERS)
-    return {"status": "success"}
