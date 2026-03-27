@@ -96,7 +96,8 @@
                         <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
                             <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
                                 <div class="p-2 bg-emerald-50 border-b border-emerald-100 rounded-t-xl flex justify-between items-center">
-                                    <button onclick="createWaitingPallets()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2 rounded shadow-md text-xs transition-colors">박스 생성 ➕</button>
+                                    <span class="text-sm font-black text-emerald-800 ml-1">📥 입고 대기장</span>
+                                    <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-1.5 px-3 rounded shadow-md text-xs transition-colors">박스 생성 ➕</button>
                                 </div>
                                 <div class="p-3 border-b border-slate-200 space-y-2">
                                     <div class="flex space-x-2">
@@ -389,9 +390,6 @@
         </div>
     </div>
 
-<script src="/main.js"></script>
-    <script src="/inventory.js"></script>
-    <script src="/products.js"></script>
-    <script src="/accounting.js"></script>
+    <script src="/script.js"></script>
 </body>
 </html>
