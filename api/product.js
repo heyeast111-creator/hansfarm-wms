@@ -129,7 +129,7 @@ async function deleteProduct(name, supplier, targetType) {
 }
 
 async function deleteAllProducts(targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 일괄 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
     const msg = targetType === 'finished' ? "제품" : "자재";
     if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
     const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
@@ -147,7 +147,7 @@ function exportProductsExcel(targetType) {
 }
 
 function importProductsExcel(e, targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 업로드할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
     const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
     const msg = targetType === 'finished' ? "제품" : "자재";
@@ -188,7 +188,7 @@ function exportBomExcel() {
 }
 
 function importBomExcel(e) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 업로드할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
     reader.onload = async function(ev) {
         try {
@@ -212,7 +212,7 @@ function updateBomDropdowns() {
 }
 
 async function submitBom() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 등록할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
     const finished = document.getElementById('bom-finished').value; const material = document.getElementById('bom-material').value; const qty = parseFloat(document.getElementById('bom-qty').value);
     if(!finished || !material || isNaN(qty) || qty <= 0) return alert("입력값을 확인해주세요.");
     if(finished === material) return alert("완제품과 자재가 같을 수 없습니다!");
