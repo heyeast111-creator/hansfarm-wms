@@ -13,18 +13,8 @@ SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
-# 💡 Vercel 환경 전용 자동 경로 탐색 (최상위 폴더, api 폴더 모두 뒤짐)
-API_DIR = os.path.dirname(os.path.abspath(__file__))    # /var/task/api
-ROOT_DIR = os.path.dirname(API_DIR)                     # /var/task (최상위 루트)
-
-def get_file_path(filename):
-    # 1. 루트 폴더 확인 (현재 조님의 폴더 구조)
-    if os.path.exists(os.path.join(ROOT_DIR, filename)): return os.path.join(ROOT_DIR, filename)
-    # 2. api 폴더 안쪽 확인
-    if os.path.exists(os.path.join(API_DIR, filename)): return os.path.join(API_DIR, filename)
-    # 3. public 폴더 확인
-    if os.path.exists(os.path.join(ROOT_DIR, "public", filename)): return os.path.join(ROOT_DIR, "public", filename)
-    return None
+# 💡 현재 파일(index.py)이 있는 api 폴더를 기본 경로로 고정
+API_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @app.middleware("http")
 async def add_cache_control_header(request: Request, call_next):
@@ -32,23 +22,24 @@ async def add_cache_control_header(request: Request, call_next):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
-# 💡 파일 제공 라우터
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
+@app.get("/api/index")
 async def serve_ui():
-    path = get_file_path("index.html")
-    return FileResponse(path) if path else HTMLResponse(f"<h1>HTML 낫파운드 (탐색 경로: {ROOT_DIR})</h1>", status_code=404)
+    path = os.path.join(API_DIR, "index.html")
+    return FileResponse(path) if os.path.exists(path) else HTMLResponse(f"<h1>HTML 파일을 찾을 수 없습니다.</h1>", status_code=404)
 
-@app.get("/script.js")
+# 💡 HTML이 api 폴더 안의 로고와 스크립트를 정상적으로 불러오도록 라우팅 수정
+@app.get("/api/script.js")
 async def serve_script():
-    path = get_file_path("script.js")
-    return FileResponse(path) if path else HTMLResponse("JS 낫파운드", status_code=404)
+    path = os.path.join(API_DIR, "script.js")
+    return FileResponse(path) if os.path.exists(path) else HTMLResponse("JS Not Found", status_code=404)
 
-@app.get("/logo.jpg")
+@app.get("/api/logo.jpg")
 async def serve_logo():
-    path = get_file_path("logo.jpg")
-    return FileResponse(path) if path else HTMLResponse("Logo 낫파운드", status_code=404)
+    path = os.path.join(API_DIR, "logo.jpg")
+    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Logo Not Found", status_code=404)
 
 # --- Pydantic 데이터 모델 ---
 class InboundData(BaseModel): location_id: str; category: str; item_name: str; quantity: int; pallet_count: float = 1.0; production_date: Optional[str] = None; remarks: Optional[str] = ""
