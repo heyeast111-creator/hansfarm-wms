@@ -15,9 +15,10 @@ const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
 const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료/냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재/실온)', cols: 20 } ];
 
+// 💡 [핵심 1] 모든 데이터 변경 후 호출되는 load() 함수 대폭 업그레이드
 async function load() {
     try {
-        const ts = new Date().getTime();
+        const ts = new Date().getTime(); // DB 캐시 무력화
         const [occRes, prodRes, fpRes, histRes, bomRes] = await Promise.all([ 
             fetch('/api/inventory?t=' + ts), 
             fetch('/api/products?t=' + ts), 
@@ -25,6 +26,7 @@ async function load() {
             fetch('/api/history?t=' + ts), 
             fetch('/api/bom?t=' + ts) 
         ]);
+        
         globalOccupancy = await occRes.json() || []; 
         productMaster = await prodRes.json() || []; 
         finishedProductMaster = await fpRes.json() || []; 
@@ -32,36 +34,39 @@ async function load() {
         bomMaster = await bomRes.json() || [];
         
         updateMapSearchCategoryDropdown(); 
-        updateSummarySupplierDropdown(); 
         populateWaitDropdowns(); 
         
         let t = new Date();
         let yyyy = t.getFullYear();
         let mm = String(t.getMonth() + 1).padStart(2, '0');
         let dd = String(t.getDate()).padStart(2, '0');
-        document.getElementById('acc-date').value = `${yyyy}-${mm}-${dd}`;
-        document.getElementById('acc-period-start').value = `${yyyy}-${mm}-01`; 
-        document.getElementById('acc-period-end').value = `${yyyy}-${mm}-${dd}`; 
-        document.getElementById('acc-month').value = `${yyyy}-${mm}`;
-        updateAccFilters('type');
+        if(!document.getElementById('acc-date').value) document.getElementById('acc-date').value = `${yyyy}-${mm}-${dd}`;
+        if(!document.getElementById('acc-period-start').value) document.getElementById('acc-period-start').value = `${yyyy}-${mm}-01`; 
+        if(!document.getElementById('acc-period-end').value) document.getElementById('acc-period-end').value = `${yyyy}-${mm}-${dd}`; 
+        if(!document.getElementById('acc-month').value) document.getElementById('acc-month').value = `${yyyy}-${mm}`;
 
-        populateProductFilters('finished');
-        populateProductFilters('materials');
+        // 💡 [핵심 2] 현재 유저가 보고 있는 화면을 똑똑하게 추적해서 즉시 리렌더링!
+        let activeView = 'dashboard';
+        ['inventory', 'dashboard', 'search', 'products', 'safety', 'accounting'].forEach(v => {
+            let el = document.getElementById('view-' + v);
+            if(el && !el.classList.contains('hidden')) activeView = v;
+        });
 
-        let viewInv = document.getElementById('view-inventory');
-        if(viewInv && !viewInv.classList.contains('hidden')) renderMap(); 
-        
-        let viewDash = document.getElementById('view-dashboard');
-        if(viewDash && !viewDash.classList.contains('hidden')) updateDashboard();
-
-        let viewProd = document.getElementById('view-products');
-        if(viewProd && !viewProd.classList.contains('hidden')) {
-            renderProductMaster('finished');
-            renderProductMaster('materials');
+        if(activeView === 'inventory') { 
+            renderMap(); 
+            if(selectedCellId) await clickCell(selectedCellId); 
+            else closeInfoPanel(); 
         }
-        
-        if(selectedCellId) await clickCell(selectedCellId); else closeInfoPanel();
-    } catch (e) { console.error("로딩 에러:", e); }
+        else if(activeView === 'dashboard') updateDashboard();
+        else if(activeView === 'search') updateSummarySupplierDropdown();
+        else if(activeView === 'products') { 
+            populateProductFilters('finished'); populateProductFilters('materials');
+            renderProductMaster('finished'); renderProductMaster('materials');
+        }
+        else if(activeView === 'safety') renderSafetyStock();
+        else if(activeView === 'accounting') updateAccFilters('type');
+
+    } catch (e) { console.error("데이터 로딩 에러:", e); }
 }
 
 function clearInfo() {
@@ -77,11 +82,13 @@ function adminLogin() {
         document.getElementById('admin-btn-pc').innerText = "🔒 관리자"; 
         document.getElementById('admin-btn-mo').innerHTML = "🔒<span class='mt-1'>관리자</span>"; 
         document.getElementById('admin-btn-mo').classList.remove('bg-rose-100', 'text-rose-700', 'border-rose-300'); 
+        
+        // 관리자 권한 해제 시 철저히 숨김 처리
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden')); 
         if(fp) fp.classList.add('hidden');
+        
         let viewAcc = document.getElementById('view-accounting');
-        if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
-        load(); 
+        if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); // 정산 화면 보던 중 끄면 대시보드로 쫓아냄
         return; 
     }
     const pw = prompt("비밀번호 입력 (1234):"); 
@@ -91,9 +98,10 @@ function adminLogin() {
         document.getElementById('admin-btn-pc').innerText = "🔓 관리자 (ON)"; 
         document.getElementById('admin-btn-mo').innerHTML = "🔓<span class='mt-1'>관리자</span>"; 
         document.getElementById('admin-btn-mo').classList.add('bg-rose-100', 'text-rose-700', 'border-rose-300'); 
+        
+        // 관리자 로그인 시 숨김 해제
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
         if(fp) fp.classList.remove('hidden');
-        load(); 
     } else if (pw !== null) {
         alert("비밀번호가 틀렸습니다.");
     }
@@ -157,9 +165,9 @@ function switchZone(zone) {
     updateZoneTabs(); renderMap(); 
 }
 
-// 💡 [버그 해결] hidden 클래스가 통째로 날아가는 오류 해결
+// 💡 [핵심 3] 버튼 스타일 조작 시 hidden 클래스가 절대 파괴되지 않도록 완벽 보완!
 function showView(viewName) {
-    // 모든 뷰 숨기기
+    // 1. 모든 화면 숨기기
     ['view-inventory', 'view-dashboard', 'view-search', 'view-products', 'view-safety', 'view-accounting', 'view-production', 'view-outbound'].forEach(id => { 
         let el = document.getElementById(id);
         if(el) { el.classList.add('hidden'); el.classList.remove('flex'); }
@@ -172,42 +180,41 @@ function showView(viewName) {
         renderMap(); 
     } else if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
     
+    // 2. 선택된 화면만 켜기
     let targetView = document.getElementById('view-' + viewName);
     if(targetView) { targetView.classList.remove('hidden'); targetView.classList.add('flex'); }
 
-    // 💡 오직 색깔(스타일) 클래스만 추가/제거하도록 변경하여 'hidden' 클래스가 보존됨
+    // 3. PC 메뉴 버튼 색상 안전 교체 (classList 사용)
     document.querySelectorAll('.nav-btn-pc').forEach(btn => {
         btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'bg-rose-50', 'border-rose-200', 'text-rose-600', 'bg-yellow-50', 'border-yellow-300', 'text-yellow-700', 'shadow-inner');
-        btn.classList.add('border-slate-200', 'text-slate-600');
     });
-    document.querySelectorAll('.nav-btn-mo').forEach(btn => {
-        if(btn.id !== 'admin-btn-mo') {
-            btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
-            btn.classList.add('bg-white', 'border-slate-200', 'text-slate-600');
-        }
-    });
-
     document.querySelectorAll('.nav-btn-pc.target-' + viewName).forEach(btn => {
-        btn.classList.remove('border-slate-200', 'text-slate-600');
         if(viewName === 'safety') btn.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-600', 'shadow-inner');
         else if(viewName === 'accounting') btn.classList.add('bg-yellow-50', 'border-yellow-300', 'text-yellow-700', 'shadow-inner');
         else btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
     });
+
+    // 4. 모바일 메뉴 버튼 색상 안전 교체 (classList 사용)
+    document.querySelectorAll('.nav-btn-mo').forEach(btn => {
+        if(btn.id !== 'admin-btn-mo') {
+            btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
+            btn.classList.add('bg-white');
+        }
+    });
     document.querySelectorAll('.nav-btn-mo.target-' + viewName).forEach(btn => {
-        btn.classList.remove('bg-white', 'border-slate-200', 'text-slate-600');
+        btn.classList.remove('bg-white');
         btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
     });
     
+    // 5. 뷰 변경 직후 즉시 데이터 다시 불러오기
     if(viewName === 'products') { 
-        populateProductFilters('finished');
-        populateProductFilters('materials');
-        renderProductMaster('finished'); 
-        switchProductTab('fp'); 
+        populateProductFilters('finished'); populateProductFilters('materials');
+        renderProductMaster('finished'); switchProductTab('fp'); 
     } 
     else if(viewName === 'search') { updateSummarySupplierDropdown(); } 
     else if(viewName === 'dashboard') updateDashboard(); 
     else if(viewName === 'safety') renderSafetyStock(); 
-    else if(viewName === 'accounting') { updateAccFilters('type'); }
+    else if(viewName === 'accounting') updateAccFilters('type'); 
 }
 
 function closeInfoPanel() { 
@@ -259,7 +266,7 @@ async function onDrop(event, displayId, dbBaseId) {
     let movePallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty});
     try { 
         await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc, item_name: itemName, quantity: qty, pallet_count: movePallet }) }); 
-        await load(); 
+        await load(); // DB 수정 후 100% 동기화 보장
     } catch(e) { alert("서버 통신 오류"); }
 }
 
@@ -308,7 +315,7 @@ async function createWaitingPallets() {
             let promises = payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) })); 
             await Promise.all(promises); 
             document.getElementById('wait-qty').value = ''; 
-            await load(); 
+            await load(); // DB 수정 후 완벽 동기화
         } catch(e) { alert("생성 중 오류 발생"); }
     }
 }
@@ -549,209 +556,6 @@ function updateDashboard() {
     } catch(e) { console.error("Dashboard Render Error:", e); }
 }
 
-function toggleAccDateInput() {
-    let type = document.getElementById('acc-type').value;
-    document.getElementById('acc-date').classList.add('hidden');
-    document.getElementById('acc-period-wrapper').classList.add('hidden');
-    document.getElementById('acc-period-wrapper').classList.remove('flex');
-    document.getElementById('acc-month').classList.add('hidden');
-
-    if(type === 'date') { 
-        document.getElementById('acc-date').classList.remove('hidden'); 
-    } else if(type === 'period') { 
-        document.getElementById('acc-period-wrapper').classList.remove('hidden'); 
-        document.getElementById('acc-period-wrapper').classList.add('flex'); 
-    } else if(type === 'month') { 
-        document.getElementById('acc-month').classList.remove('hidden'); 
-    }
-}
-
-function isAccDateMatch(hDate) {
-    let type = document.getElementById('acc-type').value;
-    if (type === 'date') {
-        let target = document.getElementById('acc-date').value;
-        if(!target) return false;
-        return hDate === target;
-    } else if (type === 'period') {
-        let start = document.getElementById('acc-period-start').value;
-        let end = document.getElementById('acc-period-end').value;
-        if (!start || !end) return false;
-        return hDate >= start && hDate <= end;
-    } else if (type === 'month') {
-        let target = document.getElementById('acc-month').value;
-        if(!target) return false;
-        return hDate.substring(0, 7) === target;
-    }
-    return false;
-}
-
-function updateAccFilters(changedFilter) {
-    try {
-        let inboundLog = globalHistory.filter(h => {
-            if(h.action_type !== '입고') return false;
-            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
-            return isAccDateMatch(hDate);
-        });
-
-        let supSelect = document.getElementById('acc-supplier'); 
-        let itemSelect = document.getElementById('acc-item');
-        let curSup = supSelect.value;
-        let curItem = itemSelect.value;
-
-        if (changedFilter === 'date' || changedFilter === 'type') {
-            let suppliers = [...new Set(inboundLog.map(h => h.remarks || '기본입고처'))].sort();
-            supSelect.innerHTML = `<option value="ALL">전체 매입처</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
-            if(suppliers.includes(curSup)) supSelect.value = curSup; else supSelect.value = 'ALL';
-            curSup = supSelect.value;
-        }
-
-        if (changedFilter === 'date' || changedFilter === 'type' || changedFilter === 'supplier') {
-            let itemLog = inboundLog;
-            if (curSup !== 'ALL') {
-                itemLog = itemLog.filter(h => (h.remarks || '기본입고처') === curSup);
-            }
-            let items = [...new Set(itemLog.map(h => h.item_name))].sort();
-            itemSelect.innerHTML = `<option value="ALL">전체 품목</option>` + items.map(s => `<option value="${s}">${s}</option>`).join('');
-            if(items.includes(curItem)) itemSelect.value = curItem; else itemSelect.value = 'ALL';
-        }
-
-        renderAccounting();
-    } catch(e) { console.error("Filter Update Error:", e); }
-}
-
-function renderAccounting() { 
-    try {
-        const selectedSup = document.getElementById('acc-supplier').value;
-        const selectedItem = document.getElementById('acc-item').value;
-        const groupMode = document.getElementById('acc-group').value;
-
-        let inboundLog = globalHistory.filter(h => h.action_type === '입고');
-        let allItems = [...finishedProductMaster, ...productMaster];
-
-        let filtered = inboundLog.filter(h => {
-            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
-            let matchDate = isAccDateMatch(hDate);
-            let matchSup = selectedSup === 'ALL' || (h.remarks || '기본입고처') === selectedSup;
-            let matchItem = selectedItem === 'ALL' || h.item_name === selectedItem;
-            return matchDate && matchSup && matchItem;
-        });
-
-        let groupedLog = {};
-        filtered.forEach(h => {
-            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
-            let hSup = h.remarks || '기본입고처';
-            let hItem = h.item_name;
-            let key = `${hDate}|${hSup}|${hItem}`;
-            
-            if(!groupedLog[key]) { groupedLog[key] = { date: hDate, supplier: hSup, item_name: hItem, quantity: 0 }; }
-            groupedLog[key].quantity += h.quantity;
-        });
-
-        let consolidated = Object.values(groupedLog);
-        consolidated.sort((a,b) => new Date(b.date) - new Date(a.date));
-
-        let totalSupply = 0, totalTax = 0, totalSum = 0;
-        let html = '';
-
-        if(groupMode === 'list') {
-            html = consolidated.map((h, i) => {
-                let pInfo = allItems.find(p => String(p.item_name).trim() === String(h.item_name).trim() && String(p.supplier).trim() === String(h.supplier).trim());
-                let price = pInfo ? pInfo.unit_price : 0;
-                let supply = price * h.quantity;
-                let tax = Math.floor(supply * 0.1); 
-                let sum = supply + tax;
-                totalSupply += supply; totalTax += tax; totalSum += sum;
-                
-                let bgClass = i % 2 === 0 ? 'bg-white' : 'bg-slate-50'; 
-                
-                return `<tr class="${bgClass} border-b border-slate-200 hover:bg-indigo-50 transition-colors">
-                    <td class="p-1.5 md:p-2 text-slate-500 text-[10px] md:text-[11px] whitespace-nowrap">${h.date}</td>
-                    <td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td>
-                    <td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td>
-                    <td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td>
-                    <td class="p-1.5 md:p-2 text-right text-slate-500 text-[10px] md:text-[11px]">${price.toLocaleString()}</td>
-                    <td class="p-1.5 md:p-2 text-right font-black text-slate-700 text-[11px] md:text-xs">${supply.toLocaleString()}</td>
-                    <td class="p-1.5 md:p-2 text-right font-bold text-rose-500 text-[10px] md:text-[11px]">${tax.toLocaleString()}</td>
-                    <td class="p-1.5 md:p-2 text-right font-black text-blue-700 text-[11px] md:text-xs">${sum.toLocaleString()}</td>
-                </tr>`;
-            }).join('');
-        } else {
-            let groupAggr = {};
-            consolidated.forEach(h => {
-                let key = groupMode === 'supplier' ? h.supplier : h.item_name;
-                let subKey = groupMode === 'supplier' ? h.item_name : h.supplier;
-                
-                let pInfo = allItems.find(p => String(p.item_name).trim() === String(h.item_name).trim() && String(p.supplier).trim() === String(h.supplier).trim());
-                let price = pInfo ? pInfo.unit_price : 0;
-                let supply = price * h.quantity;
-                let tax = Math.floor(supply * 0.1);
-                let sum = supply + tax;
-
-                if(!groupAggr[key]) groupAggr[key] = { totalQty: 0, totalSupply: 0, totalTax: 0, totalSum: 0, details: {} };
-                groupAggr[key].totalQty += h.quantity;
-                groupAggr[key].totalSupply += supply;
-                groupAggr[key].totalTax += tax;
-                groupAggr[key].totalSum += sum;
-
-                if(!groupAggr[key].details[subKey]) groupAggr[key].details[subKey] = { qty: 0, supply: 0 };
-                groupAggr[key].details[subKey].qty += h.quantity;
-                groupAggr[key].details[subKey].supply += supply;
-            });
-
-            for(let key in groupAggr) {
-                let g = groupAggr[key];
-                totalSupply += g.totalSupply; totalTax += g.totalTax; totalSum += g.totalSum;
-                
-                html += `<tr class="bg-indigo-100 border-b-2 border-indigo-200">
-                    <td colspan="3" class="p-2 font-black text-indigo-900 text-xs md:text-sm">📁 [${key}] 누적 요약</td>
-                    <td class="p-2 text-right font-black text-indigo-700 text-[11px] md:text-xs">${g.totalQty.toLocaleString()}</td>
-                    <td class="p-2 text-right">-</td>
-                    <td class="p-2 text-right font-black text-slate-800 text-[11px] md:text-xs">${g.totalSupply.toLocaleString()}</td>
-                    <td class="p-2 text-right font-bold text-rose-600 text-[11px] md:text-xs">${g.totalTax.toLocaleString()}</td>
-                    <td class="p-2 text-right font-black text-blue-800 text-[11px] md:text-xs">${g.totalSum.toLocaleString()}</td>
-                </tr>`;
-                
-                for(let subKey in g.details) {
-                    let d = g.details[subKey];
-                    let dTax = Math.floor(d.supply * 0.1);
-                    let dSum = d.supply + dTax;
-                    let displaySup = groupMode === 'supplier' ? key : subKey;
-                    let displayItem = groupMode === 'item' ? key : subKey;
-                    
-                    html += `<tr class="bg-white border-b border-slate-100 opacity-90">
-                        <td class="p-1.5 md:p-2 text-center text-[10px] text-slate-400">↳ 상세항목</td>
-                        <td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displaySup}</td>
-                        <td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displayItem}</td>
-                        <td class="p-1.5 md:p-2 text-right font-bold text-indigo-500 text-[10px] md:text-[11px]">${d.qty.toLocaleString()}</td>
-                        <td class="p-1.5 md:p-2 text-right text-slate-400 text-[9px]">-</td>
-                        <td class="p-1.5 md:p-2 text-right text-slate-600 text-[10px] md:text-[11px]">${d.supply.toLocaleString()}</td>
-                        <td class="p-1.5 md:p-2 text-right text-rose-400 text-[10px] md:text-[11px]">${dTax.toLocaleString()}</td>
-                        <td class="p-1.5 md:p-2 text-right font-bold text-blue-600 text-[10px] md:text-[11px]">${dSum.toLocaleString()}</td>
-                    </tr>`;
-                }
-            }
-        }
-
-        document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
-        document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; 
-        document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; 
-        document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
-    } catch(e) { console.error(e); }
-}
-
-function exportAccountingExcel() {
-    try {
-        const table = document.getElementById('accounting-table');
-        if(!table) return alert("다운로드할 표가 없습니다.");
-        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
-        let today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
-    } catch (error) {
-        console.error(error);
-        alert("엑셀 다운로드 중 오류가 발생했습니다.");
-    }
-}
-
 function updateMapSearchCategoryDropdown() {
     let sourceItems = [];
     if (currentZone === '실온') sourceItems = productMaster.filter(p => p.category && !p.category.includes('원란'));
@@ -965,6 +769,74 @@ function renderProductMaster(targetType) {
     }
 }
 
+function editProductSetup(cat, name, supplier, usage, price, ea, targetType) { 
+    editingProductOriginalName = name; editingProductOriginalSupplier = supplier; 
+    const prefix = targetType === 'finished' ? 'fp' : 'pm';
+    document.getElementById(`${prefix}-cat`).value = cat; 
+    document.getElementById(`${prefix}-name`).value = name; 
+    document.getElementById(`${prefix}-supplier`).value = supplier; 
+    document.getElementById(`${prefix}-usage`).value = usage; 
+    document.getElementById(`${prefix}-price`).value = price; 
+    document.getElementById(`${prefix}-pallet-ea`).value = ea || 1; 
+    document.getElementById(`${prefix}-form-title`).innerText = "기존 항목 수정 중 ✏️"; 
+    document.getElementById(`${prefix}-submit-btn`).innerText = "✅ 저장하기"; 
+    document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-indigo-600', 'bg-emerald-600'); 
+    document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); 
+    document.getElementById(`${prefix}-cancel-btn`).classList.remove('hidden'); 
+    renderProductMaster(targetType); 
+}
+
+function cancelEdit(targetType) { 
+    editingProductOriginalName = null; editingProductOriginalSupplier = null; 
+    const prefix = targetType === 'finished' ? 'fp' : 'pm'; const title = targetType === 'finished' ? '신규 완제품 추가' : '신규 자재 추가';
+    document.getElementById(`${prefix}-cat`).value = ''; 
+    document.getElementById(`${prefix}-name`).value = ''; 
+    document.getElementById(`${prefix}-supplier`).value = ''; 
+    document.getElementById(`${prefix}-usage`).value = '0'; 
+    document.getElementById(`${prefix}-price`).value = '0'; 
+    document.getElementById(`${prefix}-pallet-ea`).value = '1'; 
+    document.getElementById(`${prefix}-form-title`).innerText = title; 
+    document.getElementById(`${prefix}-submit-btn`).innerText = "등록하기"; 
+    document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-emerald-600', 'bg-indigo-600'); 
+    document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700'); 
+    document.getElementById(`${prefix}-cancel-btn`).classList.add('hidden'); 
+    renderProductMaster(targetType);
+}
+
+async function submitProduct(targetType) { 
+    const prefix = targetType === 'finished' ? 'fp' : 'pm';
+    const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
+    if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
+    const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
+    try { 
+        if(editingProductOriginalName) { 
+            const res = await fetch(`${endpoint}?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
+            const result = await res.json();
+            if(result.status === 'success') { alert("수정 완료"); cancelEdit(targetType); } else { alert(`수정 실패: ${result.message}`); }
+        } else { 
+            const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
+            const result = await res.json();
+            if(result.status === 'success') { alert("등록 완료"); document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; } else { alert(`등록 실패: ${result.message}`); }
+        } 
+        await load(); 
+    } catch(e) { alert("서버 통신 실패"); } 
+}
+
+async function deleteProduct(name, supplier, targetType) { 
+    if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
+    const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
+    try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
+}
+
+async function deleteAllProducts(targetType) { 
+    const msg = targetType === 'finished' ? "제품" : "자재";
+    if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
+    const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
+    const endpoint = targetType === 'finished' ? '/api/finished_products_all' : '/api/products_all';
+    try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); await load(); } catch(e) { alert("삭제 실패!"); } 
+}
+
+// 💡 엑셀 다운로드 (공통)
 function exportProductsExcel(targetType) { 
     try { 
         let wsData = []; let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster; let sheetName = targetType === 'finished' ? "제품마스터" : "자재마스터"; let fileName = targetType === 'finished' ? "한스팜_제품마스터_양식.xlsx" : "한스팜_자재마스터_양식.xlsx";
@@ -1044,71 +916,226 @@ async function submitBom() {
 
 async function deleteBom(id) { if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } }
 
-function editProductSetup(cat, name, supplier, usage, price, ea, targetType) { 
-    editingProductOriginalName = name; editingProductOriginalSupplier = supplier; 
-    const prefix = targetType === 'finished' ? 'fp' : 'pm';
-    document.getElementById(`${prefix}-cat`).value = cat; 
-    document.getElementById(`${prefix}-name`).value = name; 
-    document.getElementById(`${prefix}-supplier`).value = supplier; 
-    document.getElementById(`${prefix}-usage`).value = usage; 
-    document.getElementById(`${prefix}-price`).value = price; 
-    document.getElementById(`${prefix}-pallet-ea`).value = ea || 1; 
-    document.getElementById(`${prefix}-form-title`).innerText = "기존 항목 수정 중 ✏️"; 
-    document.getElementById(`${prefix}-submit-btn`).innerText = "✅ 저장하기"; 
-    document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-indigo-600', 'bg-emerald-600'); 
-    document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); 
-    document.getElementById(`${prefix}-cancel-btn`).classList.remove('hidden'); 
-    renderProductMaster(targetType); 
+function renderSafetyStock() { 
+    const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; 
+    globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); 
+    let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); 
+    if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다.</td></tr>`; } 
+    else { 
+        monitoredProducts.forEach(p => { 
+            let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; 
+            let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 발주 복사</button>` : ''; 
+            let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">🔴 위험</span>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">🟢 여유</span>`; 
+            html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}"><td class="p-2 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td><td class="p-2 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td><td class="p-2 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${totalQty.toLocaleString()}</td><td class="p-2 md:p-4 text-right font-bold text-xs md:text-sm text-slate-500">${p.daily_usage.toLocaleString()} / 일</td><td class="p-2 md:p-4 text-center"><div class="w-full bg-slate-200 rounded-full h-2 mb-1 max-w-[100px] md:max-w-[150px] mx-auto overflow-hidden"><div class="h-2 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div><span class="text-[10px] md:text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span></td><td class="p-2 md:p-4 text-center">${statusHtml}</td></tr>`; 
+        }); 
+    } 
+    document.getElementById('safety-list').innerHTML = html; 
 }
 
-function cancelEdit(targetType) { 
-    editingProductOriginalName = null; editingProductOriginalSupplier = null; 
-    const prefix = targetType === 'finished' ? 'fp' : 'pm'; const title = targetType === 'finished' ? '신규 완제품 추가' : '신규 자재 추가';
-    document.getElementById(`${prefix}-cat`).value = ''; 
-    document.getElementById(`${prefix}-name`).value = ''; 
-    document.getElementById(`${prefix}-supplier`).value = ''; 
-    document.getElementById(`${prefix}-usage`).value = '0'; 
-    document.getElementById(`${prefix}-price`).value = '0'; 
-    document.getElementById(`${prefix}-pallet-ea`).value = '1'; 
-    document.getElementById(`${prefix}-form-title`).innerText = title; 
-    document.getElementById(`${prefix}-submit-btn`).innerText = "등록하기"; 
-    document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-emerald-600', 'bg-indigo-600'); 
-    document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700'); 
-    document.getElementById(`${prefix}-cancel-btn`).classList.add('hidden'); 
-    renderProductMaster(targetType);
+function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`[${supplier}] 수량(EA):`, "1000개"); if(!moq) return; const leadTime = prompt(`납기일:`, "최대한 빠르게"); const text = `[발주 요청서]\n수신: ${supplier}\n\n안녕하세요, 한스팜입니다.\n아래 품목 발주 요청드립니다.\n\n- 품목명: ${itemName}\n- 발주수량: ${moq}\n- 납기요청: ${leadTime}\n\n확인 후 회신 부탁드립니다. 감사합니다.`; navigator.clipboard.writeText(text.replace(/\\n/g, '\n')).then(() => { alert("복사 완료"); }); }
+
+// 💡 [정산회계] 조회 필터 연동 및 테이블 출력 로직
+function toggleAccDateInput() {
+    let type = document.getElementById('acc-type').value;
+    document.getElementById('acc-date').classList.add('hidden');
+    document.getElementById('acc-period-wrapper').classList.add('hidden');
+    document.getElementById('acc-period-wrapper').classList.remove('flex');
+    document.getElementById('acc-month').classList.add('hidden');
+
+    if(type === 'date') { 
+        document.getElementById('acc-date').classList.remove('hidden'); 
+    } else if(type === 'period') { 
+        document.getElementById('acc-period-wrapper').classList.remove('hidden'); 
+        document.getElementById('acc-period-wrapper').classList.add('flex'); 
+    } else if(type === 'month') { 
+        document.getElementById('acc-month').classList.remove('hidden'); 
+    }
 }
 
-async function submitProduct(targetType) { 
-    const prefix = targetType === 'finished' ? 'fp' : 'pm';
-    const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
-    if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
-    const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-    try { 
-        if(editingProductOriginalName) { 
-            const res = await fetch(`${endpoint}?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-            const result = await res.json();
-            if(result.status === 'success') { alert("수정 완료"); cancelEdit(targetType); } else { alert(`수정 실패: ${result.message}`); }
-        } else { 
-            const res = await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-            const result = await res.json();
-            if(result.status === 'success') { alert("등록 완료"); document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; } else { alert(`등록 실패: ${result.message}`); }
-        } 
-        await load(); 
-    } catch(e) { alert("서버 통신 실패"); } 
+function isAccDateMatch(hDate) {
+    let type = document.getElementById('acc-type').value;
+    if (type === 'date') {
+        let target = document.getElementById('acc-date').value;
+        if(!target) return false;
+        return hDate === target;
+    } else if (type === 'period') {
+        let start = document.getElementById('acc-period-start').value;
+        let end = document.getElementById('acc-period-end').value;
+        if (!start || !end) return false;
+        return hDate >= start && hDate <= end;
+    } else if (type === 'month') {
+        let target = document.getElementById('acc-month').value;
+        if(!target) return false;
+        return hDate.substring(0, 7) === target;
+    }
+    return false;
 }
 
-async function deleteProduct(name, supplier, targetType) { 
-    if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
-    const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-    try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
+function updateAccFilters(changedFilter) {
+    try {
+        let inboundLog = globalHistory.filter(h => {
+            if(h.action_type !== '입고') return false;
+            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
+            return isAccDateMatch(hDate);
+        });
+
+        let supSelect = document.getElementById('acc-supplier'); 
+        let itemSelect = document.getElementById('acc-item');
+        let curSup = supSelect.value;
+        let curItem = itemSelect.value;
+
+        if (changedFilter === 'date' || changedFilter === 'type') {
+            let suppliers = [...new Set(inboundLog.map(h => h.remarks || '기본입고처'))].sort();
+            supSelect.innerHTML = `<option value="ALL">전체 매입처</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join('');
+            if(suppliers.includes(curSup)) supSelect.value = curSup; else supSelect.value = 'ALL';
+            curSup = supSelect.value;
+        }
+
+        if (changedFilter === 'date' || changedFilter === 'type' || changedFilter === 'supplier') {
+            let itemLog = inboundLog;
+            if (curSup !== 'ALL') {
+                itemLog = itemLog.filter(h => (h.remarks || '기본입고처') === curSup);
+            }
+            let items = [...new Set(itemLog.map(h => h.item_name))].sort();
+            itemSelect.innerHTML = `<option value="ALL">전체 품목</option>` + items.map(s => `<option value="${s}">${s}</option>`).join('');
+            if(items.includes(curItem)) itemSelect.value = curItem; else itemSelect.value = 'ALL';
+        }
+
+        renderAccounting();
+    } catch(e) { console.error("Filter Update Error:", e); }
 }
 
-async function deleteAllProducts(targetType) { 
-    const msg = targetType === 'finished' ? "제품" : "자재";
-    if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
-    const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
-    const endpoint = targetType === 'finished' ? '/api/finished_products_all' : '/api/products_all';
-    try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); await load(); } catch(e) { alert("삭제 실패!"); } 
+function renderAccounting() { 
+    try {
+        const selectedSup = document.getElementById('acc-supplier').value;
+        const selectedItem = document.getElementById('acc-item').value;
+        const groupMode = document.getElementById('acc-group').value;
+
+        let inboundLog = globalHistory.filter(h => h.action_type === '입고');
+        let allItems = [...finishedProductMaster, ...productMaster];
+
+        let filtered = inboundLog.filter(h => {
+            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
+            let matchDate = isAccDateMatch(hDate);
+            let matchSup = selectedSup === 'ALL' || (h.remarks || '기본입고처') === selectedSup;
+            let matchItem = selectedItem === 'ALL' || h.item_name === selectedItem;
+            return matchDate && matchSup && matchItem;
+        });
+
+        let groupedLog = {};
+        filtered.forEach(h => {
+            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
+            let hSup = h.remarks || '기본입고처';
+            let hItem = h.item_name;
+            let key = `${hDate}|${hSup}|${hItem}`;
+            
+            if(!groupedLog[key]) { groupedLog[key] = { date: hDate, supplier: hSup, item_name: hItem, quantity: 0 }; }
+            groupedLog[key].quantity += h.quantity;
+        });
+
+        let consolidated = Object.values(groupedLog);
+        consolidated.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        let totalSupply = 0, totalTax = 0, totalSum = 0;
+        let html = '';
+
+        if(groupMode === 'list') {
+            html = consolidated.map((h, i) => {
+                let pInfo = allItems.find(p => String(p.item_name).trim() === String(h.item_name).trim() && String(p.supplier).trim() === String(h.supplier).trim());
+                let price = pInfo ? pInfo.unit_price : 0;
+                let supply = price * h.quantity;
+                let tax = Math.floor(supply * 0.1); 
+                let sum = supply + tax;
+                totalSupply += supply; totalTax += tax; totalSum += sum;
+                
+                let bgClass = i % 2 === 0 ? 'bg-white' : 'bg-slate-50'; 
+                
+                return `<tr class="${bgClass} border-b border-slate-200 hover:bg-indigo-50 transition-colors">
+                    <td class="p-1.5 md:p-2 text-slate-500 text-[10px] md:text-[11px] whitespace-nowrap">${h.date}</td>
+                    <td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td>
+                    <td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td>
+                    <td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right text-slate-500 text-[10px] md:text-[11px]">${price.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right font-black text-slate-700 text-[11px] md:text-xs">${supply.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right font-bold text-rose-500 text-[10px] md:text-[11px]">${tax.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right font-black text-blue-700 text-[11px] md:text-xs">${sum.toLocaleString()}</td>
+                </tr>`;
+            }).join('');
+        } else {
+            let groupAggr = {};
+            consolidated.forEach(h => {
+                let key = groupMode === 'supplier' ? h.supplier : h.item_name;
+                let subKey = groupMode === 'supplier' ? h.item_name : h.supplier;
+                
+                let pInfo = allItems.find(p => String(p.item_name).trim() === String(h.item_name).trim() && String(p.supplier).trim() === String(h.supplier).trim());
+                let price = pInfo ? pInfo.unit_price : 0;
+                let supply = price * h.quantity;
+                let tax = Math.floor(supply * 0.1);
+                let sum = supply + tax;
+
+                if(!groupAggr[key]) groupAggr[key] = { totalQty: 0, totalSupply: 0, totalTax: 0, totalSum: 0, details: {} };
+                groupAggr[key].totalQty += h.quantity;
+                groupAggr[key].totalSupply += supply;
+                groupAggr[key].totalTax += tax;
+                groupAggr[key].totalSum += sum;
+
+                if(!groupAggr[key].details[subKey]) groupAggr[key].details[subKey] = { qty: 0, supply: 0 };
+                groupAggr[key].details[subKey].qty += h.quantity;
+                groupAggr[key].details[subKey].supply += supply;
+            });
+
+            for(let key in groupAggr) {
+                let g = groupAggr[key];
+                totalSupply += g.totalSupply; totalTax += g.totalTax; totalSum += g.totalSum;
+                
+                html += `<tr class="bg-indigo-100 border-b-2 border-indigo-200">
+                    <td colspan="3" class="p-2 font-black text-indigo-900 text-xs md:text-sm">📁 [${key}] 누적 요약</td>
+                    <td class="p-2 text-right font-black text-indigo-700 text-[11px] md:text-xs">${g.totalQty.toLocaleString()}</td>
+                    <td class="p-2 text-right">-</td>
+                    <td class="p-2 text-right font-black text-slate-800 text-[11px] md:text-xs">${g.totalSupply.toLocaleString()}</td>
+                    <td class="p-2 text-right font-bold text-rose-600 text-[11px] md:text-xs">${g.totalTax.toLocaleString()}</td>
+                    <td class="p-2 text-right font-black text-blue-800 text-[11px] md:text-xs">${g.totalSum.toLocaleString()}</td>
+                </tr>`;
+                
+                for(let subKey in g.details) {
+                    let d = g.details[subKey];
+                    let dTax = Math.floor(d.supply * 0.1);
+                    let dSum = d.supply + dTax;
+                    let displaySup = groupMode === 'supplier' ? key : subKey;
+                    let displayItem = groupMode === 'item' ? key : subKey;
+                    
+                    html += `<tr class="bg-white border-b border-slate-100 opacity-90">
+                        <td class="p-1.5 md:p-2 text-center text-[10px] text-slate-400">↳ 상세항목</td>
+                        <td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displaySup}</td>
+                        <td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displayItem}</td>
+                        <td class="p-1.5 md:p-2 text-right font-bold text-indigo-500 text-[10px] md:text-[11px]">${d.qty.toLocaleString()}</td>
+                        <td class="p-1.5 md:p-2 text-right text-slate-400 text-[9px]">-</td>
+                        <td class="p-1.5 md:p-2 text-right text-slate-600 text-[10px] md:text-[11px]">${d.supply.toLocaleString()}</td>
+                        <td class="p-1.5 md:p-2 text-right text-rose-400 text-[10px] md:text-[11px]">${dTax.toLocaleString()}</td>
+                        <td class="p-1.5 md:p-2 text-right font-bold text-blue-600 text-[10px] md:text-[11px]">${dSum.toLocaleString()}</td>
+                    </tr>`;
+                }
+            }
+        }
+
+        document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
+        document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; 
+        document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; 
+        document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
+    } catch(e) { console.error(e); }
+}
+
+function exportAccountingExcel() {
+    try {
+        const table = document.getElementById('accounting-table');
+        if(!table) return alert("다운로드할 표가 없습니다.");
+        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
+    } catch (error) {
+        console.error(error);
+        alert("엑셀 다운로드 중 오류가 발생했습니다.");
+    }
 }
 
 window.onload = function() { load(); showView('dashboard'); };
