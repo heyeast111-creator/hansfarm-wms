@@ -31,7 +31,7 @@ function siteLogin() {
         alert("❌ 비밀번호가 틀렸습니다.");
         return;
     }
-    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-app').classList.remove('hidden');
     document.getElementById('main-app').classList.add('flex');
     load(); 
@@ -150,7 +150,7 @@ function switchZone(zone) {
     globalSearchTargets = []; currentZone = zone; selectedCellId = null; movingItem = null;
     let rs = document.getElementById('right-sidebar');
     if(window.innerWidth < 768 && rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
-    updateZoneTabs(); renderMap(); 
+    updateZoneTabs(); renderMap(); populateWaitDropdowns();
 }
 
 function switchOrderTab(tab) {
@@ -159,12 +159,12 @@ function switchOrderTab(tab) {
         ['inventory', 'search', 'history', 'safety'].forEach(t => {
             let btn = document.getElementById('order-tab-' + t); let view = document.getElementById('subview-' + t);
             if(btn) btn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors";
-            if(view) { view.classList.add('hidden'); view.classList.remove('flex'); }
+            if(view) { view.style.display = 'none'; }
         });
 
         let activeBtn = document.getElementById('order-tab-' + tab); let activeView = document.getElementById('subview-' + tab);
         if(activeBtn) activeBtn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-indigo-700 border-b-4 border-indigo-700 transition-colors";
-        if(activeView) { activeView.classList.remove('hidden'); activeView.classList.add('flex'); }
+        if(activeView) { activeView.style.display = 'flex'; }
 
         let rs = document.getElementById('right-sidebar');
         if(tab === 'inventory') {
@@ -183,7 +183,7 @@ function showView(viewName) {
     movingItem = null;
     ['view-dashboard', 'view-order', 'view-products', 'view-accounting', 'view-production', 'view-outbound'].forEach(id => { 
         let el = document.getElementById(id);
-        if(el) { el.classList.add('hidden'); el.classList.remove('flex'); }
+        if(el) { el.style.display = 'none'; }
     });
     
     let rs = document.getElementById('right-sidebar');
@@ -193,7 +193,7 @@ function showView(viewName) {
     } else if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
     
     let targetView = document.getElementById('view-' + viewName);
-    if(targetView) { targetView.classList.remove('hidden'); targetView.classList.add('flex'); }
+    if(targetView) { targetView.style.display = 'flex'; }
 
     document.querySelectorAll('.nav-btn-pc').forEach(btn => {
         btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'bg-rose-50', 'border-rose-200', 'text-rose-600', 'bg-yellow-50', 'border-yellow-300', 'text-yellow-700', 'shadow-inner');
@@ -214,10 +214,7 @@ function showView(viewName) {
         btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
     });
     
-    if(viewName === 'products') { 
-        populateProductFilters('finished'); populateProductFilters('materials');
-        renderProductMaster('finished'); switchProductTab('fp'); 
-    } 
+    if(viewName === 'products') { switchProductTab('fp'); } 
     else if(viewName === 'order') { switchOrderTab(currentOrderTab); } 
     else if(viewName === 'dashboard') updateDashboard(); 
     else if(viewName === 'accounting') updateAccFilters('type'); 
@@ -241,7 +238,7 @@ function getDynamicPalletCount(itemObj) {
     return itemObj.pallet_count || 1;
 }
 
-// 💡 팝업 모달 함수 추가
+// 💡 팝업 모달 함수
 function showHistoryModal(locId) {
     let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
     document.getElementById('history-modal-title').innerText = `${locId} 전체 기록`;
@@ -261,7 +258,6 @@ function closeHistoryModal() {
     document.getElementById('history-modal').classList.remove('flex');
 }
 
-// 💡 재고마감 함수
 async function closeInventory() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     if(!isAdmin) return alert("🔒 관리자 권한이 필요합니다. 좌측 로고를 클릭해 로그인해주세요.");
@@ -271,9 +267,7 @@ async function closeInventory() {
         await fetch('/api/close_inventory', { method: 'POST' });
         alert("✅ 재고 마감 처리 완료!");
         await load();
-    } catch(e) {
-        alert("마감 처리 중 오류가 발생했습니다.");
-    }
+    } catch(e) { alert("마감 처리 중 오류가 발생했습니다."); }
 }
 
 function toggleOrderCart() {
@@ -435,14 +429,20 @@ async function cancelOrder(logId) {
     try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) { alert("취소 실패"); }
 }
 
+function getWaitZoneSourceItems() {
+    if (currentZone === '실온') return productMaster.filter(p => p.category && !p.category.includes('원란'));
+    else if (currentZone === '냉장') return productMaster.filter(p => p.category && p.category.includes('원란'));
+    else return [...finishedProductMaster, ...productMaster];
+}
+
 function populateWaitDropdowns() {
     try {
-        let allItems = [...finishedProductMaster, ...productMaster];
-        let sups = [...new Set(allItems.map(p => p.supplier))].filter(Boolean).sort();
+        let items = getWaitZoneSourceItems();
+        let sups = [...new Set(items.map(p => p.supplier))].filter(Boolean).sort();
         let ws = document.getElementById('wait-supplier');
         if(ws) { 
             let cur = ws.value;
-            ws.innerHTML = `<option value="">입고처</option>` + sups.map(s => `<option value="${s}">${s}</option>`).join('');
+            ws.innerHTML = `<option value="">1.입고처</option>` + sups.map(s => `<option value="${s}">${s}</option>`).join('');
             if(sups.includes(cur)) ws.value = cur;
             updateWaitCategoryDropdown();
         }
@@ -452,13 +452,14 @@ function populateWaitDropdowns() {
 function updateWaitCategoryDropdown() {
     try {
         let ws = document.getElementById('wait-supplier'); if(!ws) return;
-        let sup = ws.value; let allItems = [...finishedProductMaster, ...productMaster];
-        let filtered = sup ? allItems.filter(p => p.supplier === sup) : allItems;
+        let sup = ws.value; 
+        let items = getWaitZoneSourceItems();
+        let filtered = sup ? items.filter(p => p.supplier === sup) : items;
         let cats = [...new Set(filtered.map(p => p.category))].filter(Boolean).sort();
         let wc = document.getElementById('wait-cat');
         if(wc) {
             let cur = wc.value;
-            wc.innerHTML = `<option value="">카테고리</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); 
+            wc.innerHTML = `<option value="">2.카테고리</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join(''); 
             if(cats.includes(cur)) wc.value = cur;
             updateWaitItemDropdown();
         }
@@ -468,14 +469,15 @@ function updateWaitCategoryDropdown() {
 function updateWaitItemDropdown() {
     try {
         let ws = document.getElementById('wait-supplier'); let wc = document.getElementById('wait-cat'); if(!ws || !wc) return;
-        let sup = ws.value; let cat = wc.value; let allItems = [...finishedProductMaster, ...productMaster];
-        let filtered = allItems.filter(p => (!sup || p.supplier === sup) && (!cat || p.category === cat));
-        let items = [...new Set(filtered.map(p => p.item_name))].filter(Boolean).sort();
+        let sup = ws.value; let cat = wc.value; 
+        let items = getWaitZoneSourceItems();
+        let filtered = items.filter(p => (!sup || p.supplier === sup) && (!cat || p.category === cat));
+        let itemNames = [...new Set(filtered.map(p => p.item_name))].filter(Boolean).sort();
         let wi = document.getElementById('wait-item');
         if(wi) {
             let cur = wi.value;
-            wi.innerHTML = `<option value="">품목명</option>` + items.map(c => `<option value="${c}">${c}</option>`).join('');
-            if(items.includes(cur)) wi.value = cur;
+            wi.innerHTML = `<option value="">3.품목명</option>` + itemNames.map(c => `<option value="${c}">${c}</option>`).join('');
+            if(itemNames.includes(cur)) wi.value = cur;
         }
     } catch(e) {}
 }
@@ -749,7 +751,7 @@ async function clickCell(displayId, searchId) {
                 recentHistory.forEach(h => { 
                     let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
                     let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
-                    histHtml += `<div class="bg-white p-2 border border-slate-200 rounded text-[10px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`; 
+                    histHtml += `<div class="bg-white p-2 border border-slate-200 rounded text-[10px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`; 
                 }); 
             } else { histHtml += `<div class="text-[10px] md:text-xs text-slate-400 text-center py-4">기록이 없습니다.</div>`; } 
             histHtml += '</div></div>'; 
@@ -1153,4 +1155,4 @@ function exportAccountingExcel() {
     } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
-window.onload = function() { document.getElementById('login-screen').classList.remove('hidden'); };
+window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
