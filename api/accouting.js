@@ -141,3 +141,5 @@ function exportAccountingExcel() {
         XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
     } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
+
+window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
