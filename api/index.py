@@ -47,26 +47,11 @@ async def serve_ui():
     if os.path.exists(html_path): return FileResponse(html_path)
     return HTMLResponse(content="<h1>HTML 파일을 찾을 수 없습니다. api 폴더 안에 index.html 파일이 있는지 확인해주세요.</h1>", status_code=404)
 
-# 💡 분할된 JS 파일 라우팅 추가
-@app.get("/main.js")
-async def serve_main_js():
-    path = os.path.join(CURRENT_DIR, "main.js")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Not Found", 404)
-
-@app.get("/inventory.js")
-async def serve_inv_js():
-    path = os.path.join(CURRENT_DIR, "inventory.js")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Not Found", 404)
-
-@app.get("/products.js")
-async def serve_prod_js():
-    path = os.path.join(CURRENT_DIR, "products.js")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Not Found", 404)
-
-@app.get("/accounting.js")
-async def serve_acc_js():
-    path = os.path.join(CURRENT_DIR, "accounting.js")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Not Found", 404)
+@app.get("/script.js")
+async def serve_script():
+    script_path = os.path.join(CURRENT_DIR, "script.js")
+    if os.path.exists(script_path): return FileResponse(script_path)
+    return HTMLResponse(content="JS Not Found", status_code=404)
 
 @app.get("/logo.jpg")
 async def serve_logo():
