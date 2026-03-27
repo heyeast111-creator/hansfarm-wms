@@ -13,8 +13,8 @@ SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
-PUBLIC_DIR = os.path.join(BASE_DIR, "public")
+# 💡 현재 파이썬 파일이 있는 폴더(api)를 무조건 기본 경로로 고정
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @app.middleware("http")
 async def add_cache_control_header(request: Request, call_next):
@@ -22,23 +22,27 @@ async def add_cache_control_header(request: Request, call_next):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
+# HTML 파일 제공
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
 async def serve_ui():
-    path = os.path.join(PUBLIC_DIR, "index.html")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("index.html 낫파운드", status_code=404)
+    path = os.path.join(CURRENT_DIR, "index.html")
+    return FileResponse(path) if os.path.exists(path) else HTMLResponse(f"<h1>index.html 파일을 찾을 수 없습니다. (경로: {path})</h1>", status_code=404)
 
-@app.get("/script.js")
-async def serve_script():
-    path = os.path.join(PUBLIC_DIR, "script.js")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("JS 낫파운드", status_code=404)
-
+# 로고 이미지 제공
 @app.get("/logo.jpg")
 async def serve_logo():
-    path = os.path.join(PUBLIC_DIR, "logo.jpg")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Logo 낫파운드", status_code=404)
+    path = os.path.join(CURRENT_DIR, "logo.jpg")
+    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Logo Not Found", status_code=404)
 
+# 💡 분할된 4개의 JS 파일 제공
+@app.get("/{filename}.js")
+async def serve_js(filename: str):
+    path = os.path.join(CURRENT_DIR, f"{filename}.js")
+    return FileResponse(path) if os.path.exists(path) else HTMLResponse("JS Not Found", status_code=404)
+
+# --- Pydantic 데이터 모델 ---
 class InboundData(BaseModel): location_id: str; category: str; item_name: str; quantity: int; pallet_count: float = 1.0; production_date: Optional[str] = None; remarks: Optional[str] = ""
 class OutboundData(BaseModel): inventory_id: str; location_id: str; item_name: str; quantity: int; pallet_count: float = 1.0
 class ProductData(BaseModel): category: str; item_name: str; supplier: str = "기본입고처"; daily_usage: int = 0; unit_price: int = 0; pallet_ea: int = 1
@@ -46,32 +50,38 @@ class TransferData(BaseModel): inventory_id: str; from_location: str; to_locatio
 class EditInventoryData(BaseModel): inventory_id: str; location_id: str; item_name: str; action: str; new_quantity: Optional[int] = None; new_date: Optional[str] = None; pallet_count: Optional[float] = None
 class OrderCreateData(BaseModel): item_name: str; quantity: int; pallet_count: float; supplier: str
 
+# --- DB 통신 공통 함수 ---
 async def fetch_get(endpoint):
     async with httpx.AsyncClient() as client:
         r = await client.get(f"{SUPABASE_URL}/rest/v1/{endpoint}", headers=HEADERS)
         return r.json() if r.status_code == 200 else []
-
+        
 async def fetch_delete(endpoint):
     async with httpx.AsyncClient() as client:
         await client.delete(f"{SUPABASE_URL}/rest/v1/{endpoint}", headers=HEADERS)
         return {"status": "success"}
 
+# --- API 라우터 ---
 @app.get("/api/products")
 async def get_products(): return await fetch_get("products?select=*")
+
 @app.get("/api/finished_products")
 async def get_finished_products(): return await fetch_get("finished_products?select=*")
+
 @app.get("/api/bom")
 async def get_bom(): return await fetch_get("bom_master?select=*")
+
 @app.get("/api/inventory")
 async def get_inventory(): return await fetch_get("inventory_v2?select=*")
+
 @app.get("/api/history")
 async def get_history(): return await fetch_get("history_log?select=*")
 
 @app.post("/api/bom")
 async def add_bom(data: dict):
     async with httpx.AsyncClient() as client:
-        await client.post(f"{SUPABASE_URL}/rest/v1/bom_master", json=data, headers=HEADERS)
-        return {"status": "success"}
+        res = await client.post(f"{SUPABASE_URL}/rest/v1/bom_master", json=data, headers=HEADERS)
+        return {"status": "success"} if res.status_code in [200, 201, 204] else {"status": "error"}
 
 @app.delete("/api/bom")
 async def delete_bom(id: str): return await fetch_delete(f"bom_master?id=eq.{id}")
@@ -79,14 +89,14 @@ async def delete_bom(id: str): return await fetch_delete(f"bom_master?id=eq.{id}
 @app.post("/api/products")
 async def add_product(data: ProductData):
     async with httpx.AsyncClient() as client:
-        await client.post(f"{SUPABASE_URL}/rest/v1/products", json=data.dict(), headers=HEADERS)
-        return {"status": "success"}
+        res = await client.post(f"{SUPABASE_URL}/rest/v1/products", json=data.dict(), headers=HEADERS)
+        return {"status": "success"} if res.status_code in [200, 201, 204] else {"status": "error"}
 
 @app.put("/api/products")
 async def update_product(old_name: str, old_supplier: str, data: ProductData):
     async with httpx.AsyncClient() as client:
-        await client.patch(f"{SUPABASE_URL}/rest/v1/products?item_name=eq.{old_name}&supplier=eq.{old_supplier}", json=data.dict(), headers=HEADERS)
-        return {"status": "success"}
+        res = await client.patch(f"{SUPABASE_URL}/rest/v1/products?item_name=eq.{old_name}&supplier=eq.{old_supplier}", json=data.dict(), headers=HEADERS)
+        return {"status": "success"} if res.status_code in [200, 201, 204] else {"status": "error"}
 
 @app.delete("/api/products")
 async def delete_product(item_name: str, supplier: str): return await fetch_delete(f"products?item_name=eq.{item_name}&supplier=eq.{supplier}")
@@ -94,14 +104,14 @@ async def delete_product(item_name: str, supplier: str): return await fetch_dele
 @app.post("/api/finished_products")
 async def add_finished_product(data: ProductData):
     async with httpx.AsyncClient() as client:
-        await client.post(f"{SUPABASE_URL}/rest/v1/finished_products", json=data.dict(), headers=HEADERS)
-        return {"status": "success"}
+        res = await client.post(f"{SUPABASE_URL}/rest/v1/finished_products", json=data.dict(), headers=HEADERS)
+        return {"status": "success"} if res.status_code in [200, 201, 204] else {"status": "error"}
 
 @app.put("/api/finished_products")
 async def update_finished_product(old_name: str, old_supplier: str, data: ProductData):
     async with httpx.AsyncClient() as client:
-        await client.patch(f"{SUPABASE_URL}/rest/v1/finished_products?item_name=eq.{old_name}&supplier=eq.{old_supplier}", json=data.dict(), headers=HEADERS)
-        return {"status": "success"}
+        res = await client.patch(f"{SUPABASE_URL}/rest/v1/finished_products?item_name=eq.{old_name}&supplier=eq.{old_supplier}", json=data.dict(), headers=HEADERS)
+        return {"status": "success"} if res.status_code in [200, 201, 204] else {"status": "error"}
 
 @app.delete("/api/finished_products")
 async def delete_finished_product(item_name: str, supplier: str): return await fetch_delete(f"finished_products?item_name=eq.{item_name}&supplier=eq.{supplier}")
