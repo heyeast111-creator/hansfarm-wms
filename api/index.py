@@ -1,5 +1,6 @@
 import os
 import httpx
+import asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
@@ -321,7 +322,6 @@ async def update_history_payment(log_id: str, data: PaymentUpdate):
         await client.patch(f"{SUPABASE_URL}/rest/v1/history_log?id=eq.{log_id}", json={"payment_status": data.payment_status}, headers=HEADERS)
         return {"status": "success"}
 
-# 💡 [새 기능] 발주 장바구니 데이터를 DB에 밀어넣는 API
 @app.post("/api/orders_create")
 async def create_orders(items: List[OrderCreateData]):
     import datetime
@@ -344,7 +344,6 @@ async def create_orders(items: List[OrderCreateData]):
         if res.status_code not in [200, 201, 204]: return {"status": "error", "message": res.text}
         return {"status": "success"}
 
-# 💡 [새 기능] 발주 취소 등 단일 history_log 삭제용 API
 @app.delete("/api/history/{log_id}")
 async def delete_history_log(log_id: str):
     async with httpx.AsyncClient() as client:
@@ -419,3 +418,16 @@ async def clear_data(target: str):
         if target == 'inventory': await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?location_id=not.is.null", headers=HEADERS)
         elif target == 'history': await client.delete(f"{SUPABASE_URL}/rest/v1/history_log?location_id=not.is.null", headers=HEADERS)
     return {"status": "success"}
+
+@app.post("/api/close_inventory")
+async def close_inventory():
+    async with httpx.AsyncClient() as client:
+        r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?select=*", headers=HEADERS)
+        inv_list = r.json() if r.status_code == 200 else []
+        async def patch_item(item):
+            remarks = item.get('remarks', '') or ''
+            if '[기존재고]' not in remarks:
+                new_remarks = f"{remarks} [기존재고]".strip()
+                await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{item['id']}", json={"remarks": new_remarks}, headers=HEADERS)
+        await asyncio.gather(*(patch_item(item) for item in inv_list))
+        return {"status": "success"}
