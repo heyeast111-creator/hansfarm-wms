@@ -214,10 +214,7 @@ function showView(viewName) {
         btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
     });
     
-    if(viewName === 'products') { 
-        populateProductFilters('finished'); populateProductFilters('materials');
-        renderProductMaster('finished'); switchProductTab('fp'); 
-    } 
+    if(viewName === 'products') { populateProductFilters('finished'); populateProductFilters('materials'); renderProductMaster('finished'); switchProductTab('fp'); } 
     else if(viewName === 'order') { switchOrderTab(currentOrderTab); } 
     else if(viewName === 'dashboard') updateDashboard(); 
     else if(viewName === 'accounting') updateAccFilters('type'); 
@@ -262,20 +259,13 @@ async function closeInventory() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     if(!isAdmin) return alert("🔒 관리자 권한이 필요합니다. 좌측 로고를 클릭해 로그인해주세요.");
     if(!confirm("⚠️ [재고마감]\n현재 렉맵에 적재된 모든 품목을 '(기존재고)'로 마감 처리하시겠습니까?\n이후 월간 소요량 파악 및 악성 재고 필터링에 기준이 됩니다.")) return;
-    try {
-        await fetch('/api/close_inventory', { method: 'POST' });
-        alert("✅ 재고 마감 처리 완료!");
-        await load();
-    } catch(e) { alert("마감 처리 중 오류가 발생했습니다."); }
+    try { await fetch('/api/close_inventory', { method: 'POST' }); alert("✅ 재고 마감 처리 완료!"); await load(); } catch(e) { alert("마감 처리 중 오류가 발생했습니다."); }
 }
 
 function toggleOrderCart() {
     const el = document.getElementById('order-cart-container');
-    if(el.classList.contains('hidden')) {
-        el.classList.remove('hidden'); el.classList.add('flex'); updateOrderCartDropdowns();
-    } else {
-        el.classList.add('hidden'); el.classList.remove('flex');
-    }
+    if(el.classList.contains('hidden')) { el.classList.remove('hidden'); el.classList.add('flex'); updateOrderCartDropdowns(); } 
+    else { el.classList.add('hidden'); el.classList.remove('flex'); }
 }
 
 function updateOrderCartDropdowns() {
@@ -283,8 +273,7 @@ function updateOrderCartDropdowns() {
         let sups = [...new Set(productMaster.map(p=>p.supplier))].filter(Boolean).sort();
         let supSel = document.getElementById('oc-sup');
         if(supSel) { 
-            let cur = supSel.value;
-            supSel.innerHTML = '<option value="">1. 발주처 선택</option>' + sups.map(s=>`<option value="${s}">${s}</option>`).join(''); 
+            let cur = supSel.value; supSel.innerHTML = '<option value="">1. 발주처 선택</option>' + sups.map(s=>`<option value="${s}">${s}</option>`).join(''); 
             if(sups.includes(cur)) supSel.value = cur;
             updateOrderCartCategoryDropdown(); 
         }
@@ -297,8 +286,7 @@ function updateOrderCartCategoryDropdown() {
         let cats = [...new Set(productMaster.filter(p=>p.supplier===sup).map(p=>p.category))].filter(Boolean).sort();
         let catSel = document.getElementById('oc-cat');
         if(catSel) { 
-            let cur = catSel.value;
-            catSel.innerHTML = '<option value="">2. 카테고리 선택</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join(''); 
+            let cur = catSel.value; catSel.innerHTML = '<option value="">2. 카테고리 선택</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join(''); 
             if(cats.includes(cur)) catSel.value = cur;
             updateOrderCartItemDropdown(); 
         }
@@ -307,13 +295,11 @@ function updateOrderCartCategoryDropdown() {
 
 function updateOrderCartItemDropdown() {
     try {
-        let sup = document.getElementById('oc-sup').value;
-        let cat = document.getElementById('oc-cat').value;
+        let sup = document.getElementById('oc-sup').value; let cat = document.getElementById('oc-cat').value;
         let items = [...new Set(productMaster.filter(p=>p.supplier===sup && p.category===cat).map(p=>p.item_name))].filter(Boolean).sort();
         let itemSel = document.getElementById('oc-item');
         if(itemSel) { 
-            let cur = itemSel.value;
-            itemSel.innerHTML = '<option value="">3. 품목 선택</option>' + items.map(c=>`<option value="${c}">${c}</option>`).join(''); 
+            let cur = itemSel.value; itemSel.innerHTML = '<option value="">3. 품목 선택</option>' + items.map(c=>`<option value="${c}">${c}</option>`).join(''); 
             if(items.includes(cur)) itemSel.value = cur;
         }
     } catch(e) {}
@@ -325,12 +311,10 @@ function addOrderCartItem() {
     if(!item || !sup || isNaN(pal) || pal <= 0) return alert("품목, 발주처, 파레트 수량을 정확히 선택/입력하세요.");
 
     let pInfo = productMaster.find(p=>p.item_name===item && p.supplier===sup);
-    let eaPerPallet = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
-    let totalQty = Math.round(pal * eaPerPallet);
+    let eaPerPallet = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1; let totalQty = Math.round(pal * eaPerPallet);
 
     orderCart.push({ category: cat, item_name: item, supplier: sup, pallet_count: pal, quantity: totalQty });
-    document.getElementById('oc-pal').value = '';
-    renderOrderCart();
+    document.getElementById('oc-pal').value = ''; renderOrderCart();
 }
 
 function removeOrderCartItem(index) {
@@ -344,12 +328,7 @@ function renderOrderCart() {
     
     tbody.innerHTML = orderCart.map((item, idx) => {
         let delBtn = loginMode === 'viewer' ? '' : `<button onclick="removeOrderCartItem(${idx})" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded font-bold">❌</button>`;
-        return `<tr class="border-b border-slate-100">
-            <td class="p-2 font-bold text-rose-600">${item.supplier}</td>
-            <td class="p-2 font-black text-slate-800">${item.item_name}</td>
-            <td class="p-2 text-right font-black text-indigo-600">${item.pallet_count} P <span class="text-[10px] font-normal text-slate-500">(${item.quantity.toLocaleString()}EA)</span></td>
-            <td class="p-2 text-center">${delBtn}</td>
-        </tr>`;
+        return `<tr class="border-b border-slate-100"><td class="p-2 font-bold text-rose-600">${item.supplier}</td><td class="p-2 font-black text-slate-800">${item.item_name}</td><td class="p-2 text-right font-black text-indigo-600">${item.pallet_count} P <span class="text-[10px] font-normal text-slate-500">(${item.quantity.toLocaleString()}EA)</span></td><td class="p-2 text-center">${delBtn}</td></tr>`;
     }).join('');
 }
 
@@ -385,14 +364,7 @@ function renderOrderList() {
             actionBtns = `<button onclick="receiveOrder('${o.id}', '${o.item_name}', ${o.quantity}, ${o.pallet_count}, '${o.remarks}', '${o.category || ''}')" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-2 py-1.5 rounded shadow-sm transition-colors text-xs">입고처리</button>
             <button onclick="cancelOrder('${o.id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold px-2 py-1.5 rounded transition-colors text-xs">취소</button>`;
         }
-        return `<tr class="hover:bg-slate-50 transition-colors">
-            <td class="p-3 text-slate-500 font-bold">${o.created_at.substring(0,10)}</td>
-            <td class="p-3 font-black text-rose-600">${o.remarks || '기본'}</td>
-            <td class="p-3 font-black text-slate-800">${o.item_name}</td>
-            <td class="p-3 text-right font-black text-indigo-600">${o.pallet_count} P <span class="text-[10px] font-normal text-slate-500">(${o.quantity.toLocaleString()}EA)</span></td>
-            <td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-[10px] font-black animate-pulse">발주 대기중</span></td>
-            <td class="p-3 text-center space-x-1">${actionBtns}</td>
-        </tr>`;
+        return `<tr class="hover:bg-slate-50 transition-colors"><td class="p-3 text-slate-500 font-bold">${o.created_at.substring(0,10)}</td><td class="p-3 font-black text-rose-600">${o.remarks || '기본'}</td><td class="p-3 font-black text-slate-800">${o.item_name}</td><td class="p-3 text-right font-black text-indigo-600">${o.pallet_count} P <span class="text-[10px] font-normal text-slate-500">(${o.quantity.toLocaleString()}EA)</span></td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-[10px] font-black animate-pulse">발주 대기중</span></td><td class="p-3 text-center space-x-1">${actionBtns}</td></tr>`;
     }).join('');
 }
 
@@ -421,7 +393,6 @@ async function cancelOrder(logId) {
     try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) { alert("취소 실패"); }
 }
 
-// 💡 구역별(실온, 냉장, 현장) 대기장 품목 필터링 로직
 function getWaitZoneSourceItems() {
     if (currentZone === '실온') return productMaster.filter(p => p.category && !p.category.includes('원란'));
     else if (currentZone === '냉장') return productMaster.filter(p => p.category && p.category.includes('원란'));
@@ -925,7 +896,7 @@ async function deleteProduct(name, supplier, targetType) {
 }
 
 async function deleteAllProducts(targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 일괄 삭제할 수 없습니다.");
     const msg = targetType === 'finished' ? "제품" : "자재";
     if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
     const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
@@ -943,7 +914,7 @@ function exportProductsExcel(targetType) {
 }
 
 function importProductsExcel(e, targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 업로드할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
     const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
     const msg = targetType === 'finished' ? "제품" : "자재";
@@ -984,7 +955,7 @@ function exportBomExcel() {
 }
 
 function importBomExcel(e) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 업로드할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
     reader.onload = async function(ev) {
         try {
