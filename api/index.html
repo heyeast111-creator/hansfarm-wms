@@ -95,9 +95,8 @@
                         </header>
                         <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
                             <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
-                                <div class="p-3 bg-emerald-50 border-b border-emerald-100 rounded-t-xl font-black text-emerald-800 flex justify-between items-center">
-                                    <span>📥 입고 대기장 <span class="text-[10px] text-emerald-600 ml-1">(더블클릭 이동)</span></span>
-                                    <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-3 rounded shadow text-xs transition-colors">박스 생성 ➕</button>
+                                <div class="p-2 bg-emerald-50 border-b border-emerald-100 rounded-t-xl flex justify-between items-center">
+                                    <button onclick="createWaitingPallets()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2 rounded shadow-md text-xs transition-colors">박스 생성 ➕</button>
                                 </div>
                                 <div class="p-3 border-b border-slate-200 space-y-2">
                                     <div class="flex space-x-2">
@@ -237,7 +236,7 @@
                     <div id="bom-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('👁️ 뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('bom-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportBomExcel()" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="bom-wipe-btn" onclick="deleteAllBom()" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
                 </div>
                 
-                <div id="subview-fp" class="hidden flex-col md:grid-cols-3 gap-6 flex-1 min-h-0">
+                <div id="subview-fp" class="flex flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
                     <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit overflow-auto">
                         <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="fp-form-title">신규 완제품 추가</h2>
                         <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="fp-cat" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
