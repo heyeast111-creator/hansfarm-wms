@@ -5,7 +5,7 @@ const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료/냉�
 
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
-    if (pw === '0000') { loginMode = 'viewer'; alert("👁️ 뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)"); } 
+    if (pw === '0000') { loginMode = 'viewer'; alert("👁️ 뷰어 모드로 접속되었습니다.\n(보기만 가능)"); } 
     else if (pw === '00700') { loginMode = 'editor'; alert("✅ 일반 사용자 모드로 접속되었습니다."); } 
     else { alert("❌ 비밀번호가 틀렸습니다."); return; }
     document.getElementById('login-screen').style.display = 'none';
@@ -19,7 +19,11 @@ async function load() {
         const [occRes, prodRes, fpRes, histRes, bomRes] = await Promise.all([ 
             fetch('/api/inventory?t=' + ts), fetch('/api/products?t=' + ts), fetch('/api/finished_products?t=' + ts), fetch('/api/history?t=' + ts), fetch('/api/bom?t=' + ts) 
         ]);
-        globalOccupancy = await occRes.json() || []; productMaster = await prodRes.json() || []; finishedProductMaster = await fpRes.json() || []; globalHistory = await histRes.json() || []; bomMaster = await bomRes.json() || [];
+        let occData = await occRes.json(); globalOccupancy = Array.isArray(occData) ? occData : [];
+        let prodData = await prodRes.json(); productMaster = Array.isArray(prodData) ? prodData : [];
+        let fpData = await fpRes.json(); finishedProductMaster = Array.isArray(fpData) ? fpData : [];
+        let histData = await histRes.json(); globalHistory = Array.isArray(histData) ? histData : [];
+        let bData = await bomRes.json(); bomMaster = Array.isArray(bData) ? bData : [];
         
         let t = new Date(); let yyyy = t.getFullYear(); let mm = String(t.getMonth() + 1).padStart(2, '0'); let dd = String(t.getDate()).padStart(2, '0');
         if(!document.getElementById('acc-date').value) document.getElementById('acc-date').value = `${yyyy}-${mm}-${dd}`;
@@ -57,7 +61,7 @@ function clearInfo() {
 function adminLogin() {
     let fp = document.getElementById('admin-finance-panel');
     if(isAdmin) { 
-        isAdmin = false; alert("🔒 관리자 모드가 해제되었습니다."); 
+        isAdmin = false; alert("🔒 관리자 모드 해제됨."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden')); 
         if(fp) fp.classList.add('hidden');
         let viewAcc = document.getElementById('view-accounting'); if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
@@ -65,16 +69,77 @@ function adminLogin() {
     }
     const pw = prompt("비밀번호 입력 (1234):"); 
     if(pw === "1234") { 
-        isAdmin = true; alert("🔓 관리자 권한이 활성화되었습니다."); 
+        isAdmin = true; alert("🔓 관리자 모드 활성화됨."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
         if(fp) fp.classList.remove('hidden');
     } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
 }
 
+function updateZoneTabs() {
+    try {
+        ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => {
+            let el = document.getElementById(id);
+            if(el) el.className = "whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200 text-sm md:text-base";
+        });
+        let activeEl = null;
+        if(currentZone === '실온') activeEl = document.getElementById('tab-room');
+        else if(currentZone === '냉장') activeEl = document.getElementById('tab-cold');
+        else if(currentZone === '현장') activeEl = document.getElementById('tab-floor');
+
+        if(activeEl) {
+            if(currentZone === '실온') activeEl.className = "whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner text-sm md:text-base";
+            else if(currentZone === '냉장') activeEl.className = "whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-indigo-600 text-white font-bold rounded-t-lg shadow-inner text-sm md:text-base";
+            else if(currentZone === '현장') activeEl.className = "whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-emerald-500 text-white font-bold rounded-t-lg shadow-inner text-sm md:text-base";
+        }
+
+        let fifoBtn = document.getElementById('fifo-btn-container'); let floorSel = document.getElementById('floor-select');
+        if(currentZone === '현장') {
+            if(fifoBtn) fifoBtn.classList.add('hidden'); if(floorSel) floorSel.classList.add('hidden');
+        } else {
+            if(currentZone === '냉장') { if(fifoBtn) fifoBtn.classList.remove('hidden'); } else { if(fifoBtn) fifoBtn.classList.add('hidden'); }
+            if(floorSel) floorSel.classList.remove('hidden');
+        }
+        updateMapSearchCategoryDropdown();
+    } catch(e) {}
+}
+
+function switchZone(zone) { 
+    globalSearchTargets = []; currentZone = zone; selectedCellId = null; movingItem = null;
+    let rs = document.getElementById('right-sidebar');
+    if(window.innerWidth < 768 && rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
+    updateZoneTabs(); renderMap(); populateWaitDropdowns();
+}
+
+function switchOrderTab(tab) {
+    try {
+        currentOrderTab = tab;
+        ['inventory', 'search', 'history', 'safety'].forEach(t => {
+            let btn = document.getElementById('order-tab-' + t); let view = document.getElementById('subview-' + t);
+            if(btn) btn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors";
+            if(view) { view.classList.add('hidden'); view.classList.remove('flex'); }
+        });
+
+        let activeBtn = document.getElementById('order-tab-' + tab); let activeView = document.getElementById('subview-' + tab);
+        if(activeBtn) activeBtn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-indigo-700 border-b-4 border-indigo-700 transition-colors";
+        if(activeView) { activeView.classList.remove('hidden'); activeView.classList.add('flex'); }
+
+        let rs = document.getElementById('right-sidebar');
+        if(tab === 'inventory') {
+            if(window.innerWidth >= 768 && rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); }
+            else if(rs) { if(selectedCellId) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
+            renderMap();
+        } else { if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
+
+        if(tab === 'search') updateSummarySupplierDropdown();
+        if(tab === 'safety') renderSafetyStock();
+        if(tab === 'history') { updateOrderCartDropdowns(); renderOrderList(); }
+    } catch(e) {}
+}
+
 function showView(viewName) {
     movingItem = null;
     ['view-dashboard', 'view-order', 'view-products', 'view-accounting', 'view-production', 'view-outbound'].forEach(id => { 
-        let el = document.getElementById(id); if(el) el.style.display = 'none'; 
+        let el = document.getElementById(id); if(el) { el.classList.add('hidden'); el.classList.remove('flex'); }
     });
     
     let rs = document.getElementById('right-sidebar');
@@ -84,7 +149,7 @@ function showView(viewName) {
     } else if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
     
     let targetView = document.getElementById('view-' + viewName);
-    if(targetView) { targetView.style.display = 'flex'; }
+    if(targetView) { targetView.classList.remove('hidden'); targetView.classList.add('flex'); }
 
     document.querySelectorAll('.nav-btn-pc').forEach(btn => { btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'bg-rose-50', 'border-rose-200', 'text-rose-600', 'bg-yellow-50', 'border-yellow-300', 'text-yellow-700', 'shadow-inner'); });
     document.querySelectorAll('.nav-btn-pc.target-' + viewName).forEach(btn => {
@@ -167,85 +232,6 @@ function updateDashboard() {
         let vCold = document.getElementById('dash-val-cold'); if(vCold) vCold.innerText = valCold.toLocaleString() + ' 원'; 
         let vTotal = document.getElementById('dash-val-total'); if(vTotal) vTotal.innerText = (valRoom + valCold).toLocaleString() + ' 원'; 
     } catch(e) {} 
-}
-
-function getSummarySourceItems() {
-    const typeSelect = document.getElementById('summary-type'); if(!typeSelect) return [];
-    const type = typeSelect.value;
-    if (type === 'FINISHED') return finishedProductMaster;
-    if (type === 'MATERIAL') return productMaster.filter(p => p.category && !p.category.includes('원란'));
-    if (type === 'RAW') return productMaster.filter(p => p.category && p.category.includes('원란'));
-    return [...finishedProductMaster, ...productMaster];
-}
-function updateSummarySupplierDropdown() {
-    try {
-        let items = getSummarySourceItems(); let suppliers = [...new Set(items.map(p => p.supplier))].filter(Boolean).sort();
-        const supSelect = document.getElementById('summary-supplier');
-        if (supSelect) { supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); updateSummaryCategoryDropdown(); }
-    } catch(e){}
-}
-function updateSummaryCategoryDropdown() {
-    try {
-        let items = getSummarySourceItems(); const supSelect = document.getElementById('summary-supplier'); const supplier = supSelect ? supSelect.value : 'ALL';
-        if (supplier !== 'ALL') items = items.filter(p => p.supplier === supplier);
-        let categories = [...new Set(items.map(p => p.category))].filter(Boolean).sort();
-        const catSelect = document.getElementById('summary-category');
-        if (catSelect) { catSelect.innerHTML = `<option value="ALL">전체 카테고리</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join(''); updateSummaryItemDropdown(); }
-    } catch(e){}
-}
-function updateSummaryItemDropdown() {
-    try {
-        let items = getSummarySourceItems(); const supSelect = document.getElementById('summary-supplier'); const catSelect = document.getElementById('summary-category');
-        const supplier = supSelect ? supSelect.value : 'ALL'; const cat = catSelect ? catSelect.value : 'ALL';
-        if (supplier !== 'ALL') items = items.filter(p => p.supplier === supplier);
-        if (cat !== 'ALL') items = items.filter(p => p.category === cat);
-        const uniqueItems = [...new Set(items.map(p => p.item_name))].filter(Boolean).sort();
-        const itemSelect = document.getElementById('summary-item');
-        if(itemSelect) { itemSelect.innerHTML = `<option value="">품목을 선택하세요</option>` + uniqueItems.map(name => `<option value="${name}">${name}</option>`).join(''); }
-        calculateSummary();
-    } catch(e){}
-}
-function calculateSummary() {
-    try {
-        const itemSelect = document.getElementById('summary-item'); if(!itemSelect) return;
-        const itemName = itemSelect.value; const supplier = document.getElementById('summary-supplier').value;
-        let breakdown = {}; let totalQty = 0; let totalPallet = 0;
-        if(itemName) {
-            globalOccupancy.forEach(item => {
-                let itemSupplier = item.remarks || "기본입고처";
-                if(item.item_name === itemName) {
-                    if (supplier === 'ALL' || itemSupplier === supplier) {
-                        if(!breakdown[itemSupplier]) breakdown[itemSupplier] = { qty: 0, pallet: 0 };
-                        let dynP = getDynamicPalletCount(item);
-                        breakdown[itemSupplier].qty += item.quantity; breakdown[itemSupplier].pallet += dynP;
-                        totalQty += item.quantity; totalPallet += dynP;
-                    }
-                }
-            });
-        }
-        document.getElementById('summary-result').innerHTML = `${totalQty.toLocaleString()} <span class="text-xl md:text-2xl text-indigo-400 font-bold">EA</span>`;
-        document.getElementById('summary-pallet').innerText = `${totalPallet.toFixed(1)} P (부피 합산)`;
-        let breakdownHtml = ''; let supKeys = Object.keys(breakdown);
-        if(supKeys.length > 0) {
-            breakdownHtml = '<div class="space-y-2 mt-4">';
-            supKeys.forEach(sup => { breakdownHtml += `<div class="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200 shadow-sm text-sm md:text-base"><span class="font-bold text-slate-700 text-left w-1/3 truncate" title="${sup}">${sup}</span><span class="font-black text-indigo-600 w-1/3 text-right">${breakdown[sup].qty.toLocaleString()} EA</span><span class="font-bold text-rose-500 w-1/3 text-right">${breakdown[sup].pallet.toFixed(1)} P</span></div>`; });
-            breakdownHtml += '</div>';
-        }
-        document.getElementById('summary-breakdown').innerHTML = breakdownHtml;
-    } catch(e){}
-}
-function findItemLocationFromSummary() {
-    const itemName = document.getElementById('summary-item').value; const supplier = document.getElementById('summary-supplier').value;
-    if(!itemName) return alert("먼저 위치를 확인할 품목을 선택해주세요.");
-    let targets = globalOccupancy.filter(item => { let itemSupplier = item.remarks || "기본입고처"; if(item.item_name === itemName) { if (supplier === 'ALL' || itemSupplier === supplier) return true; } return false; });
-    if(targets.length === 0) return alert("현재 창고에 해당 품목의 재고가 없습니다.");
-    globalSearchTargets = targets.map(t => t.location_id);
-    let firstLoc = globalSearchTargets[0];
-    if (firstLoc.startsWith('FL-')) { currentZone = '현장'; } else if (firstLoc.startsWith('C-')) { currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; } else { currentZone = '실온'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; }
-    showView('order'); switchOrderTab('inventory');
-    let zoneMap = {'실온':'실온(Room)', '냉장':'냉장(Cold)', '현장':'현장(Floor)'}; let foundZones = new Set();
-    globalSearchTargets.forEach(loc => { if(loc.startsWith('FL-')) foundZones.add('현장'); else if(loc.startsWith('C-')) foundZones.add('냉장'); else foundZones.add('실온'); });
-    alert(`[${itemName}] 위치 추적 완료!\n(발견 구역: ${Array.from(foundZones).map(z => zoneMap[z]).join(', ')})`); 
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
