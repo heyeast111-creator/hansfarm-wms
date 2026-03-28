@@ -3,6 +3,7 @@ import httpx
 import asyncio
 import datetime
 from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -12,12 +13,43 @@ SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
+# 💡 Vercel 바깥쪽(루트) 폴더 경로를 귀신같이 찾아냄
+API_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(API_DIR)
+
 @app.middleware("http")
 async def add_cache_control_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
+# ==== 💡 화면 및 파일 제공 라우터 (파이썬이 직접 화면을 띄움) ====
+@app.get("/")
+@app.get("/api")
+@app.get("/api/")
+async def serve_ui():
+    path = os.path.join(ROOT_DIR, "index.html")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return HTMLResponse(f"<h1>HTML 파일을 찾을 수 없습니다. (경로: {path})</h1>", status_code=404)
+
+@app.get("/script.js")
+@app.get("/api/script.js")
+async def serve_script():
+    path = os.path.join(ROOT_DIR, "script.js")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return HTMLResponse("JS Not Found", status_code=404)
+
+@app.get("/logo.jpg")
+@app.get("/api/logo.jpg")
+async def serve_logo():
+    path = os.path.join(ROOT_DIR, "logo.jpg")
+    if os.path.exists(path):
+        return FileResponse(path)
+    return HTMLResponse("Logo Not Found", status_code=404)
+
+# ==== API 라우터 (데이터베이스 통신) ====
 class InboundData(BaseModel): location_id: str; category: str; item_name: str; quantity: int; pallet_count: float = 1.0; production_date: Optional[str] = None; remarks: Optional[str] = ""
 class OutboundData(BaseModel): inventory_id: str; location_id: str; item_name: str; quantity: int; pallet_count: float = 1.0
 class ProductData(BaseModel): category: str; item_name: str; supplier: str = "기본입고처"; daily_usage: int = 0; unit_price: int = 0; pallet_ea: int = 1
