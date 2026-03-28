@@ -1247,75 +1247,71 @@ function importBomExcel(e) {
 }
 
 // BOM 전용 장바구니 배열
+// BOM 전용 장바구니 배열
 let bomCart = [];
 
 function updateBomDropdowns() {
     try {
-        // 1. 완제품 드롭다운
         const fNames = [...new Set(finishedProductMaster.map(p => p.item_name))].filter(Boolean).sort();
+        const mNames = [...new Set(productMaster.map(p => p.item_name))].filter(Boolean).sort();
+        
         const fOptions = fNames.length > 0 ? fNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
         document.getElementById('bom-finished').innerHTML = fOptions; 
 
-        // 2. 자재 카테고리 드롭다운 세팅 (productMaster 기반)
         const mCats = [...new Set(productMaster.map(p => p.category))].filter(Boolean).sort();
         const catOptions = `<option value="ALL">전체 카테고리</option>` + mCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
         const catSelect = document.getElementById('bom-material-cat');
         if(catSelect) {
             catSelect.innerHTML = catOptions;
-            updateBomMaterialDropdown(); // 카테고리 세팅 후 자재 목록 연쇄 업데이트
+            updateBomMaterialDropdown(); 
         }
     } catch(e){}
 }
 
-// 카테고리 변경 시 자재 드롭다운 업데이트 함수 (신규 추가)
 function updateBomMaterialDropdown() {
     try {
         const cat = document.getElementById('bom-material-cat').value;
         let filtered = productMaster;
+        if (cat !== 'ALL') filtered = productMaster.filter(p => p.category === cat);
         
-        // 카테고리 필터링
-        if (cat !== 'ALL') {
-            filtered = productMaster.filter(p => p.category === cat);
-        }
-        
-        // 품목명은 같지만 입고처가 다를 수 있으므로 [품목명 - 입고처] 형태로 표시
         const mOptions = filtered.map(p => {
             const displayName = `${p.item_name} [${p.supplier}]`;
             return `<option value="${displayName}">${displayName}</option>`;
         }).join('');
         
         const matSelect = document.getElementById('bom-material');
-        if(matSelect) {
-            matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
-        }
+        if(matSelect) matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
     } catch(e){}
 }
 
-// 1. 장바구니에 자재 담기
+// 1. 장바구니에 자재 담기 (기본 type 추가)
 function addMaterialToBomCart() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     const mat = document.getElementById('bom-material').value;
     if(!mat) return alert("자재를 선택해주세요.");
-    
     if(bomCart.find(b => b.material === mat)) return alert("이미 조립 목록에 추가된 자재입니다.");
     
-    bomCart.push({ material: mat, qty: 1 });
+    // type: 'per_item'(기본 소모) or 'per_box'(묶음 박스용)
+    bomCart.push({ material: mat, qty: 1, type: 'per_item' });
     renderBomCart();
 }
 
-// 2. 장바구니에서 자재 빼기
 function removeMaterialFromBomCart(index) {
     bomCart.splice(index, 1);
     renderBomCart();
 }
 
-// 3. 장바구니 안에서 수량 변경
 function updateBomCartQty(index, val) {
     bomCart[index].qty = parseFloat(val) || 0;
 }
 
-// 4. 장바구니 화면 그리기
+// 단위(타입) 변경 저장 함수
+function updateBomCartType(index, val) {
+    bomCart[index].type = val;
+}
+
+// 2. 장바구니 화면 그리기 (단위 선택 드롭다운 추가)
 function renderBomCart() {
     const container = document.getElementById('bom-cart-list');
     if(bomCart.length === 0) {
@@ -1324,14 +1320,58 @@ function renderBomCart() {
     }
     container.innerHTML = bomCart.map((item, idx) => `
         <div class="flex justify-between items-center bg-white p-2 border border-slate-200 rounded shadow-sm transition-all hover:border-emerald-300">
-            <span class="text-[11px] md:text-xs font-black text-slate-700 truncate w-1/2" title="${item.material}">${item.material}</span>
-            <div class="flex items-center space-x-1 w-1/2 justify-end">
-                <input type="number" step="0.01" value="${item.qty}" onchange="updateBomCartQty(${idx}, this.value)" class="w-16 border-2 border-emerald-200 rounded p-1 text-[11px] md:text-xs text-right font-black outline-none focus:border-emerald-500 text-emerald-700">
-                <span class="text-[10px] text-slate-500 mr-1 font-bold">EA</span>
+            <span class="text-[11px] md:text-xs font-black text-slate-700 truncate w-4/12" title="${item.material}">${item.material}</span>
+            <div class="flex items-center space-x-1 w-8/12 justify-end">
+                <input type="number" step="0.1" value="${item.qty}" onchange="updateBomCartQty(${idx}, this.value)" class="w-14 border-2 border-emerald-200 rounded p-1 text-[11px] md:text-xs text-right font-black outline-none focus:border-emerald-500 text-emerald-700">
+                <select onchange="updateBomCartType(${idx}, this.value)" class="border border-slate-300 rounded p-1 text-[10px] md:text-[11px] font-bold bg-slate-50 outline-none text-slate-600">
+                    <option value="per_item" ${item.type === 'per_item' ? 'selected' : ''}>개 소모 (기본)</option>
+                    <option value="per_box" ${item.type === 'per_box' ? 'selected' : ''}>개 묶음포장 (1개 소모)</option>
+                </select>
                 <button onclick="removeMaterialFromBomCart(${idx})" class="text-rose-500 hover:bg-rose-100 px-1.5 py-0.5 rounded font-black text-xs ml-1">X</button>
             </div>
         </div>
     `).join('');
+}
+
+// 3. 서버에 일괄 저장 (자동 소수점 연산 로직 포함)
+async function submitBomCart() {
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    const finished = document.getElementById('bom-finished').value;
+    
+    if(!finished) return alert("기준 완제품을 선택해주세요.");
+    if(bomCart.length === 0) return alert("레시피 구성품을 하나 이상 추가해주세요.");
+
+    for(let i=0; i<bomCart.length; i++) {
+        if(bomCart[i].qty <= 0) return alert(`[${bomCart[i].material}]의 수량을 0보다 크게 입력하세요.`);
+        if(finished === bomCart[i].material) return alert("완제품과 자재가 같을 수 없습니다!");
+    }
+
+    try {
+        let promises = bomCart.map(item => {
+            // 💡 핵심 로직: '묶음포장' 타입이면 (1 ÷ 입력수량) 으로 자동 변환
+            let finalQty = item.qty;
+            if (item.type === 'per_box') {
+                finalQty = 1 / item.qty;
+            }
+            // 소수점 4자리까지만 깔끔하게 자르기 (예: 1/15 = 0.0667)
+            finalQty = Math.round(finalQty * 10000) / 10000;
+
+            return fetch('/api/bom', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ finished_product: finished, material_product: item.material, require_qty: finalQty }) 
+            });
+        });
+        
+        await Promise.all(promises); 
+        
+        alert("✅ 레시피 일괄 등록 완료!");
+        bomCart = []; 
+        renderBomCart();
+        await load(); 
+    } catch(e) {
+        alert("서버 통신 실패");
+    }
 }
 
 // 5. 서버에 일괄 저장
