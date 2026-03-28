@@ -284,10 +284,13 @@
                         <label class="block text-xs font-bold text-slate-500 mb-1">1. 기준 완제품 선택</label>
                         <select id="bom-finished" class="w-full border-2 border-emerald-200 rounded-lg p-2 mb-5 text-sm font-black text-emerald-800 outline-none bg-emerald-50"></select>
                         
-                        <label class="block text-xs font-bold text-slate-500 mb-1">2. 구성품(자재/원란) 추가</label>
-                        <div class="flex space-x-2 mb-3">
-                            <select id="bom-material" class="flex-1 border border-slate-300 rounded p-2 text-sm font-bold bg-slate-50"></select>
-                            <button onclick="addMaterialToBomCart()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold px-4 rounded shadow-sm text-xs transition-colors">추가</button>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">2. 구성품(자재/원란) 카테고리 및 자재 선택</label>
+                        <div class="flex flex-col space-y-2 mb-3">
+                            <select id="bom-material-cat" onchange="updateBomMaterialDropdown()" class="w-full border border-slate-300 rounded p-2 text-xs font-bold bg-slate-50"></select>
+                            <div class="flex space-x-2">
+                                <select id="bom-material" class="flex-1 border border-slate-300 rounded p-2 text-xs font-bold bg-slate-50"></select>
+                                <button onclick="addMaterialToBomCart()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold px-4 rounded shadow-sm text-xs transition-colors whitespace-nowrap">담기 ⬇️</button>
+                            </div>
                         </div>
 
                         <div class="bg-slate-50 rounded-lg border border-slate-200 p-2 mb-6 min-h-[150px] max-h-[300px] overflow-y-auto custom-scrollbar">
@@ -305,7 +308,7 @@
                         <div class="overflow-y-auto flex-1 custom-scrollbar">
                             <table class="w-full text-left border-collapse text-xs md:text-sm min-w-[400px]">
                                 <thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500">
-                                    <tr><th class="p-2">완제품</th><th class="p-2">자재</th><th class="p-2 text-right">수량</th><th class="p-2 text-center">관리</th></tr>
+                                    <tr><th class="p-2">완제품</th><th class="p-2">자재 (입고처)</th><th class="p-2 text-right">수량</th><th class="p-2 text-center">관리</th></tr>
                                 </thead>
                                 <tbody id="bom-list" class="divide-y divide-slate-100"></tbody>
                             </table>
