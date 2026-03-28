@@ -28,7 +28,7 @@
 
     <div id="login-screen" class="fixed inset-0 bg-slate-800 flex items-center justify-center z-[100]">
         <div class="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center w-80">
-            <img src="logo.jpg" alt="Logo" class="w-32 mb-6 rounded-lg shadow-sm">
+            <img src="/logo.jpg" onerror="this.src='logo.jpg'" alt="Logo" class="w-32 mb-6 rounded-lg shadow-sm">
             <h2 class="text-xl font-black text-slate-800 mb-4">HANSFARM 접속</h2>
             <input type="password" id="site-pw" placeholder="비밀번호 입력" class="w-full border-2 border-slate-300 rounded-lg p-3 text-center font-black tracking-widest mb-4 outline-none focus:border-indigo-500" onkeypress="if(event.key==='Enter') siteLogin()">
             <button onclick="siteLogin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-lg shadow-md transition-colors">접속하기</button>
@@ -42,7 +42,7 @@
         <input type="file" id="bom-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importBomExcel(event)">
 
         <aside class="hidden md:flex w-36 bg-white border-r border-slate-300 flex-col items-center py-6 shadow-lg z-20 shrink-0 h-screen">
-            <div class="mb-8 w-full px-4 flex justify-center cursor-pointer hover:opacity-80 transition-opacity" onclick="adminLogin()" title="관리자 로그인"><img src="logo.jpg" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm"></div>
+            <div class="mb-8 w-full px-4 flex justify-center cursor-pointer hover:opacity-80 transition-opacity" onclick="adminLogin()" title="관리자 로그인"><img src="/logo.jpg" onerror="this.src='logo.jpg'" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm"></div>
             <div class="flex flex-col space-y-2 w-full px-3 flex-1">
                 <button onclick="showView('dashboard')" class="nav-btn-pc target-dashboard w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all">대시보드</button>
                 <button onclick="showView('order')" class="nav-btn-pc target-order w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">📦 재고/발주</button>
@@ -96,7 +96,7 @@
                         <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
                             <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
                                 <div class="p-2 bg-emerald-50 border-b border-emerald-100 rounded-t-xl flex justify-between items-center">
-                                    <span class="text-sm font-black text-emerald-800 ml-1">📥 입고 대기장 <span class="text-[10px] text-emerald-600 ml-1">(더블클릭 이동)</span></span>
+                                    <span class="text-sm font-black text-emerald-800 ml-1">📥 입고 대기장</span>
                                     <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-3 rounded shadow-md text-xs transition-colors">박스 생성 ➕</button>
                                 </div>
                                 <div class="p-3 border-b border-slate-200 space-y-2">
@@ -237,7 +237,7 @@
                     <div id="bom-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('👁️ 뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('bom-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportBomExcel()" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="bom-wipe-btn" onclick="deleteAllBom()" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
                 </div>
                 
-                <div id="subview-fp" class="flex flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
+                <div id="subview-fp" class="hidden flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
                     <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit overflow-auto">
                         <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="fp-form-title">신규 완제품 추가</h2>
                         <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="fp-cat" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
@@ -390,6 +390,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="/script.js"></script>
 </body>
 </html>
