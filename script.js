@@ -1269,30 +1269,39 @@ function updateBomDropdowns() {
     } catch(e){}
 }
 
+// 카테고리 변경 시 자재 드롭다운 업데이트 (중복 제거 버전)
 function updateBomMaterialDropdown() {
     try {
         const cat = document.getElementById('bom-material-cat').value;
         let filtered = productMaster;
-        if (cat !== 'ALL') filtered = productMaster.filter(p => p.category === cat);
         
-        const mOptions = filtered.map(p => {
-            const displayName = `${p.item_name} [${p.supplier}]`;
-            return `<option value="${displayName}">${displayName}</option>`;
+        if (cat !== 'ALL') {
+            filtered = productMaster.filter(p => p.category === cat);
+        }
+        
+        // 💡 핵심: 입고처가 달라도 품목명이 같으면 하나로 합침
+        const uniqueItemNames = [...new Set(filtered.map(p => p.item_name))].sort();
+        
+        const mOptions = uniqueItemNames.map(name => {
+            return `<option value="${name}">${name}</option>`;
         }).join('');
         
         const matSelect = document.getElementById('bom-material');
-        if(matSelect) matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
+        if(matSelect) {
+            matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
+        }
     } catch(e){}
 }
 
-// 1. 장바구니에 자재 담기 (기본 type 추가)
+// 1. 장바구니에 자재 담기
 function addMaterialToBomCart() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     const mat = document.getElementById('bom-material').value;
     if(!mat) return alert("자재를 선택해주세요.");
+    
+    // 이미 담긴 자재인지 확인
     if(bomCart.find(b => b.material === mat)) return alert("이미 조립 목록에 추가된 자재입니다.");
     
-    // type: 'per_item'(기본 소모) or 'per_box'(묶음 박스용)
     bomCart.push({ material: mat, qty: 1, type: 'per_item' });
     renderBomCart();
 }
@@ -1306,12 +1315,11 @@ function updateBomCartQty(index, val) {
     bomCart[index].qty = parseFloat(val) || 0;
 }
 
-// 단위(타입) 변경 저장 함수
 function updateBomCartType(index, val) {
     bomCart[index].type = val;
 }
 
-// 2. 장바구니 화면 그리기 (단위 선택 드롭다운 추가)
+// 2. 장바구니 화면 그리기
 function renderBomCart() {
     const container = document.getElementById('bom-cart-list');
     if(bomCart.length === 0) {
@@ -1333,7 +1341,7 @@ function renderBomCart() {
     `).join('');
 }
 
-// 3. 서버에 일괄 저장 (자동 소수점 연산 로직 포함)
+// 3. 서버에 일괄 저장
 async function submitBomCart() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     const finished = document.getElementById('bom-finished').value;
@@ -1348,51 +1356,20 @@ async function submitBomCart() {
 
     try {
         let promises = bomCart.map(item => {
-            // 💡 핵심 로직: '묶음포장' 타입이면 (1 ÷ 입력수량) 으로 자동 변환
             let finalQty = item.qty;
             if (item.type === 'per_box') {
                 finalQty = 1 / item.qty;
             }
-            // 소수점 4자리까지만 깔끔하게 자르기 (예: 1/15 = 0.0667)
             finalQty = Math.round(finalQty * 10000) / 10000;
 
             return fetch('/api/bom', { 
                 method: 'POST', 
                 headers: {'Content-Type':'application/json'}, 
-                body: JSON.stringify({ finished_product: finished, material_product: item.material, require_qty: finalQty }) 
-            });
-        });
-        
-        await Promise.all(promises); 
-        
-        alert("✅ 레시피 일괄 등록 완료!");
-        bomCart = []; 
-        renderBomCart();
-        await load(); 
-    } catch(e) {
-        alert("서버 통신 실패");
-    }
-}
-
-// 5. 서버에 일괄 저장
-async function submitBomCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
-    const finished = document.getElementById('bom-finished').value;
-    
-    if(!finished) return alert("기준 완제품을 선택해주세요.");
-    if(bomCart.length === 0) return alert("레시피 구성품을 하나 이상 추가해주세요.");
-
-    for(let i=0; i<bomCart.length; i++) {
-        if(bomCart[i].qty <= 0) return alert(`[${bomCart[i].material}]의 수량을 0보다 크게 입력하세요.`);
-        if(finished === bomCart[i].material) return alert("완제품과 자재가 같을 수 없습니다!");
-    }
-
-    try {
-        let promises = bomCart.map(item => {
-            return fetch('/api/bom', { 
-                method: 'POST', 
-                headers: {'Content-Type':'application/json'}, 
-                body: JSON.stringify({ finished_product: finished, material_product: item.material, require_qty: item.qty }) 
+                body: JSON.stringify({ 
+                    finished_product: finished, 
+                    material_product: item.material, // 💡 이제 깔끔하게 품목명만 들어갑니다.
+                    require_qty: finalQty 
+                }) 
             });
         });
         
