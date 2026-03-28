@@ -1,8 +1,7 @@
-import os
 import httpx
 import asyncio
 import datetime
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -11,12 +10,6 @@ app = FastAPI()
 SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
-
-@app.middleware("http")
-async def add_cache_control_header(request: Request, call_next):
-    response = await call_next(request)
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    return response
 
 class InboundData(BaseModel): location_id: str; category: str; item_name: str; quantity: int; pallet_count: float = 1.0; production_date: Optional[str] = None; remarks: Optional[str] = ""
 class OutboundData(BaseModel): inventory_id: str; location_id: str; item_name: str; quantity: int; pallet_count: float = 1.0
