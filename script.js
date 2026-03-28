@@ -1246,25 +1246,99 @@ function importBomExcel(e) {
     }; reader.readAsArrayBuffer(file); e.target.value = '';
 }
 
+// BOM 전용 장바구니 배열
+let bomCart = [];
+
 function updateBomDropdowns() {
     try {
         const fNames = [...new Set(finishedProductMaster.map(p => p.item_name))].filter(Boolean).sort();
+        // 향후 원란 추가를 위해 자재 마스터(productMaster)의 모든 품목을 가져옵니다.
         const mNames = [...new Set(productMaster.map(p => p.item_name))].filter(Boolean).sort();
+        
         const fOptions = fNames.length > 0 ? fNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
         const mOptions = mNames.length > 0 ? mNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[자재 마스터]에 자재를 등록해주세요</option>`;
-        document.getElementById('bom-finished').innerHTML = fOptions; document.getElementById('bom-material').innerHTML = mOptions;
+        
+        document.getElementById('bom-finished').innerHTML = fOptions; 
+        document.getElementById('bom-material').innerHTML = mOptions;
     } catch(e){}
 }
 
-async function submitBom() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 등록할 수 없습니다.");
-    const finished = document.getElementById('bom-finished').value; const material = document.getElementById('bom-material').value; const qty = parseFloat(document.getElementById('bom-qty').value);
-    if(!finished || !material || isNaN(qty) || qty <= 0) return alert("입력값을 확인해주세요.");
-    if(finished === material) return alert("완제품과 자재가 같을 수 없습니다!");
-    try { 
-        await fetch('/api/bom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ finished_product: finished, material_product: material, require_qty: qty }) }); 
-        alert("레시피 연결 완료!"); document.getElementById('bom-qty').value = 1; await load();
-    } catch(e) { alert("서버 통신 실패"); }
+// 1. 장바구니에 자재 담기
+function addMaterialToBomCart() {
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    const mat = document.getElementById('bom-material').value;
+    if(!mat) return alert("자재를 선택해주세요.");
+    
+    // 이미 담긴 자재인지 확인
+    if(bomCart.find(b => b.material === mat)) return alert("이미 조립 목록에 추가된 자재입니다.");
+    
+    bomCart.push({ material: mat, qty: 1 });
+    renderBomCart();
+}
+
+// 2. 장바구니에서 자재 빼기
+function removeMaterialFromBomCart(index) {
+    bomCart.splice(index, 1);
+    renderBomCart();
+}
+
+// 3. 장바구니 안에서 수량 변경 (향후 원란 0.3판 같은 소수점을 위해 적용)
+function updateBomCartQty(index, val) {
+    bomCart[index].qty = parseFloat(val) || 0;
+}
+
+// 4. 장바구니 화면 그리기
+function renderBomCart() {
+    const container = document.getElementById('bom-cart-list');
+    if(bomCart.length === 0) {
+        container.innerHTML = `<div class="text-center text-slate-400 text-xs py-4 font-bold">위에서 구성품을 추가해주세요</div>`;
+        return;
+    }
+    container.innerHTML = bomCart.map((item, idx) => `
+        <div class="flex justify-between items-center bg-white p-2 border border-slate-200 rounded shadow-sm transition-all hover:border-emerald-300">
+            <span class="text-[11px] md:text-xs font-black text-slate-700 truncate w-1/2" title="${item.material}">${item.material}</span>
+            <div class="flex items-center space-x-1 w-1/2 justify-end">
+                <input type="number" step="0.01" value="${item.qty}" onchange="updateBomCartQty(${idx}, this.value)" class="w-16 border-2 border-emerald-200 rounded p-1 text-[11px] md:text-xs text-right font-black outline-none focus:border-emerald-500 text-emerald-700">
+                <span class="text-[10px] text-slate-500 mr-1 font-bold">EA</span>
+                <button onclick="removeMaterialFromBomCart(${idx})" class="text-rose-500 hover:bg-rose-100 px-1.5 py-0.5 rounded font-black text-xs ml-1">X</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// 5. 서버에 일괄 저장 (파이썬 수정 없이 JS에서 반복 발송)
+async function submitBomCart() {
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    const finished = document.getElementById('bom-finished').value;
+    
+    if(!finished) return alert("기준 완제품을 선택해주세요.");
+    if(bomCart.length === 0) return alert("레시피 구성품을 하나 이상 추가해주세요.");
+
+    // 데이터 검증
+    for(let i=0; i<bomCart.length; i++) {
+        if(bomCart[i].qty <= 0) return alert(`[${bomCart[i].material}]의 수량을 0보다 크게 입력하세요.`);
+        if(finished === bomCart[i].material) return alert("완제품과 자재가 같을 수 없습니다!");
+    }
+
+    try {
+        // 서버 파이썬 코드를 건드리지 않고, JS에서 동시에 여러 번 쏘는 방식 (안전함)
+        let promises = bomCart.map(item => {
+            return fetch('/api/bom', { 
+                method: 'POST', 
+                headers: {'Content-Type':'application/json'}, 
+                body: JSON.stringify({ finished_product: finished, material_product: item.material, require_qty: item.qty }) 
+            });
+        });
+        
+        await Promise.all(promises); // 모든 저장이 끝날 때까지 대기
+        
+        alert("✅ 레시피 일괄 등록 완료!");
+        bomCart = []; // 장바구니 비우기
+        renderBomCart();
+        await load(); // 우측 리스트 새로고침
+    } catch(e) {
+        alert("서버 통신 실패");
+    }
 }
 
 async function deleteBom(id) { 
