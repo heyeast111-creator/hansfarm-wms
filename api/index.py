@@ -3,7 +3,6 @@ import httpx
 import asyncio
 import datetime
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -13,31 +12,11 @@ SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
-API_DIR = os.path.dirname(os.path.abspath(__file__))
-
 @app.middleware("http")
 async def add_cache_control_header(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
-
-@app.get("/")
-@app.get("/api")
-@app.get("/api/")
-@app.get("/api/index")
-async def serve_ui():
-    html_path = os.path.join(API_DIR, "index.html")
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        return HTMLResponse(content=content)
-    return HTMLResponse("<h1>index.html 파일을 찾을 수 없습니다.</h1>", status_code=404)
-
-@app.get("/logo.jpg")
-@app.get("/api/logo.jpg")
-async def serve_logo():
-    path = os.path.join(API_DIR, "logo.jpg")
-    return FileResponse(path) if os.path.exists(path) else HTMLResponse("Logo Not Found", status_code=404)
 
 class InboundData(BaseModel): location_id: str; category: str; item_name: str; quantity: int; pallet_count: float = 1.0; production_date: Optional[str] = None; remarks: Optional[str] = ""
 class OutboundData(BaseModel): inventory_id: str; location_id: str; item_name: str; quantity: int; pallet_count: float = 1.0
