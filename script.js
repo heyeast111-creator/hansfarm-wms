@@ -1251,15 +1251,44 @@ let bomCart = [];
 
 function updateBomDropdowns() {
     try {
+        // 1. 완제품 드롭다운
         const fNames = [...new Set(finishedProductMaster.map(p => p.item_name))].filter(Boolean).sort();
-        // 향후 원란 추가를 위해 자재 마스터(productMaster)의 모든 품목을 가져옵니다.
-        const mNames = [...new Set(productMaster.map(p => p.item_name))].filter(Boolean).sort();
-        
         const fOptions = fNames.length > 0 ? fNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
-        const mOptions = mNames.length > 0 ? mNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[자재 마스터]에 자재를 등록해주세요</option>`;
-        
         document.getElementById('bom-finished').innerHTML = fOptions; 
-        document.getElementById('bom-material').innerHTML = mOptions;
+
+        // 2. 자재 카테고리 드롭다운 세팅 (productMaster 기반)
+        const mCats = [...new Set(productMaster.map(p => p.category))].filter(Boolean).sort();
+        const catOptions = `<option value="ALL">전체 카테고리</option>` + mCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
+        
+        const catSelect = document.getElementById('bom-material-cat');
+        if(catSelect) {
+            catSelect.innerHTML = catOptions;
+            updateBomMaterialDropdown(); // 카테고리 세팅 후 자재 목록 연쇄 업데이트
+        }
+    } catch(e){}
+}
+
+// 카테고리 변경 시 자재 드롭다운 업데이트 함수 (신규 추가)
+function updateBomMaterialDropdown() {
+    try {
+        const cat = document.getElementById('bom-material-cat').value;
+        let filtered = productMaster;
+        
+        // 카테고리 필터링
+        if (cat !== 'ALL') {
+            filtered = productMaster.filter(p => p.category === cat);
+        }
+        
+        // 품목명은 같지만 입고처가 다를 수 있으므로 [품목명 - 입고처] 형태로 표시
+        const mOptions = filtered.map(p => {
+            const displayName = `${p.item_name} [${p.supplier}]`;
+            return `<option value="${displayName}">${displayName}</option>`;
+        }).join('');
+        
+        const matSelect = document.getElementById('bom-material');
+        if(matSelect) {
+            matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
+        }
     } catch(e){}
 }
 
@@ -1269,7 +1298,6 @@ function addMaterialToBomCart() {
     const mat = document.getElementById('bom-material').value;
     if(!mat) return alert("자재를 선택해주세요.");
     
-    // 이미 담긴 자재인지 확인
     if(bomCart.find(b => b.material === mat)) return alert("이미 조립 목록에 추가된 자재입니다.");
     
     bomCart.push({ material: mat, qty: 1 });
@@ -1282,7 +1310,7 @@ function removeMaterialFromBomCart(index) {
     renderBomCart();
 }
 
-// 3. 장바구니 안에서 수량 변경 (향후 원란 0.3판 같은 소수점을 위해 적용)
+// 3. 장바구니 안에서 수량 변경
 function updateBomCartQty(index, val) {
     bomCart[index].qty = parseFloat(val) || 0;
 }
@@ -1306,7 +1334,7 @@ function renderBomCart() {
     `).join('');
 }
 
-// 5. 서버에 일괄 저장 (파이썬 수정 없이 JS에서 반복 발송)
+// 5. 서버에 일괄 저장
 async function submitBomCart() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     const finished = document.getElementById('bom-finished').value;
@@ -1314,14 +1342,12 @@ async function submitBomCart() {
     if(!finished) return alert("기준 완제품을 선택해주세요.");
     if(bomCart.length === 0) return alert("레시피 구성품을 하나 이상 추가해주세요.");
 
-    // 데이터 검증
     for(let i=0; i<bomCart.length; i++) {
         if(bomCart[i].qty <= 0) return alert(`[${bomCart[i].material}]의 수량을 0보다 크게 입력하세요.`);
         if(finished === bomCart[i].material) return alert("완제품과 자재가 같을 수 없습니다!");
     }
 
     try {
-        // 서버 파이썬 코드를 건드리지 않고, JS에서 동시에 여러 번 쏘는 방식 (안전함)
         let promises = bomCart.map(item => {
             return fetch('/api/bom', { 
                 method: 'POST', 
@@ -1330,12 +1356,12 @@ async function submitBomCart() {
             });
         });
         
-        await Promise.all(promises); // 모든 저장이 끝날 때까지 대기
+        await Promise.all(promises); 
         
         alert("✅ 레시피 일괄 등록 완료!");
-        bomCart = []; // 장바구니 비우기
+        bomCart = []; 
         renderBomCart();
-        await load(); // 우측 리스트 새로고침
+        await load(); 
     } catch(e) {
         alert("서버 통신 실패");
     }
