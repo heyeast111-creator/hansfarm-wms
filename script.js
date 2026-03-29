@@ -15,7 +15,7 @@ let editingProductOriginalSupplier = null;
 let orderCart = []; 
 let movingItem = null;
 let bomCart = [];
-let expandedBomRows = {}; // BOM 접기/펴기 상태 저장
+let expandedBomRows = {}; 
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
@@ -25,12 +25,12 @@ function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') {
         loginMode = 'viewer';
-        alert("👁️ 뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
+        alert("뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
     } else if (pw === '00700') {
         loginMode = 'editor';
-        alert("✅ 일반 사용자 모드로 접속되었습니다.");
+        alert("일반 모드로 접속되었습니다.");
     } else {
-        alert("❌ 비밀번호가 틀렸습니다.");
+        alert("비밀번호가 틀렸습니다.");
         return;
     }
     document.getElementById('login-screen').style.display = 'none';
@@ -89,16 +89,16 @@ function clearInfo() {
 function adminLogin() {
     let fp = document.getElementById('admin-finance-panel');
     if(isAdmin) { 
-        isAdmin = false; alert("🔒 관리자 모드가 해제되었습니다."); 
+        isAdmin = false; alert("관리자 모드가 해제되었습니다."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden')); 
         if(fp) fp.classList.add('hidden');
         let viewAcc = document.getElementById('view-accounting');
         if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
         return; 
     }
-    const pw = prompt("비밀번호 입력 (1234):"); 
-    if(pw === "1234") { 
-        isAdmin = true; alert("🔓 관리자 권한이 활성화되었습니다."); 
+    const pw = prompt("비밀번호 입력:"); 
+    if(pw === "123456789*") { 
+        isAdmin = true; alert("관리자 권한이 활성화되었습니다."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
         if(fp) fp.classList.remove('hidden');
     } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
@@ -261,12 +261,12 @@ function closeHistoryModal() {
 }
 
 async function closeInventory() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
-    if(!isAdmin) return alert("🔒 관리자 권한이 필요합니다. 좌측 로고를 클릭해 로그인해주세요.");
-    if(!confirm("⚠️ [재고마감]\n현재 렉맵에 적재된 모든 품목을 '(기존재고)'로 마감 처리하시겠습니까?\n이후 월간 소요량 파악 및 악성 재고 필터링에 기준이 됩니다.")) return;
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
+    if(!isAdmin) return alert("관리자 권한이 필요합니다.");
+    if(!confirm("[재고마감]\n현재 렉맵에 적재된 모든 품목을 '(기존재고)'로 마감 처리하시겠습니까?")) return;
     try {
         await fetch('/api/close_inventory', { method: 'POST' });
-        alert("✅ 재고 마감 처리 완료!");
+        alert("재고 마감 처리 완료!");
         await load();
     } catch(e) { alert("마감 처리 중 오류가 발생했습니다."); }
 }
@@ -322,7 +322,7 @@ function updateOrderCartItemDropdown() {
 }
 
 function addOrderCartItem() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 발주 기능을 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 발주 기능을 사용할 수 없습니다.");
     let cat = document.getElementById('oc-cat').value; let item = document.getElementById('oc-item').value; let sup = document.getElementById('oc-sup').value; let pal = parseFloat(document.getElementById('oc-pal').value);
     if(!item || !sup || isNaN(pal) || pal <= 0) return alert("품목, 발주처, 파레트 수량을 정확히 선택/입력하세요.");
 
@@ -336,7 +336,7 @@ function addOrderCartItem() {
 }
 
 function removeOrderCartItem(index) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     orderCart.splice(index, 1); renderOrderCart();
 }
 
@@ -356,7 +356,7 @@ function renderOrderCart() {
 }
 
 async function submitOrderCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 발주를 확정할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 발주를 확정할 수 없습니다.");
     if(orderCart.length === 0) return alert("장바구니가 비어있습니다.");
 
     let text = "[한스팜]발주요청서\n안녕하세요.\n아래 품목 발주 요청 드립니다.\n";
@@ -366,10 +366,10 @@ async function submitOrderCart() {
     try {
         await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(orderCart) });
         navigator.clipboard.writeText(text).then(async () => {
-            alert("✅ 발주가 등록되었으며, 카카오톡 텍스트가 복사되었습니다!\nPC 카톡이나 메신저에 Ctrl+V 로 붙여넣기 하세요.");
+            alert("발주가 등록되었으며,텍스트가 복사되었습니다!\nPC 카톡이나 메신저에 Ctrl+V 로 붙여넣기 하세요.");
             orderCart = []; toggleOrderCart(); await load();
         }).catch(async (e) => {
-            alert("✅ 발주가 등록되었습니다. (브라우저 권한으로 텍스트 자동 복사는 실패했습니다)");
+            alert("발주가 등록되었습니다.);
             orderCart = []; toggleOrderCart(); await load();
         });
     } catch(e) { alert("발주 에러가 발생했습니다."); }
@@ -399,13 +399,13 @@ function renderOrderList() {
 }
 
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     let emptyW = "";
     for(let i=1; i<=30; i++) { 
         let wId = `W-${i.toString().padStart(2, '0')}`; 
         if(!globalOccupancy.find(o => o.location_id === wId)) { emptyW = wId; break; } 
     }
-    if(!emptyW) return alert(`⚠️ 대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
+    if(!emptyW) return alert(`대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
     if(!confirm(`[${itemName}]을(를) [${emptyW}] 위치로 입고 처리하시겠습니까?`)) return;
 
     try {
@@ -418,7 +418,7 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
 }
 
 async function cancelOrder(logId) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     if(!confirm("이 발주 내역을 정말 취소(삭제)하시겠습니까?")) return;
     try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) { alert("취소 실패"); }
 }
@@ -477,7 +477,7 @@ function updateWaitItemDropdown() {
 }
 
 async function createWaitingPallets() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 박스를 생성할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 박스를 생성할 수 없습니다.");
     const cat = document.getElementById('wait-cat').value; const item = document.getElementById('wait-item').value; 
     const ws = document.getElementById('wait-supplier'); const supplier = ws ? ws.value || '기본입고처' : '기본입고처';
     let wd = document.getElementById('wait-date'); let date = wd ? wd.value : ''; 
@@ -518,9 +518,8 @@ async function createWaitingPallets() {
     }
 }
 
-// 💡 렉 이동 버그 수정 부분
 function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 렉 이동을 할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 렉 이동을 할 수 없습니다.");
     if (movingItem && movingItem.invId === invId) { cancelMove(); return; } 
     
     movingItem = { invId, itemName, maxQty, currentPallet, fromLoc, supplier };
@@ -573,7 +572,7 @@ async function onDrop(event, displayId, dbBaseId) {
     
     let toLoc = dbBaseId;
     if (!toLoc.startsWith('W-') && currentZone !== '현장') {
-        let floor = prompt(`[${itemName}]을(를) ${displayId}의 몇 층으로 이동할까요?\n(1 또는 2 입력)`, "1");
+        let floor = prompt(`[${itemName}]을(를) ${displayId}의 몇 층으로 이동할까요?, "1");
         if(floor !== "1" && floor !== "2") return;
         toLoc = floor === "1" ? dbBaseId : `${dbBaseId}-2F`;
     }
@@ -699,13 +698,12 @@ async function clickCell(displayId, searchId) {
             else { let floorSel = document.getElementById('floor-select'); const floor = floorSel ? floorSel.value : "1"; const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`); searchId = floor === "1" ? baseId : `${baseId}-2F`; }
         } 
 
-        // 💡 이동 모드일 때의 동작
         if (movingItem) {
             if (movingItem.fromLoc === searchId) { cancelMove(); return; } 
             
             let toLoc = searchId;
             if (!toLoc.startsWith('W-') && currentZone !== '현장') {
-                let floor = prompt(`📦 [${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
+                let floor = prompt(`[${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
                 if(floor !== "1" && floor !== "2") { cancelMove(); return; }
                 const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); 
                 const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`);
@@ -784,7 +782,7 @@ async function clickCell(displayId, searchId) {
 }
 
 async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     let action = prompt(`[${itemName}] 편집 메뉴\n\n1: 수량 수정 (EA)\n2: 날짜 수정 (YYYY-MM-DD)\n3: 기록 완전 삭제 (오입력 취소)\n\n원하시는 작업 번호를 입력하세요:`);
     
     if (action === '1') { 
@@ -798,7 +796,6 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
             } else alert("올바른 수량을 입력하세요."); 
         } 
     } 
-        
     else if (action === '2') { 
         let newDate = prompt(`새로운 날짜를 입력하세요:\n(형식: YYYY-MM-DD)`, date || ''); 
         if(newDate !== null) { 
@@ -807,46 +804,28 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
         } 
     } 
     else if (action === '3') { 
-        if(confirm(`⚠️ 정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(정산/회계 내역에서도 함께 삭제됩니다)`)) { 
-            
-            // 💡 1. 렉에서 지우기 전에 정산서에 남아있는 '입고 원본 히스토리'를 찾아서 폭파시킴
+        if(confirm(` 정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(정산/회계 내역에서도 함께 삭제됩니다)`)) { 
             let targetHistories = globalHistory.filter(h => 
                 h.action_type === '입고' && 
                 h.location_id === locId && 
                 h.item_name === itemName && 
                 (h.remarks || '') === (remarks || '')
             );
-            // 가장 최근에 입고된 똑같은 기록을 찾음
             targetHistories.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
             
             if(targetHistories.length > 0) {
                 await fetch(`/api/history/${targetHistories[0].id}`, { method: 'DELETE' });
             }
 
-            // 💡 2. 렉맵(인벤토리)에서 삭제
             await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'DELETE' }) }); 
             
             alert("재고 및 정산/입고 기록 완벽 삭제 완료!"); await load(); 
         } 
     }
 }
-    else if (action === '2') { 
-        let newDate = prompt(`새로운 날짜를 입력하세요:\n(형식: YYYY-MM-DD)`, date || ''); 
-        if(newDate !== null) { 
-            await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_DATE', new_date: newDate }) }); 
-            alert("날짜 수정 완료!"); await load(); 
-        } 
-    } 
-    else if (action === '3') { 
-        if(confirm(`⚠️ 정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(실수로 입고 버튼을 두 번 누른 경우 사용하세요)`)) { 
-            await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'DELETE' }) }); 
-            alert("재고 삭제 완료!"); await load(); 
-        } 
-    }
-}
 
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 출고할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 출고할 수 없습니다.");
     const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); 
     if(!qtyStr) return; const qty = parseInt(qtyStr); 
     if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); 
@@ -1213,7 +1192,7 @@ function cancelEdit(targetType) {
 }
 
 async function submitProduct(targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const prefix = targetType === 'finished' ? 'fp' : 'pm';
     const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
     if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
@@ -1231,14 +1210,14 @@ async function submitProduct(targetType) {
 }
 
 async function deleteProduct(name, supplier, targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
     const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
     try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
 }
 
 async function deleteAllProducts(targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 일괄 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 일괄 삭제할 수 없습니다.");
     const msg = targetType === 'finished' ? "제품" : "자재";
     if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
     const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
@@ -1256,7 +1235,7 @@ function exportProductsExcel(targetType) {
 }
 
 function importProductsExcel(e, targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
     const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
     const msg = targetType === 'finished' ? "제품" : "자재";
@@ -1316,7 +1295,7 @@ function updateBomMaterialDropdown() {
 }
 
 function addMaterialToBomCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     const mat = document.getElementById('bom-material').value;
     if(!mat) return alert("자재를 선택해주세요.");
     
@@ -1361,7 +1340,7 @@ function renderBomCart() {
 }
 
 async function submitBomCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     const finished = document.getElementById('bom-finished').value;
     
     if(!finished) return alert("기준 완제품을 선택해주세요.");
@@ -1456,7 +1435,7 @@ function renderBomMaster() {
 }
 
 async function deleteBom(id) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; 
     try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } 
 }
