@@ -119,37 +119,20 @@ function exportPhysicalCountExcel() {
     } catch (error) { alert("양식 다운로드 중 오류가 발생했습니다."); }
 }
 
-// 💡 1. 렉맵 모든 히스토리 엑셀 다운로드 추가
 function exportAllHistoryExcel() {
     try {
         if (globalHistory.length === 0) return alert("출력할 히스토리 데이터가 없습니다.");
-        
         let sorted = [...globalHistory].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-        
         let wsData = sorted.map(h => {
             let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
-            return {
-                "처리 일시": dateStr,
-                "입고일/산란일": h.production_date || "",
-                "렉 위치": h.location_id || "",
-                "작업 구분": h.action_type || "",
-                "카테고리": h.category || "",
-                "품목명": h.item_name || "",
-                "수량(EA)": h.quantity || 0,
-                "파레트(P)": h.pallet_count || 0,
-                "비고/입고처": h.remarks || ""
-            };
+            return { "처리 일시": dateStr, "입고일/산란일": h.production_date || "", "렉 위치": h.location_id || "", "작업 구분": h.action_type || "", "카테고리": h.category || "", "품목명": h.item_name || "", "수량(EA)": h.quantity || 0, "파레트(P)": h.pallet_count || 0, "비고/입고처": h.remarks || "" };
         });
-        
-        const wb = XLSX.utils.book_new(); 
-        const ws = XLSX.utils.json_to_sheet(wsData); 
+        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); 
         ws['!cols'] = [{wch: 22}, {wch: 15}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 25}, {wch: 10}, {wch: 10}, {wch: 20}]; 
         XLSX.utils.book_append_sheet(wb, ws, "전체렉히스토리"); 
         let today = new Date().toISOString().split('T')[0];
         XLSX.writeFile(wb, `한스팜_전체렉히스토리_${today}.xlsx`);
-    } catch(e) {
-        alert("엑셀 다운로드 중 오류가 발생했습니다.");
-    }
+    } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 function updateZoneTabs() {
@@ -430,23 +413,80 @@ function renderOrderList() {
     }).join('');
 }
 
+// 💡 1. 발주 입고 시 대기장으로 파레트 분할하여 넣기
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
-    let emptyW = "";
-    for(let i=1; i<=30; i++) { 
-        let wId = `W-${i.toString().padStart(2, '0')}`; 
-        if(!globalOccupancy.find(o => o.location_id === wId)) { emptyW = wId; break; } 
+
+    // 1. 해당 품목의 1파레트당 수량 찾기 (제품 마스터 or 자재 마스터)
+    let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) 
+             || productMaster.find(p => p.item_name === itemName && p.supplier === supplier) 
+             || finishedProductMaster.find(p => p.item_name === itemName) 
+             || productMaster.find(p => p.item_name === itemName);
+             
+    let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
+
+    // 2. 분할 로직 (remaining을 pEa 단위로 쪼갬)
+    let remaining = qty;
+    let payloads = [];
+    let waitIndex = 1;
+    let todayDate = new Date().toISOString().split('T')[0];
+
+    while(remaining > 0) {
+        let chunk = remaining > pEa ? pEa : remaining;
+        let chunkPallet = chunk / pEa;
+        let emptyW = "";
+
+        for(let i = waitIndex; i <= 30; i++) { 
+            let wId = `W-${i.toString().padStart(2, '0')}`; 
+            // 실제 빈 렉인지 && 페이로드 배열 안에서도 안 겹치는지
+            if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) { 
+                emptyW = wId; 
+                waitIndex = i + 1; 
+                break; 
+            } 
+        }
+
+        if(!emptyW) {
+            if(payloads.length === 0) {
+                return alert(`대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
+            } else {
+                alert(`대기 렉이 부족하여 주문량의 일부(${payloads.length}박스)만 먼저 입고 처리됩니다.`);
+                break;
+            }
+        }
+
+        payloads.push({ 
+            location_id: emptyW, 
+            category: cat || '미분류', 
+            item_name: itemName, 
+            quantity: chunk, 
+            pallet_count: chunkPallet, 
+            production_date: todayDate, 
+            remarks: supplier 
+        }); 
+        remaining -= chunk;
     }
-    if(!emptyW) return alert(`대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
-    if(!confirm(`[${itemName}]을(를) [${emptyW}] 위치로 입고 처리하시겠습니까?`)) return;
+
+    if(payloads.length === 0) return;
+
+    let totalBoxes = payloads.length;
+    if(!confirm(`[${itemName}] 총 ${qty.toLocaleString()}EA (${pallet}P)를\n대기장 ${totalBoxes}칸에 나누어 입고 처리하시겠습니까?`)) return;
 
     try {
         await fetch(`/api/history/${logId}`, { method: 'DELETE' });
-        let payload = { location_id: emptyW, category: cat || '미분류', item_name: itemName, quantity: qty, pallet_count: pallet, production_date: new Date().toISOString().split('T')[0], remarks: supplier };
-        await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
-        alert("입고 완료! 대기장에서 물건을 확인하세요.");
+        
+        let promises = payloads.map(p => fetch('/api/inbound', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(p) 
+        })); 
+        await Promise.all(promises); 
+        
+        alert("입고 분할 처리 완료! 대기장을 확인하세요.");
         await load();
-    } catch(e) { alert("입고 처리 중 오류가 발생했습니다."); }
+    } catch(e) { 
+        alert("입고 처리 중 오류가 발생했습니다."); 
+    }
 }
 
 async function cancelOrder(logId) {
@@ -1151,7 +1191,7 @@ function highlightFIFO() {
     globalSearchTargets = targets.map(t => t.location_id);
     let firstLoc = globalSearchTargets[0];
     currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1";
-    updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 깜빡이로 표시합니다.`); 
+    updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 표시합니다.`); 
 }
 
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
@@ -1734,16 +1774,6 @@ function renderAccounting() {
         document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
-}
-
-function exportAccountingExcel() {
-    try {
-        const table = document.getElementById('accounting-table');
-        if(!table) return alert("다운로드할 표가 없습니다.");
-        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
-        let today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
-    } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
