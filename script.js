@@ -519,9 +519,37 @@ async function createWaitingPallets() {
 
 function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier) {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 렉 이동을 할 수 없습니다.");
-    if (movingItem && movingItem.invId === invId) { movingItem = null; renderAll(); return; } 
+    if (movingItem && movingItem.invId === invId) { cancelMove(); return; } 
+    
     movingItem = { invId, itemName, maxQty, currentPallet, fromLoc, supplier };
-    renderAll(); 
+    renderMap(); // 전체 새로고침(renderAll) 대신 맵만 그려서 버그 방지
+
+    // 💡 패널을 "도착지 선택" 안내 화면으로 바꿈
+    const panel = document.getElementById('info-panel');
+    if(panel) {
+        panel.innerHTML = `
+            <div class="bg-indigo-50 border-2 border-indigo-400 border-dashed p-6 rounded-xl text-center shadow-inner mt-4">
+                <div class="text-4xl animate-bounce mb-4">📦</div>
+                <div class="text-lg font-black text-indigo-800 mb-2">이동 모드 활성화</div>
+                <div class="text-sm font-bold text-slate-600 mb-6">
+                    <span class="text-rose-600">${itemName}</span><br>
+                    이동시킬 도착지 렉을<br>왼쪽 도면에서 클릭해주세요.
+                </div>
+                <button onclick="cancelMove()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-colors w-full">취소하기</button>
+            </div>
+        `;
+    }
+}
+
+// 이동 취소 함수 (새로 추가)
+function cancelMove() {
+    movingItem = null;
+    renderMap();
+    if (selectedCellId) {
+        let temp = selectedCellId;
+        selectedCellId = null;
+        clickCell(temp); // 기존 패널 내용 복구
+    }
 }
 
 function onCardDragStart(event, invId, itemName, maxQty, currentPallet, fromLoc, supplier) {
@@ -561,6 +589,9 @@ async function onDrop(event, displayId, dbBaseId) {
         await load(); 
     } catch(e) { alert("서버 통신 오류"); }
 }
+
+function renderMap() { 
+// ... 기존 코드 유지 (건드리지 마세요)
 
 function renderMap() { 
     try {
@@ -672,27 +703,30 @@ async function clickCell(displayId, searchId) {
         } 
 
         if (movingItem) {
-            if (movingItem.fromLoc === searchId) { movingItem = null; renderAll(); return; } 
+            // 💡 제자리를 다시 클릭하면 취소 처리
+            if (movingItem.fromLoc === searchId) { cancelMove(); return; } 
+            
             let toLoc = searchId;
             if (!toLoc.startsWith('W-') && currentZone !== '현장') {
                 let floor = prompt(`📦 [${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
-                if(floor !== "1" && floor !== "2") { movingItem = null; renderAll(); return; }
+                if(floor !== "1" && floor !== "2") { cancelMove(); return; }
                 const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); 
                 const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`);
                 toLoc = floor === "1" ? baseId : `${baseId}-2F`;
             }
             let qtyStr = prompt(`이동할 수량(EA)을 입력하세요.\n(최대 ${movingItem.maxQty}EA)`, movingItem.maxQty);
-            if(!qtyStr) { movingItem = null; renderAll(); return; }
+            if(!qtyStr) { cancelMove(); return; }
             let qty = parseInt(qtyStr);
-            if(isNaN(qty) || qty <= 0 || qty > movingItem.maxQty) { alert("수량이 올바르지 않습니다."); movingItem = null; renderAll(); return; }
+            if(isNaN(qty) || qty <= 0 || qty > movingItem.maxQty) { alert("수량이 올바르지 않습니다."); cancelMove(); return; }
 
             let movePallet = getDynamicPalletCount({item_name: movingItem.itemName, remarks: movingItem.supplier, quantity: qty});
             try { 
                 await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: movingItem.invId, from_location: movingItem.fromLoc, to_location: toLoc, item_name: movingItem.itemName, quantity: qty, pallet_count: movePallet }) }); 
                 movingItem = null; await load(); 
-            } catch(e) { alert("서버 통신 오류"); movingItem = null; renderAll(); }
+            } catch(e) { alert("서버 통신 오류"); cancelMove(); }
             return;
         }
+
 
         selectedCellId = displayId; 
         renderMap(); 
@@ -1340,22 +1374,60 @@ async function submitBomCart() {
     }
 }
 
+let expandedBomRows = {}; // 접기/펴기 상태 저장용 변수 추가
+
+function toggleBomRow(fpName) {
+    expandedBomRows[fpName] = !expandedBomRows[fpName];
+    renderBomMaster();
+}
+
 function renderBomMaster() {
     try {
         const tbody = document.getElementById('bom-list');
         if(!tbody) return;
-        if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
+        if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
+
         bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
-        tbody.innerHTML = bomMaster.map(b => {
-            let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-xs font-bold">삭제</button>` : '';
-            return `<tr class="hover:bg-slate-50 transition-colors">
-                <td class="p-2 border-b border-slate-100 font-black text-emerald-800 text-xs md:text-sm">${b.finished_product}</td>
-                <td class="p-2 border-b border-slate-100 text-center text-slate-400">➡️</td>
-                <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-xs md:text-sm">${b.material_product}</td>
-                <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-xs md:text-sm">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td>
-                <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
+
+        // 💡 완제품(finished_product)을 기준으로 자재들을 묶어줍니다.
+        let grouped = {};
+        bomMaster.forEach(b => {
+            if(!grouped[b.finished_product]) grouped[b.finished_product] = [];
+            grouped[b.finished_product].push(b);
+        });
+
+        let html = '';
+        Object.keys(grouped).sort().forEach(fp => {
+            let items = grouped[fp];
+            let isOpen = expandedBomRows[fp];
+
+            // 1. 헤더(부모) 행: 클릭하면 열리고 닫힘
+            html += `
+            <tr class="hover:bg-indigo-50 transition-colors cursor-pointer border-b border-slate-300 bg-slate-100" onclick="toggleBomRow('${fp}')">
+                <td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm">
+                    <div class="flex justify-between items-center">
+                        <span>📦 ${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
+                        <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기 🔼' : '펼치기 🔽'}</span>
+                    </div>
+                </td>
             </tr>`;
-        }).join('');
+
+            // 2. 자식(자재) 행: isOpen이 true일 때만 화면에 그려줌
+            if(isOpen) {
+                items.forEach(b => {
+                    let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
+                    html += `
+                    <tr class="hover:bg-slate-50 transition-colors bg-white">
+                        <td class="p-2 border-b border-slate-100 pl-6 text-slate-300 text-sm font-black">↳</td>
+                        <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-[11px] md:text-xs">${b.material_product}</td>
+                        <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-[11px] md:text-xs bg-slate-50 rounded-lg m-1 inline-block">${b.require_qty} <span class="text-[9px] font-normal text-slate-500">EA</span></td>
+                        <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
+                    </tr>`;
+                });
+            }
+        });
+
+        tbody.innerHTML = html;
     } catch(e){}
 }
 
