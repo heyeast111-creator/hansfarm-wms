@@ -45,31 +45,31 @@
             <div class="mb-8 w-full px-4 flex justify-center cursor-pointer hover:opacity-80 transition-opacity" onclick="adminLogin()" title="관리자 로그인"><img src="/logo.jpg" onerror="this.src='logo.jpg'" alt="HANS FARM" class="max-w-full h-auto object-contain drop-shadow-sm"></div>
             <div class="flex flex-col space-y-2 w-full px-3 flex-1">
                 <button onclick="showView('dashboard')" class="nav-btn-pc target-dashboard w-full py-3 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-700 font-black shadow-inner text-sm transition-all">대시보드</button>
-                <button onclick="showView('order')" class="nav-btn-pc target-order w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">📦 재고/발주</button>
+                <button onclick="showView('order')" class="nav-btn-pc target-order w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">재고/발주</button>
                 <button onclick="showView('production')" class="nav-btn-pc target-production w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">생산관리</button>
                 <button onclick="showView('outbound')" class="nav-btn-pc target-outbound w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">출고관리</button>
                 <button onclick="showView('products')" class="nav-btn-pc target-products w-full py-3 rounded-md border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 shadow-sm text-sm transition-all">품목관리</button>
-                <button onclick="showView('accounting')" class="nav-btn-pc target-accounting hidden w-full py-3 rounded-md border border-slate-200 text-yellow-700 font-black hover:bg-yellow-50 shadow-sm text-sm transition-all">💰 정산/회계</button>
+                <button onclick="showView('accounting')" class="nav-btn-pc target-accounting hidden w-full py-3 rounded-md border border-slate-200 text-yellow-700 font-black hover:bg-yellow-50 shadow-sm text-sm transition-all">정산/회계</button>
                 <div class="my-2 border-b border-slate-200 w-full"></div>
-                <button onclick="exportPhysicalCountExcel()" class="w-full py-3 rounded-md bg-blue-50 border border-blue-200 text-blue-700 font-black shadow-inner text-[12px] transition-all hover:bg-blue-100">📋 실사 양식</button>
-                <button onclick="document.getElementById('excel-upload').click()" class="w-full mt-1 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-[12px] transition-all hover:bg-emerald-100">⬆️ 엑셀 입고</button>
+                <button onclick="exportPhysicalCountExcel()" class="w-full py-3 rounded-md bg-blue-50 border border-blue-200 text-blue-700 font-black shadow-inner text-[12px] transition-all hover:bg-blue-100">실사 양식</button>
+                <button onclick="document.getElementById('excel-upload').click()" class="w-full mt-1 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black shadow-inner text-[12px] transition-all hover:bg-emerald-100">엑셀 입고</button>
             </div>
         </aside>
 
         <nav class="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-around p-1 z-50 h-16">
-            <button onclick="showView('dashboard')" class="nav-btn-mo target-dashboard flex-1 py-2 rounded-md text-[11px] border border-slate-200 text-slate-600 bg-white font-bold flex flex-col items-center justify-center mx-0.5 transition-all">📊<span class="mt-1">대시보드</span></button>
-            <button onclick="showView('order')" class="nav-btn-mo target-order flex-1 py-2 rounded-md text-[11px] border border-slate-200 text-slate-600 bg-white font-bold flex flex-col items-center justify-center mx-0.5 transition-all">📦<span class="mt-1">재고/발주</span></button>
-            <button onclick="showView('products')" class="nav-btn-mo target-products flex-1 py-2 rounded-md text-[11px] border border-slate-200 text-slate-600 bg-white font-bold flex flex-col items-center justify-center mx-0.5 transition-all">📋<span class="mt-1">품목관리</span></button>
+            <button onclick="showView('dashboard')" class="nav-btn-mo target-dashboard flex-1 py-2 rounded-md text-[11px] border border-slate-200 text-slate-600 bg-white font-bold flex flex-col items-center justify-center mx-0.5 transition-all"><span class="mt-1">대시보드</span></button>
+            <button onclick="showView('order')" class="nav-btn-mo target-order flex-1 py-2 rounded-md text-[11px] border border-slate-200 text-slate-600 bg-white font-bold flex flex-col items-center justify-center mx-0.5 transition-all"><span class="mt-1">재고/발주</span></button>
+            <button onclick="showView('products')" class="nav-btn-mo target-products flex-1 py-2 rounded-md text-[11px] border border-slate-200 text-slate-600 bg-white font-bold flex flex-col items-center justify-center mx-0.5 transition-all"><span class="mt-1">품목관리</span></button>
         </nav>
 
         <main class="flex-1 bg-slate-200 relative overflow-hidden flex flex-col h-full w-full">
             
             <div id="view-order" class="hidden flex-col h-full w-full absolute inset-0 z-10 bg-slate-100">
                 <div class="bg-white border-b border-slate-300 px-4 md:px-8 pt-4 flex space-x-2 md:space-x-6 overflow-x-auto shrink-0 shadow-sm custom-scrollbar">
-                    <button id="order-tab-inventory" onclick="switchOrderTab('inventory')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-indigo-700 border-b-4 border-indigo-700 transition-colors">🗺️ 렉맵</button>
-                    <button id="order-tab-search" onclick="switchOrderTab('search')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">📦 재고조회</button>
-                    <button id="order-tab-history" onclick="switchOrderTab('history')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">📜 발주조회/진행</button>
-                    <button id="order-tab-safety" onclick="switchOrderTab('safety')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">🚨 안전재고설정</button>
+                    <button id="order-tab-inventory" onclick="switchOrderTab('inventory')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-indigo-700 border-b-4 border-indigo-700 transition-colors">렉맵</button>
+                    <button id="order-tab-search" onclick="switchOrderTab('search')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">재고조회</button>
+                    <button id="order-tab-history" onclick="switchOrderTab('history')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">발주조회/진행</button>
+                    <button id="order-tab-safety" onclick="switchOrderTab('safety')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">안전재고설정</button>
                 </div>
 
                 <div class="flex-1 relative overflow-hidden flex flex-col">
@@ -81,8 +81,8 @@
                                 <button id="tab-floor" onclick="switchZone('현장')" class="whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200 text-sm md:text-base">생산 현장</button>
                             </div>
                             <div class="flex items-center space-x-2 md:space-x-4 pb-2 w-full md:w-auto justify-between md:justify-end mt-2 md:mt-0">
-                                <button onclick="toggleWaitContainer()" class="px-2 md:px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded-md hover:bg-emerald-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">📥 대기장</button>
-                                <button onclick="toggleMapSearch()" class="px-2 md:px-4 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded-md hover:bg-indigo-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">🔍 스캔창</button>
+                                <button onclick="toggleWaitContainer()" class="px-2 md:px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded-md hover:bg-emerald-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">대기장</button>
+                                <button onclick="toggleMapSearch()" class="px-2 md:px-4 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded-md hover:bg-indigo-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">스캔창</button>
                                 <div id="fifo-btn-container" class="hidden flex items-center">
                                     <button onclick="highlightFIFO()" class="px-2 md:px-4 py-1.5 bg-rose-100 border border-rose-300 text-rose-700 font-black rounded-md hover:bg-rose-200 text-xs md:text-sm flex items-center shadow-sm whitespace-nowrap">선입선출 추천</button>
                                 </div>
@@ -96,8 +96,8 @@
                         <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
                             <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
                                 <div class="p-2 bg-emerald-50 border-b border-emerald-100 rounded-t-xl flex justify-between items-center">
-                                    <span class="text-sm font-black text-emerald-800 ml-1">📥 입고 대기장 <span class="text-[10px] text-emerald-600 ml-1">(더블클릭 이동)</span></span>
-                                    <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-3 rounded shadow-md text-xs transition-colors">박스 생성 ➕</button>
+                                    <span class="text-sm font-black text-emerald-800 ml-1">입고 대기장 <span class="text-[10px] text-emerald-600 ml-1">(더블클릭 이동)</span></span>
+                                    <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-3 rounded shadow-md text-xs transition-colors">박스 생성</button>
                                 </div>
                                 <div class="p-3 border-b border-slate-200 space-y-2">
                                     <div class="flex space-x-2">
@@ -147,20 +147,20 @@
                                 <div class="text-4xl md:text-5xl font-black text-indigo-600" id="summary-result">0 <span class="text-xl md:text-2xl text-indigo-400 font-bold">EA</span></div>
                                 <div class="text-xs md:text-sm font-bold text-rose-500 mt-2 md:mt-3" id="summary-pallet">0.0 P</div>
                                 <div id="summary-breakdown" class="w-full max-w-sm mx-auto mb-4"></div>
-                                <button onclick="findItemLocationFromSummary()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-4 md:px-8 rounded-xl shadow-md transition-colors w-full max-w-sm mx-auto flex items-center justify-center text-sm md:text-base mt-2"><svg class="w-4 h-4 md:w-5 md:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>📍 렉맵에서 위치 확인</button>
+                                <button onclick="findItemLocationFromSummary()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-4 md:px-8 rounded-xl shadow-md transition-colors w-full max-w-sm mx-auto flex items-center justify-center text-sm md:text-base mt-2">렉맵에서 위치 확인</button>
                             </div>
                         </div>
                     </div>
 
                     <div id="subview-history" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto bg-slate-100">
                         <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xl md:text-2xl font-black text-slate-800">📜 발주 내역 및 입고 처리</h2>
-                            <button onclick="toggleOrderCart()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors flex items-center text-sm">🛒 신규 발주 작성</button>
+                            <h2 class="text-xl md:text-2xl font-black text-slate-800">발주 내역 및 입고 처리</h2>
+                            <button onclick="toggleOrderCart()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors flex items-center text-sm">신규 발주 작성</button>
                         </div>
 
                         <div id="order-cart-container" class="hidden flex-col mb-6 bg-white p-4 md:p-6 rounded-2xl shadow-lg border-2 border-indigo-200">
                             <div class="flex justify-between items-center border-b pb-2 mb-4">
-                                <h3 class="text-lg font-black text-indigo-800">🛒 발주 장바구니</h3>
+                                <h3 class="text-lg font-black text-indigo-800">발주 장바구니</h3>
                                 <span class="text-xs text-slate-500 font-bold">항목을 담고 '카톡 복사'를 누르세요.</span>
                             </div>
                             <div class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-4">
@@ -178,7 +178,7 @@
                                     <tbody id="order-cart-tbody"></tbody>
                                 </table>
                             </div>
-                            <button onclick="submitOrderCart()" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow-md transition-colors text-sm md:text-base">✅ 발주 확정 및 카카오톡 텍스트 복사</button>
+                            <button onclick="submitOrderCart()" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow-md transition-colors text-sm md:text-base">발주 확정 및 카카오톡 텍스트 복사</button>
                         </div>
 
                         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden overflow-x-auto flex-1">
@@ -207,12 +207,12 @@
             </div>
 
             <div id="view-dashboard" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
-                <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-2 md:space-y-0"><h1 class="text-2xl md:text-3xl font-black text-slate-800">📊 물류 대시보드</h1><select id="dash-period" onchange="updateDashboard()" class="w-full md:w-auto border-2 border-indigo-200 rounded-lg p-2 font-bold text-indigo-700 bg-white outline-none"><option value="daily">일간</option><option value="weekly">주간</option><option value="monthly">월간</option></select></div>
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-2 md:space-y-0"><h1 class="text-2xl md:text-3xl font-black text-slate-800">물류 대시보드</h1><select id="dash-period" onchange="updateDashboard()" class="w-full md:w-auto border-2 border-indigo-200 rounded-lg p-2 font-bold text-indigo-700 bg-white outline-none"><option value="daily">일간</option><option value="weekly">주간</option><option value="monthly">월간</option></select></div>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center justify-center"><div class="flex justify-between items-center mb-4 w-full"><div class="text-slate-500 font-black text-xs md:text-sm">창고 적재율</div><select id="dash-zone-select" onchange="updateDashboard()" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-600 outline-none bg-slate-50"><option value="ALL">전체 창고</option><option value="ROOM">실온</option><option value="COLD">냉장</option></select></div><div class="relative w-32 h-32 md:w-36 md:h-36 rounded-full donut-ring flex items-center justify-center shadow-inner" id="dash-donut" style="background: conic-gradient(#10b981 0%, #e2e8f0 0%);"><div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm"><span class="text-2xl md:text-3xl font-black text-emerald-600" id="dash-cap-percent">0%</span><span class="text-[9px] md:text-[10px] text-slate-400 font-bold" id="dash-cap-text">0 / 0 파레트</span></div></div></div>
                     <div class="col-span-1 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="bg-indigo-50 p-5 rounded-2xl shadow-sm border border-indigo-100 flex flex-col justify-between"><div class="flex justify-between items-center mb-2"><div class="font-black text-indigo-800 text-sm md:text-base">❄️ 냉장 창고</div><div class="text-indigo-500 font-bold text-sm" id="dash-cold-percent">0%</div></div><div class="space-y-2 text-xs md:text-sm mt-2"><div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-cold-total">0</span></div><div class="flex justify-between text-indigo-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-cold-occ">0</span></div><div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-cold-empty">0</span></div></div></div>
-                        <div class="bg-orange-50 p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col justify-between"><div class="flex justify-between items-center mb-2"><div class="font-black text-orange-800 text-sm md:text-base">☀️ 실온 창고</div><div class="text-orange-500 font-bold text-sm" id="dash-room-percent">0%</div></div><div class="space-y-2 text-xs md:text-sm mt-2"><div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-room-total">0</span></div><div class="flex justify-between text-orange-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-room-occ">0</span></div><div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-room-empty">0</span></div></div></div>
+                        <div class="bg-indigo-50 p-5 rounded-2xl shadow-sm border border-indigo-100 flex flex-col justify-between"><div class="flex justify-between items-center mb-2"><div class="font-black text-indigo-800 text-sm md:text-base">냉장 창고</div><div class="text-indigo-500 font-bold text-sm" id="dash-cold-percent">0%</div></div><div class="space-y-2 text-xs md:text-sm mt-2"><div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-cold-total">0</span></div><div class="flex justify-between text-indigo-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-cold-occ">0</span></div><div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-cold-empty">0</span></div></div></div>
+                        <div class="bg-orange-50 p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col justify-between"><div class="flex justify-between items-center mb-2"><div class="font-black text-orange-800 text-sm md:text-base">실온 창고</div><div class="text-orange-500 font-bold text-sm" id="dash-room-percent">0%</div></div><div class="space-y-2 text-xs md:text-sm mt-2"><div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-room-total">0</span></div><div class="flex justify-between text-orange-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-room-occ">0</span></div><div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-room-empty">0</span></div></div></div>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
@@ -220,21 +220,21 @@
                     <div class="bg-white p-6 rounded-2xl shadow-md border-l-4 border-rose-500"><div class="text-slate-500 font-bold text-xs md:text-sm mb-1 flex items-center justify-between"><span>기간 내 출고량 (OUT)</span></div><div class="text-3xl md:text-4xl font-black text-rose-600 mt-2" id="dash-out">0 P</div></div>
                 </div>
                 <div id="admin-finance-panel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200"><h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">💰 재고자산</h3><div class="space-y-3"><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>❄️ 냉장 자산</span><span id="dash-val-cold">0 원</span></div><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>☀️ 실온 자산</span><span id="dash-val-room">0 원</span></div><div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div></div></div>
-                    <div class="bg-rose-50 p-6 rounded-2xl shadow-md border border-rose-200 flex flex-col justify-center"><h3 class="text-rose-800 font-black text-lg mb-2 flex items-center">💸 소모 원가</h3><div class="text-4xl font-black text-rose-600 text-right" id="dash-cost-out">0 원</div></div>
+                    <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200"><h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">재고자산</h3><div class="space-y-3"><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>냉장 자산</span><span id="dash-val-cold">0 원</span></div><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>실온 자산</span><span id="dash-val-room">0 원</span></div><div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div></div></div>
+                    <div class="bg-rose-50 p-6 rounded-2xl shadow-md border border-rose-200 flex flex-col justify-center"><h3 class="text-rose-800 font-black text-lg mb-2 flex items-center">소모 원가</h3><div class="text-4xl font-black text-rose-600 text-right" id="dash-cost-out">0 원</div></div>
                 </div>
             </div>
 
             <div id="view-products" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
                 <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 shrink-0 space-y-4 md:space-y-0">
                     <div class="flex space-x-2 md:space-x-4 w-full md:w-auto overflow-x-auto custom-scrollbar">
-                        <button onclick="switchProductTab('fp')" id="tab-btn-fp" class="whitespace-nowrap text-lg md:text-2xl font-black text-indigo-700 border-b-4 border-indigo-700 pb-1 px-2 transition-colors">📦 제품 마스터</button>
-                        <button onclick="switchProductTab('pm')" id="tab-btn-pm" class="whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">✂️ 자재 마스터</button>
-                        <button onclick="switchProductTab('bom')" id="tab-btn-bom" class="whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">📜 BOM 설정</button>
+                        <button onclick="switchProductTab('fp')" id="tab-btn-fp" class="whitespace-nowrap text-lg md:text-2xl font-black text-indigo-700 border-b-4 border-indigo-700 pb-1 px-2 transition-colors">제품 마스터</button>
+                        <button onclick="switchProductTab('pm')" id="tab-btn-pm" class="whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">자재 마스터</button>
+                        <button onclick="switchProductTab('bom')" id="tab-btn-bom" class="whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">BOM 설정</button>
                     </div>
-                    <div id="fp-header-btns" class="flex space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('👁️ 뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('finished-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportProductsExcel('finished')" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="fp-wipe-btn" onclick="deleteAllProducts('finished')" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
-                    <div id="pm-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('👁️ 뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('product-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportProductsExcel('materials')" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="pm-wipe-btn" onclick="deleteAllProducts('materials')" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
-                    <div id="bom-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('👁️ 뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('bom-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportBomExcel()" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="bom-wipe-btn" onclick="deleteAllBom()" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
+                    <div id="fp-header-btns" class="flex space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('finished-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportProductsExcel('finished')" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="fp-wipe-btn" onclick="deleteAllProducts('finished')" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
+                    <div id="pm-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('product-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportProductsExcel('materials')" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="pm-wipe-btn" onclick="deleteAllProducts('materials')" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
+                    <div id="bom-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('bom-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportBomExcel()" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="bom-wipe-btn" onclick="deleteAllBom()" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
                 </div>
                 
                 <div id="subview-fp" class="flex flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
@@ -279,31 +279,36 @@
 
                 <div id="subview-bom" class="hidden flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
                     <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit flex flex-col">
-                        <h2 class="font-black text-lg text-emerald-700 mb-4 border-b pb-2">📦 신규 레시피 조립</h2>
+                        <h2 class="font-black text-lg text-emerald-700 mb-4 border-b pb-2">신규 레시피 조립</h2>
+                        
                         <label class="block text-xs font-bold text-slate-500 mb-1">1. 기준 완제품 선택</label>
                         <select id="bom-finished" class="w-full border-2 border-emerald-200 rounded-lg p-2 mb-5 text-sm font-black text-emerald-800 outline-none bg-emerald-50"></select>
+                        
                         <label class="block text-xs font-bold text-slate-500 mb-1">2. 구성품(자재/원란) 카테고리 및 자재 선택</label>
                         <div class="flex flex-col space-y-2 mb-3">
                             <select id="bom-material-cat" onchange="updateBomMaterialDropdown()" class="w-full border border-slate-300 rounded p-2 text-xs font-bold bg-slate-50"></select>
                             <div class="flex space-x-2">
                                 <select id="bom-material" class="flex-1 border border-slate-300 rounded p-2 text-xs font-bold bg-slate-50"></select>
-                                <button onclick="addMaterialToBomCart()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold px-4 rounded shadow-sm text-xs transition-colors whitespace-nowrap">담기 ⬇️</button>
+                                <button onclick="addMaterialToBomCart()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold px-4 rounded shadow-sm text-xs transition-colors whitespace-nowrap">담기</button>
                             </div>
                         </div>
+
                         <div class="bg-slate-50 rounded-lg border border-slate-200 p-2 mb-6 min-h-[150px] max-h-[300px] overflow-y-auto custom-scrollbar">
                             <div class="text-xs font-bold text-slate-500 mb-2 border-b pb-1">레시피 구성 (수량 조절)</div>
                             <div id="bom-cart-list" class="space-y-2">
                                 <div class="text-center text-slate-400 text-xs py-4 font-bold">위에서 구성품을 추가해주세요</div>
                             </div>
                         </div>
-                        <button onclick="submitBomCart()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm md:text-base">✅ 조립된 레시피 일괄 저장</button>
+
+                        <button onclick="submitBomCart()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm md:text-base">조립된 레시피 일괄 저장</button>
                     </div>
+
                     <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden">
                         <h2 class="font-black text-lg text-slate-700 mb-4">현재 BOM (저장된 레시피)</h2>
                         <div class="overflow-y-auto flex-1 custom-scrollbar">
                             <table class="w-full text-left border-collapse text-xs md:text-sm min-w-[400px]">
                                 <thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500">
-                                    <tr><th class="p-2">완제품</th><th class="p-2">자재</th><th class="p-2 text-right">수량</th><th class="p-2 text-center">관리</th></tr>
+                                    <tr><th class="p-2">완제품</th><th class="p-2">자재 (입고처)</th><th class="p-2 text-right">수량</th><th class="p-2 text-center">관리</th></tr>
                                 </thead>
                                 <tbody id="bom-list" class="divide-y divide-slate-100"></tbody>
                             </table>
@@ -314,13 +319,13 @@
 
             <div id="view-accounting" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
                 <div class="flex justify-between items-center mb-6">
-                    <h1 class="text-2xl md:text-3xl font-black text-yellow-800">💰 매입처 정산/회계</h1>
+                    <h1 class="text-2xl md:text-3xl font-black text-yellow-800">매입처 정산/회계</h1>
                 </div>
                 
                 <div class="flex flex-col space-y-2 mb-4 bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-2">
-                        <h2 class="text-sm font-black text-slate-700">🔍 정산 조건 필터</h2>
-                        <button onclick="exportAccountingExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded shadow-sm text-xs transition-colors">엑셀 다운로드 ⬇️</button>
+                        <h2 class="text-sm font-black text-slate-700">정산 조건 필터</h2>
+                        <button onclick="exportAccountingExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1.5 px-4 rounded shadow-sm text-xs transition-colors">엑셀 다운로드</button>
                     </div>
                     <div class="flex flex-wrap gap-3">
                         <div class="w-full md:w-auto flex-1">
@@ -378,6 +383,7 @@
                                 <th class="p-2 font-black text-right">공급가액</th>
                                 <th class="p-2 font-black text-right">세액(10%)</th>
                                 <th class="p-2 font-black text-right text-blue-700">합계금액</th>
+                                <th class="p-2 font-black text-center text-rose-600">관리</th>
                             </tr>
                         </thead>
                         <tbody id="acc-list" class="divide-y divide-slate-100"></tbody>
@@ -386,17 +392,17 @@
             </div>
 
             <div id="view-production" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
-                <h1 class="text-3xl font-black text-slate-800 mb-4">🏭 생산 관리 시스템</h1><p class="text-slate-500 font-bold text-center">BOM 기반 자동 차감(Backflush) 기능 준비중</p>
+                <h1 class="text-3xl font-black text-slate-800 mb-4">생산 관리 시스템</h1><p class="text-slate-500 font-bold text-center">BOM 기반 자동 차감(Backflush) 기능 준비중</p>
             </div>
             
             <div id="view-outbound" class="hidden flex-col items-center justify-center h-full w-full absolute inset-0 p-8 z-10 bg-slate-100">
-                <h1 class="text-3xl font-black text-slate-800 mb-4">🚚 출고 관리 시스템</h1><p class="text-slate-500 font-bold text-center">패킹 리스트 생성 기능 준비중</p>
+                <h1 class="text-3xl font-black text-slate-800 mb-4">출고 관리 시스템</h1><p class="text-slate-500 font-bold text-center">패킹 리스트 생성 기능 준비중</p>
             </div>
 
         </main>
 
         <aside id="right-sidebar" class="hidden fixed md:relative bottom-16 md:bottom-0 right-0 w-full md:w-80 h-[60vh] md:h-full bg-white border-t md:border-l border-slate-300 flex-col shadow-[0_-10px_20px_rgba(0,0,0,0.15)] md:shadow-lg z-40 shrink-0 transition-all">
-            <div class="p-3 md:p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center"><h2 class="text-base md:text-lg font-black text-slate-800 flex items-center">📍 위치 상세 정보</h2><button onclick="closeInfoPanel()" class="md:hidden text-slate-500 font-bold px-2 py-1 bg-slate-200 rounded text-xs">닫기 ⬇️</button></div>
+            <div class="p-3 md:p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center"><h2 class="text-base md:text-lg font-black text-slate-800 flex items-center">위치 상세 정보</h2><button onclick="closeInfoPanel()" class="md:hidden text-slate-500 font-bold px-2 py-1 bg-slate-200 rounded text-xs">닫기</button></div>
             <div class="p-4 md:p-6 flex-1 overflow-y-auto pb-20 md:pb-6" id="info-panel"><div class="text-center text-slate-400 py-10 mt-10">도면에서 위치를 선택해주세요</div></div>
         </aside>
     </div>
