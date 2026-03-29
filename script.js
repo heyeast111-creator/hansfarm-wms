@@ -19,18 +19,18 @@ let expandedBomRows = {};
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
-const layoutFloor = [ { id: 'FL-C', title: '❄️ 생산 현장 (원재료/냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '📦 생산 현장 (부자재/실온)', cols: 20 } ];
+const layoutFloor = [ { id: 'FL-C', title: '생산 현장 (원재료/냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '생산 현장 (부자재/실온)', cols: 20 } ];
 
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') {
         loginMode = 'viewer';
-        alert("👁️ 뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
+        alert("뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
     } else if (pw === '00700') {
         loginMode = 'editor';
-        alert("✅ 일반 사용자 모드로 접속되었습니다.");
+        alert("일반 사용자 모드로 접속되었습니다.");
     } else {
-        alert("❌ 비밀번호가 틀렸습니다.");
+        alert("비밀번호가 틀렸습니다.");
         return;
     }
     document.getElementById('login-screen').style.display = 'none';
@@ -89,16 +89,16 @@ function clearInfo() {
 function adminLogin() {
     let fp = document.getElementById('admin-finance-panel');
     if(isAdmin) { 
-        isAdmin = false; alert("🔒 관리자 모드가 해제되었습니다."); 
+        isAdmin = false; alert("관리자 모드가 해제되었습니다."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden')); 
         if(fp) fp.classList.add('hidden');
         let viewAcc = document.getElementById('view-accounting');
         if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
         return; 
     }
-    const pw = prompt("비밀번호 입력 (1234):"); 
-    if(pw === "1234") { 
-        isAdmin = true; alert("🔓 관리자 권한이 활성화되었습니다."); 
+    const pw = prompt("관리자 비밀번호를 입력하세요:"); 
+    if(pw === "123456789*") { 
+        isAdmin = true; alert("관리자 권한이 활성화되었습니다."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
         if(fp) fp.classList.remove('hidden');
     } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
@@ -261,12 +261,12 @@ function closeHistoryModal() {
 }
 
 async function closeInventory() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
-    if(!isAdmin) return alert("🔒 관리자 권한이 필요합니다. 좌측 로고를 클릭해 로그인해주세요.");
-    if(!confirm("⚠️ [재고마감]\n현재 렉맵에 적재된 모든 품목을 '(기존재고)'로 마감 처리하시겠습니까?\n이후 월간 소요량 파악 및 악성 재고 필터링에 기준이 됩니다.")) return;
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
+    if(!isAdmin) return alert("관리자 권한이 필요합니다. 좌측 로고를 클릭해 로그인해주세요.");
+    if(!confirm("[재고마감]\n현재 렉맵에 적재된 모든 품목을 '(기존재고)'로 마감 처리하시겠습니까?\n이후 월간 소요량 파악 및 악성 재고 필터링에 기준이 됩니다.")) return;
     try {
         await fetch('/api/close_inventory', { method: 'POST' });
-        alert("✅ 재고 마감 처리 완료!");
+        alert("재고 마감 처리 완료!");
         await load();
     } catch(e) { alert("마감 처리 중 오류가 발생했습니다."); }
 }
@@ -322,7 +322,7 @@ function updateOrderCartItemDropdown() {
 }
 
 function addOrderCartItem() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 발주 기능을 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 발주 기능을 사용할 수 없습니다.");
     let cat = document.getElementById('oc-cat').value; let item = document.getElementById('oc-item').value; let sup = document.getElementById('oc-sup').value; let pal = parseFloat(document.getElementById('oc-pal').value);
     if(!item || !sup || isNaN(pal) || pal <= 0) return alert("품목, 발주처, 파레트 수량을 정확히 선택/입력하세요.");
 
@@ -336,7 +336,7 @@ function addOrderCartItem() {
 }
 
 function removeOrderCartItem(index) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     orderCart.splice(index, 1); renderOrderCart();
 }
 
@@ -345,7 +345,7 @@ function renderOrderCart() {
     if(orderCart.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="text-center p-4 text-slate-400 font-bold">장바구니가 비어있습니다.</td></tr>`; return; }
     
     tbody.innerHTML = orderCart.map((item, idx) => {
-        let delBtn = loginMode === 'viewer' ? '' : `<button onclick="removeOrderCartItem(${idx})" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded font-bold">❌</button>`;
+        let delBtn = loginMode === 'viewer' ? '' : `<button onclick="removeOrderCartItem(${idx})" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded font-bold">삭제</button>`;
         return `<tr class="border-b border-slate-100">
             <td class="p-2 font-bold text-rose-600">${item.supplier}</td>
             <td class="p-2 font-black text-slate-800">${item.item_name}</td>
@@ -356,7 +356,7 @@ function renderOrderCart() {
 }
 
 async function submitOrderCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 발주를 확정할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 발주를 확정할 수 없습니다.");
     if(orderCart.length === 0) return alert("장바구니가 비어있습니다.");
 
     let text = "[한스팜]발주요청서\n안녕하세요.\n아래 품목 발주 요청 드립니다.\n";
@@ -366,10 +366,10 @@ async function submitOrderCart() {
     try {
         await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(orderCart) });
         navigator.clipboard.writeText(text).then(async () => {
-            alert("✅ 발주가 등록되었으며, 카카오톡 텍스트가 복사되었습니다!\nPC 카톡이나 메신저에 Ctrl+V 로 붙여넣기 하세요.");
+            alert("발주가 등록되었으며, 카카오톡 텍스트가 복사되었습니다!\nPC 카톡이나 메신저에 Ctrl+V 로 붙여넣기 하세요.");
             orderCart = []; toggleOrderCart(); await load();
         }).catch(async (e) => {
-            alert("✅ 발주가 등록되었습니다. (브라우저 권한으로 텍스트 자동 복사는 실패했습니다)");
+            alert("발주가 등록되었습니다. (브라우저 권한으로 텍스트 자동 복사는 실패했습니다)");
             orderCart = []; toggleOrderCart(); await load();
         });
     } catch(e) { alert("발주 에러가 발생했습니다."); }
@@ -399,13 +399,13 @@ function renderOrderList() {
 }
 
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     let emptyW = "";
     for(let i=1; i<=30; i++) { 
         let wId = `W-${i.toString().padStart(2, '0')}`; 
         if(!globalOccupancy.find(o => o.location_id === wId)) { emptyW = wId; break; } 
     }
-    if(!emptyW) return alert(`⚠️ 대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
+    if(!emptyW) return alert(`대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
     if(!confirm(`[${itemName}]을(를) [${emptyW}] 위치로 입고 처리하시겠습니까?`)) return;
 
     try {
@@ -418,7 +418,7 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
 }
 
 async function cancelOrder(logId) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     if(!confirm("이 발주 내역을 정말 취소(삭제)하시겠습니까?")) return;
     try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) { alert("취소 실패"); }
 }
@@ -477,7 +477,7 @@ function updateWaitItemDropdown() {
 }
 
 async function createWaitingPallets() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 박스를 생성할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 박스를 생성할 수 없습니다.");
     const cat = document.getElementById('wait-cat').value; const item = document.getElementById('wait-item').value; 
     const ws = document.getElementById('wait-supplier'); const supplier = ws ? ws.value || '기본입고처' : '기본입고처';
     let wd = document.getElementById('wait-date'); let date = wd ? wd.value : ''; 
@@ -519,7 +519,7 @@ async function createWaitingPallets() {
 }
 
 function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 렉 이동을 할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 렉 이동을 할 수 없습니다.");
     if (movingItem && movingItem.invId === invId) { cancelMove(); return; } 
     
     movingItem = { invId, itemName, maxQty, currentPallet, fromLoc, supplier };
@@ -529,7 +529,7 @@ function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier
     if(panel) {
         panel.innerHTML = `
             <div class="bg-indigo-50 border-2 border-indigo-400 border-dashed p-6 rounded-xl text-center shadow-inner mt-4">
-                <div class="text-4xl animate-bounce mb-4">📦</div>
+                <div class="text-4xl animate-bounce mb-4 text-indigo-500 font-black">이동</div>
                 <div class="text-lg font-black text-indigo-800 mb-2">이동 모드 활성화</div>
                 <div class="text-sm font-bold text-slate-600 mb-6">
                     <span class="text-rose-600">${itemName}</span><br>
@@ -703,7 +703,7 @@ async function clickCell(displayId, searchId) {
             
             let toLoc = searchId;
             if (!toLoc.startsWith('W-') && currentZone !== '현장') {
-                let floor = prompt(`📦 [${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
+                let floor = prompt(`[${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
                 if(floor !== "1" && floor !== "2") { cancelMove(); return; }
                 const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); 
                 const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`);
@@ -743,9 +743,9 @@ async function clickCell(displayId, searchId) {
                 
                 let actionBtns = '';
                 if(loginMode !== 'viewer') {
-                    let moveBtn = `<button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] md:text-[11px] font-bold transition-colors">📦 렉으로 이동</button>`;
+                    let moveBtn = `<button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] md:text-[11px] font-bold transition-colors">렉으로 이동</button>`;
                     let outBtn = `<button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="w-1/2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] md:text-[11px] font-bold transition-colors">선택 출고</button>`;
-                    let editBtn = `<button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="flex-1 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] md:text-[11px] font-bold transition-colors mt-2 w-full">⚙️ 편집/삭제</button>`;
+                    let editBtn = `<button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="flex-1 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] md:text-[11px] font-bold transition-colors mt-2 w-full">편집/삭제</button>`;
                     actionBtns = `<div class="flex space-x-2 mt-3 border-t pt-2">${outBtn}${moveBtn}</div>${editBtn}`;
                 }
                 
@@ -782,7 +782,7 @@ async function clickCell(displayId, searchId) {
 }
 
 async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     let action = prompt(`[${itemName}] 편집 메뉴\n\n1: 수량 수정 (EA)\n2: 날짜 수정 (YYYY-MM-DD)\n3: 기록 완전 삭제 (오입력 취소)\n\n원하시는 작업 번호를 입력하세요:`);
     
     if (action === '1') { 
@@ -804,7 +804,8 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
         } 
     } 
     else if (action === '3') { 
-        if(confirm(`⚠️ 정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(정산/회계 내역에서도 함께 삭제됩니다)`)) { 
+        if(confirm(`정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(정산/회계 내역에서도 함께 삭제됩니다)`)) { 
+            
             let targetHistories = globalHistory.filter(h => 
                 h.action_type === '입고' && 
                 h.location_id === locId && 
@@ -825,7 +826,7 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
 }
 
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 출고할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 출고할 수 없습니다.");
     const qtyStr = prompt(`[${itemName}] 소진할 수량(EA)을 입력하세요. (최대 ${maxQty}EA)`, maxQty); 
     if(!qtyStr) return; const qty = parseInt(qtyStr); 
     if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("잘못된 수량"); 
@@ -1066,8 +1067,8 @@ function renderSafetyStock() {
     else { 
         monitoredProducts.forEach(p => { 
             let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; 
-            let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">💬 발주 복사</button>` : ''; 
-            let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">🔴 위험</span><br>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">🟢 여유</span>`; 
+            let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>` : ''; 
+            let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험</span><br>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">여유</span>`; 
             html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}">
                 <td class="p-2 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
                 <td class="p-2 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td>
@@ -1179,7 +1180,7 @@ function editProductSetup(cat, name, supplier, usage, price, ea, targetType) {
     editingProductOriginalName = name; editingProductOriginalSupplier = supplier; 
     const prefix = targetType === 'finished' ? 'fp' : 'pm';
     document.getElementById(`${prefix}-cat`).value = cat; document.getElementById(`${prefix}-name`).value = name; document.getElementById(`${prefix}-supplier`).value = supplier; document.getElementById(`${prefix}-usage`).value = usage; document.getElementById(`${prefix}-price`).value = price; document.getElementById(`${prefix}-pallet-ea`).value = ea || 1; 
-    document.getElementById(`${prefix}-form-title`).innerText = "기존 항목 수정 중 ✏️"; document.getElementById(`${prefix}-submit-btn`).innerText = "✅ 저장하기"; document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-indigo-600', 'bg-emerald-600'); document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); document.getElementById(`${prefix}-cancel-btn`).classList.remove('hidden'); 
+    document.getElementById(`${prefix}-form-title`).innerText = "기존 항목 수정 중"; document.getElementById(`${prefix}-submit-btn`).innerText = "저장하기"; document.getElementById(`${prefix}-submit-btn`).classList.replace('bg-indigo-600', 'bg-emerald-600'); document.getElementById(`${prefix}-submit-btn`).classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700'); document.getElementById(`${prefix}-cancel-btn`).classList.remove('hidden'); 
     renderProductMaster(targetType); 
 }
 
@@ -1192,7 +1193,7 @@ function cancelEdit(targetType) {
 }
 
 async function submitProduct(targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const prefix = targetType === 'finished' ? 'fp' : 'pm';
     const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
     if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
@@ -1210,17 +1211,17 @@ async function submitProduct(targetType) {
 }
 
 async function deleteProduct(name, supplier, targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
     const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
     try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
 }
 
 async function deleteAllProducts(targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 일괄 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 일괄 삭제할 수 없습니다.");
     const msg = targetType === 'finished' ? "제품" : "자재";
-    if(!confirm(`⚠️ 정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
-    const pw = prompt("관리자 비밀번호(1234) 입력:"); if(pw !== "1234") return alert("틀렸습니다."); 
+    if(!confirm(`정말 모든 ${msg} 마스터를 일괄 삭제하시겠습니까?`)) return; 
+    const pw = prompt("관리자 비밀번호를 입력하세요:"); if(pw !== "123456789*") return alert("틀렸습니다."); 
     const endpoint = targetType === 'finished' ? '/api/finished_products_all' : '/api/products_all';
     try { await fetch(endpoint, { method: 'DELETE' }); alert("일괄 삭제 완료!"); await load(); } catch(e) { alert("삭제 실패!"); } 
 }
@@ -1235,7 +1236,7 @@ function exportProductsExcel(targetType) {
 }
 
 function importProductsExcel(e, targetType) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); 
     const endpoint = targetType === 'finished' ? '/api/finished_products_batch' : '/api/products_batch';
     const msg = targetType === 'finished' ? "제품" : "자재";
@@ -1250,10 +1251,6 @@ function importProductsExcel(e, targetType) {
         } catch(err) { console.error(err); alert("업로드 처리 중 오류 발생: 엑셀 양식을 다시 확인해주세요."); } 
     }; reader.readAsArrayBuffer(file); e.target.value = ''; 
 }
-
-// ==========================================
-// 💡 [BOM 레시피 장바구니 로직]
-// ==========================================
 
 function updateBomDropdowns() {
     try {
@@ -1295,7 +1292,7 @@ function updateBomMaterialDropdown() {
 }
 
 function addMaterialToBomCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     const mat = document.getElementById('bom-material').value;
     if(!mat) return alert("자재를 선택해주세요.");
     
@@ -1340,7 +1337,7 @@ function renderBomCart() {
 }
 
 async function submitBomCart() {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     const finished = document.getElementById('bom-finished').value;
     
     if(!finished) return alert("기준 완제품을 선택해주세요.");
@@ -1372,7 +1369,7 @@ async function submitBomCart() {
         
         await Promise.all(promises); 
         
-        alert("✅ 레시피 일괄 등록 완료!");
+        alert("레시피 일괄 등록 완료!");
         bomCart = []; 
         renderBomCart();
         await load(); 
@@ -1381,7 +1378,6 @@ async function submitBomCart() {
     }
 }
 
-// 💡 [BOM 아코디언 로직]
 function toggleBomRow(fpName) {
     expandedBomRows[fpName] = !expandedBomRows[fpName];
     renderBomMaster();
@@ -1410,8 +1406,8 @@ function renderBomMaster() {
             <tr class="hover:bg-indigo-50 transition-colors cursor-pointer border-b border-slate-300 bg-slate-100" onclick="toggleBomRow('${fp}')">
                 <td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm">
                     <div class="flex justify-between items-center">
-                        <span>📦 ${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
-                        <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기 🔼' : '펼치기 🔽'}</span>
+                        <span>${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
+                        <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기' : '펼치기'}</span>
                     </div>
                 </td>
             </tr>`;
@@ -1421,7 +1417,7 @@ function renderBomMaster() {
                     let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
                     html += `
                     <tr class="hover:bg-slate-50 transition-colors bg-white">
-                        <td class="p-2 border-b border-slate-100 pl-6 text-slate-300 text-sm font-black">↳</td>
+                        <td class="p-2 border-b border-slate-100 pl-6 text-slate-300 text-sm font-black">-</td>
                         <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-[11px] md:text-xs">${b.material_product}</td>
                         <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-[11px] md:text-xs bg-slate-50 rounded-lg m-1 inline-block">${b.require_qty} <span class="text-[9px] font-normal text-slate-500">EA</span></td>
                         <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
@@ -1435,7 +1431,7 @@ function renderBomMaster() {
 }
 
 async function deleteBom(id) { 
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; 
     try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } 
 }
@@ -1446,7 +1442,7 @@ function exportBomExcel() {
 }
 
 function importBomExcel(e) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
     reader.onload = async function(ev) {
         try {
@@ -1458,10 +1454,6 @@ function importBomExcel(e) {
         } catch(err) { alert("업로드 처리 중 오류 발생"); }
     }; reader.readAsArrayBuffer(file); e.target.value = '';
 }
-
-// ==========================================
-// 💡 [정산/회계 로직] 
-// ==========================================
 
 function toggleAccDateInput() {
     let type = document.getElementById('acc-type').value;
@@ -1525,6 +1517,21 @@ function updateAccFilters(changedFilter) {
     } catch(e) { console.error("Filter Update Error:", e); }
 }
 
+async function deleteAccountingRecord(logId, itemName) {
+    if(!isAdmin) return alert("관리자 권한이 필요합니다.");
+    const pw = prompt("관리자 비밀번호를 다시 입력하세요:");
+    if(pw !== "123456789*") return alert("비밀번호가 틀렸습니다.");
+    if(!confirm(`[${itemName}] 해당 입고/정산 내역을 정말 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)`)) return;
+
+    try {
+        await fetch(`/api/history/${logId}`, { method: 'DELETE' });
+        alert("정산 내역 삭제 완료!");
+        await load();
+    } catch(e) {
+        alert("삭제 중 오류가 발생했습니다.");
+    }
+}
+
 function renderAccounting() { 
     try {
         const selectedSup = document.getElementById('acc-supplier').value;
@@ -1542,25 +1549,19 @@ function renderAccounting() {
             return matchDate && matchSup && matchItem;
         });
 
-        let groupedLog = {};
-        filtered.forEach(h => {
-            let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
-            let hSup = h.remarks || '기본입고처';
-            let hItem = h.item_name || '이름없음';
-            let key = `${hDate}|${hSup}|${hItem}`;
-            
-            if(!groupedLog[key]) { groupedLog[key] = { date: hDate, supplier: hSup, item_name: hItem, quantity: 0 }; }
-            groupedLog[key].quantity += h.quantity;
+        filtered.sort((a,b) => {
+            let dateA = a.production_date ? a.production_date : a.created_at.substring(0, 10);
+            let dateB = b.production_date ? b.production_date : b.created_at.substring(0, 10);
+            return new Date(dateB) - new Date(dateA);
         });
-
-        let consolidated = Object.values(groupedLog);
-        consolidated.sort((a,b) => new Date(b.date) - new Date(a.date));
 
         let totalSupply = 0, totalTax = 0, totalSum = 0; let html = '';
 
         if(groupMode === 'list') {
-            html = consolidated.map((h, i) => {
-                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(h.supplier||'').trim());
+            html = filtered.map((h, i) => {
+                let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
+                let hSup = h.remarks || '기본입고처';
+                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(hSup).trim());
                 if(!pInfo) pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
                 
                 let price = pInfo ? (parseFloat(pInfo.unit_price) || 0) : 0;
@@ -1568,14 +1569,18 @@ function renderAccounting() {
                 totalSupply += supply; totalTax += tax; totalSum += sum;
                 let bgClass = i % 2 === 0 ? 'bg-white' : 'bg-slate-50'; 
                 
-                return `<tr class="${bgClass} border-b border-slate-200 hover:bg-indigo-50 transition-colors"><td class="p-1.5 md:p-2 text-slate-500 text-[10px] md:text-[11px] whitespace-nowrap">${h.date}</td><td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td><td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-500 text-[10px] md:text-[11px]">${price.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-black text-slate-700 text-[11px] md:text-xs">${supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-rose-500 text-[10px] md:text-[11px]">${tax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-black text-blue-700 text-[11px] md:text-xs">${sum.toLocaleString()}</td></tr>`;
+                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${h.id}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold">삭제</button>` : '';
+
+                return `<tr class="${bgClass} border-b border-slate-200 hover:bg-indigo-50 transition-colors"><td class="p-1.5 md:p-2 text-slate-500 text-[10px] md:text-[11px] whitespace-nowrap">${hDate}</td><td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${hSup}</td><td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-500 text-[10px] md:text-[11px]">${price.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-black text-slate-700 text-[11px] md:text-xs">${supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-rose-500 text-[10px] md:text-[11px]">${tax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-black text-blue-700 text-[11px] md:text-xs">${sum.toLocaleString()}</td><td class="p-1.5 md:p-2 text-center">${delBtn}</td></tr>`;
             }).join('');
         } else {
             let groupAggr = {};
-            consolidated.forEach(h => {
-                let key = groupMode === 'supplier' ? h.supplier : h.item_name; let subKey = groupMode === 'supplier' ? h.item_name : h.supplier;
+            filtered.forEach(h => {
+                let hSup = h.remarks || '기본입고처';
+                let key = groupMode === 'supplier' ? hSup : h.item_name; 
+                let subKey = groupMode === 'supplier' ? h.item_name : hSup;
                 
-                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(h.supplier||'').trim());
+                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(hSup).trim());
                 if(!pInfo) pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
                 
                 let price = pInfo ? (parseFloat(pInfo.unit_price) || 0) : 0;
@@ -1589,15 +1594,15 @@ function renderAccounting() {
 
             for(let key in groupAggr) {
                 let g = groupAggr[key]; totalSupply += g.totalSupply; totalTax += g.totalTax; totalSum += g.totalSum;
-                html += `<tr class="bg-indigo-100 border-b-2 border-indigo-200"><td colspan="3" class="p-2 font-black text-indigo-900 text-xs md:text-sm">📁 [${key}] 누적 요약</td><td class="p-2 text-right font-black text-indigo-700 text-[11px] md:text-xs">${g.totalQty.toLocaleString()}</td><td class="p-2 text-right">-</td><td class="p-2 text-right font-black text-slate-800 text-[11px] md:text-xs">${g.totalSupply.toLocaleString()}</td><td class="p-2 text-right font-bold text-rose-600 text-[11px] md:text-xs">${g.totalTax.toLocaleString()}</td><td class="p-2 text-right font-black text-blue-800 text-[11px] md:text-xs">${g.totalSum.toLocaleString()}</td></tr>`;
+                html += `<tr class="bg-indigo-100 border-b-2 border-indigo-200"><td colspan="3" class="p-2 font-black text-indigo-900 text-xs md:text-sm">[${key}] 누적 요약</td><td class="p-2 text-right font-black text-indigo-700 text-[11px] md:text-xs">${g.totalQty.toLocaleString()}</td><td class="p-2 text-right">-</td><td class="p-2 text-right font-black text-slate-800 text-[11px] md:text-xs">${g.totalSupply.toLocaleString()}</td><td class="p-2 text-right font-bold text-rose-600 text-[11px] md:text-xs">${g.totalTax.toLocaleString()}</td><td class="p-2 text-right font-black text-blue-800 text-[11px] md:text-xs">${g.totalSum.toLocaleString()}</td><td class="p-2"></td></tr>`;
                 
                 for(let subKey in g.details) {
                     let d = g.details[subKey]; let dTax = Math.floor(d.supply * 0.1); let dSum = d.supply + dTax; let displaySup = groupMode === 'supplier' ? key : subKey; let displayItem = groupMode === 'item' ? key : subKey;
-                    html += `<tr class="bg-white border-b border-slate-100 opacity-90"><td class="p-1.5 md:p-2 text-center text-[10px] text-slate-400">↳ 상세항목</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displaySup}</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displayItem}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-500 text-[10px] md:text-[11px]">${d.qty.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-400 text-[9px]">-</td><td class="p-1.5 md:p-2 text-right text-slate-600 text-[10px] md:text-[11px]">${d.supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-rose-400 text-[10px] md:text-[11px]">${dTax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-blue-600 text-[10px] md:text-[11px]">${dSum.toLocaleString()}</td></tr>`;
+                    html += `<tr class="bg-white border-b border-slate-100 opacity-90"><td class="p-1.5 md:p-2 text-center text-[10px] text-slate-400">상세항목</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displaySup}</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displayItem}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-500 text-[10px] md:text-[11px]">${d.qty.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-400 text-[9px]">-</td><td class="p-1.5 md:p-2 text-right text-slate-600 text-[10px] md:text-[11px]">${d.supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-rose-400 text-[10px] md:text-[11px]">${dTax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-blue-600 text-[10px] md:text-[11px]">${dSum.toLocaleString()}</td><td class="p-1.5 md:p-2"></td></tr>`;
                 }
             }
         }
-        document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
+        document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
 }
