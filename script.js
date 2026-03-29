@@ -798,6 +798,7 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
             } else alert("올바른 수량을 입력하세요."); 
         } 
     } 
+        
     else if (action === '2') { 
         let newDate = prompt(`새로운 날짜를 입력하세요:\n(형식: YYYY-MM-DD)`, date || ''); 
         if(newDate !== null) { 
