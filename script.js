@@ -15,6 +15,7 @@ let editingProductOriginalSupplier = null;
 let orderCart = []; 
 let movingItem = null;
 let bomCart = [];
+let expandedBomRows = {}; // BOM 접기/펴기 상태 저장
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
@@ -517,14 +518,14 @@ async function createWaitingPallets() {
     }
 }
 
+// 💡 렉 이동 버그 수정 부분
 function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier) {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 렉 이동을 할 수 없습니다.");
     if (movingItem && movingItem.invId === invId) { cancelMove(); return; } 
     
     movingItem = { invId, itemName, maxQty, currentPallet, fromLoc, supplier };
-    renderMap(); // 전체 새로고침(renderAll) 대신 맵만 그려서 버그 방지
+    renderMap();
 
-    // 💡 패널을 "도착지 선택" 안내 화면으로 바꿈
     const panel = document.getElementById('info-panel');
     if(panel) {
         panel.innerHTML = `
@@ -541,14 +542,13 @@ function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier
     }
 }
 
-// 이동 취소 함수 (새로 추가)
 function cancelMove() {
     movingItem = null;
     renderMap();
     if (selectedCellId) {
         let temp = selectedCellId;
         selectedCellId = null;
-        clickCell(temp); // 기존 패널 내용 복구
+        clickCell(temp); 
     }
 }
 
@@ -589,9 +589,6 @@ async function onDrop(event, displayId, dbBaseId) {
         await load(); 
     } catch(e) { alert("서버 통신 오류"); }
 }
-
-function renderMap() { 
-// ... 기존 코드 유지 (건드리지 마세요)
 
 function renderMap() { 
     try {
@@ -702,8 +699,8 @@ async function clickCell(displayId, searchId) {
             else { let floorSel = document.getElementById('floor-select'); const floor = floorSel ? floorSel.value : "1"; const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`); searchId = floor === "1" ? baseId : `${baseId}-2F`; }
         } 
 
+        // 💡 이동 모드일 때의 동작
         if (movingItem) {
-            // 💡 제자리를 다시 클릭하면 취소 처리
             if (movingItem.fromLoc === searchId) { cancelMove(); return; } 
             
             let toLoc = searchId;
@@ -726,7 +723,6 @@ async function clickCell(displayId, searchId) {
             } catch(e) { alert("서버 통신 오류"); cancelMove(); }
             return;
         }
-
 
         selectedCellId = displayId; 
         renderMap(); 
@@ -1273,7 +1269,6 @@ function updateBomMaterialDropdown() {
             filtered = productMaster.filter(p => p.category === cat);
         }
         
-        // 💡 1. 여기서 중복된 품목명 제거 (입고처 무시)
         const uniqueItemNames = [...new Set(filtered.map(p => p.item_name))].filter(Boolean).sort();
         
         const mOptions = uniqueItemNames.map(name => {
@@ -1374,8 +1369,7 @@ async function submitBomCart() {
     }
 }
 
-let expandedBomRows = {}; // 접기/펴기 상태 저장용 변수 추가
-
+// 💡 [BOM 아코디언 로직]
 function toggleBomRow(fpName) {
     expandedBomRows[fpName] = !expandedBomRows[fpName];
     renderBomMaster();
@@ -1389,7 +1383,6 @@ function renderBomMaster() {
 
         bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
 
-        // 💡 완제품(finished_product)을 기준으로 자재들을 묶어줍니다.
         let grouped = {};
         bomMaster.forEach(b => {
             if(!grouped[b.finished_product]) grouped[b.finished_product] = [];
@@ -1401,7 +1394,6 @@ function renderBomMaster() {
             let items = grouped[fp];
             let isOpen = expandedBomRows[fp];
 
-            // 1. 헤더(부모) 행: 클릭하면 열리고 닫힘
             html += `
             <tr class="hover:bg-indigo-50 transition-colors cursor-pointer border-b border-slate-300 bg-slate-100" onclick="toggleBomRow('${fp}')">
                 <td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm">
@@ -1412,7 +1404,6 @@ function renderBomMaster() {
                 </td>
             </tr>`;
 
-            // 2. 자식(자재) 행: isOpen이 true일 때만 화면에 그려줌
             if(isOpen) {
                 items.forEach(b => {
                     let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
@@ -1457,7 +1448,7 @@ function importBomExcel(e) {
 }
 
 // ==========================================
-// 💡 [정산/회계 로직] (에러 방어 로직 추가됨)
+// 💡 [정산/회계 로직] 
 // ==========================================
 
 function toggleAccDateInput() {
@@ -1557,7 +1548,6 @@ function renderAccounting() {
 
         if(groupMode === 'list') {
             html = consolidated.map((h, i) => {
-                // 💡 안전한 검색: 정보가 꼬여있어도 에러 안나게 처리
                 let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(h.supplier||'').trim());
                 if(!pInfo) pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
                 
