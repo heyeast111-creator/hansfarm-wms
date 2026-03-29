@@ -81,6 +81,8 @@
                                 <button id="tab-floor" onclick="switchZone('현장')" class="whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200 text-sm md:text-base">생산 현장</button>
                             </div>
                             <div class="flex items-center space-x-2 md:space-x-4 pb-2 w-full md:w-auto justify-between md:justify-end mt-2 md:mt-0">
+                                <button onclick="toggleRightPanel()" class="px-2 md:px-4 py-1.5 bg-slate-100 border border-slate-300 text-slate-700 font-black rounded-md hover:bg-slate-200 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">우측 패널 켬/끔</button>
+                                <div class="hidden md:block w-px h-6 bg-slate-300"></div>
                                 <button onclick="toggleWaitContainer()" class="px-2 md:px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded-md hover:bg-emerald-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">대기장</button>
                                 <button onclick="toggleMapSearch()" class="px-2 md:px-4 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded-md hover:bg-indigo-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">스캔창</button>
                                 <div id="fifo-btn-container" class="hidden flex items-center">
@@ -97,7 +99,7 @@
                         <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
                             <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
                                 <div class="p-2 bg-emerald-50 border-b border-emerald-100 rounded-t-xl flex justify-between items-center">
-                                    <span class="text-sm font-black text-emerald-800 ml-1">입고 대기장</span>
+                                    <span class="text-sm font-black text-emerald-800 ml-1">입고 대기장 <span class="text-[10px] text-emerald-600 ml-1">(더블클릭 이동)</span></span>
                                     <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-3 rounded shadow-md text-xs transition-colors">박스 생성</button>
                                 </div>
                                 <div class="p-3 border-b border-slate-200 space-y-2">
@@ -208,21 +210,75 @@
             </div>
 
             <div id="view-dashboard" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
-                <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-2 md:space-y-0"><h1 class="text-2xl md:text-3xl font-black text-slate-800">물류 대시보드</h1><select id="dash-period" onchange="updateDashboard()" class="w-full md:w-auto border-2 border-indigo-200 rounded-lg p-2 font-bold text-indigo-700 bg-white outline-none"><option value="daily">일간</option><option value="weekly">주간</option><option value="monthly">월간</option></select></div>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                    <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center justify-center"><div class="flex justify-between items-center mb-4 w-full"><div class="text-slate-500 font-black text-xs md:text-sm">창고 적재율</div><select id="dash-zone-select" onchange="updateDashboard()" class="border border-slate-300 rounded px-2 py-1 text-xs font-bold text-slate-600 outline-none bg-slate-50"><option value="ALL">전체 창고</option><option value="ROOM">실온</option><option value="COLD">냉장</option></select></div><div class="relative w-32 h-32 md:w-36 md:h-36 rounded-full donut-ring flex items-center justify-center shadow-inner" id="dash-donut" style="background: conic-gradient(#10b981 0%, #e2e8f0 0%);"><div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm"><span class="text-2xl md:text-3xl font-black text-emerald-600" id="dash-cap-percent">0%</span><span class="text-[9px] md:text-[10px] text-slate-400 font-bold" id="dash-cap-text">0 / 0 파레트</span></div></div></div>
-                    <div class="col-span-1 md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="bg-indigo-50 p-5 rounded-2xl shadow-sm border border-indigo-100 flex flex-col justify-between"><div class="flex justify-between items-center mb-2"><div class="font-black text-indigo-800 text-sm md:text-base">냉장 창고</div><div class="text-indigo-500 font-bold text-sm" id="dash-cold-percent">0%</div></div><div class="space-y-2 text-xs md:text-sm mt-2"><div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-cold-total">0</span></div><div class="flex justify-between text-indigo-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-cold-occ">0</span></div><div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-cold-empty">0</span></div></div></div>
-                        <div class="bg-orange-50 p-5 rounded-2xl shadow-sm border border-orange-100 flex flex-col justify-between"><div class="flex justify-between items-center mb-2"><div class="font-black text-orange-800 text-sm md:text-base">실온 창고</div><div class="text-orange-500 font-bold text-sm" id="dash-room-percent">0%</div></div><div class="space-y-2 text-xs md:text-sm mt-2"><div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-room-total">0</span></div><div class="flex justify-between text-orange-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-room-occ">0</span></div><div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-room-empty">0</span></div></div></div>
+                <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-2 md:space-y-0">
+                    <h1 class="text-2xl md:text-3xl font-black text-slate-800">물류 대시보드</h1>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs font-bold text-slate-500">소모원가 조회기간:</span>
+                        <select id="dash-period" onchange="updateDashboard()" class="border-2 border-rose-200 rounded-lg p-2 font-bold text-rose-700 bg-white outline-none">
+                            <option value="daily">일간</option>
+                            <option value="weekly">주간</option>
+                            <option value="monthly">월간</option>
+                        </select>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-md border-l-4 border-blue-500"><div class="text-slate-500 font-bold text-xs md:text-sm mb-1 flex items-center justify-between"><span>기간 내 입고량 (IN)</span></div><div class="text-3xl md:text-4xl font-black text-blue-600 mt-2" id="dash-in">0 P</div></div>
-                    <div class="bg-white p-6 rounded-2xl shadow-md border-l-4 border-rose-500"><div class="text-slate-500 font-bold text-xs md:text-sm mb-1 flex items-center justify-between"><span>기간 내 출고량 (OUT)</span></div><div class="text-3xl md:text-4xl font-black text-rose-600 mt-2" id="dash-out">0 P</div></div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
+                    <div class="bg-white p-5 rounded-2xl shadow-md border-t-4 border-orange-500 flex flex-col items-center">
+                        <h3 class="font-black text-orange-800 text-lg mb-4">실온 창고</h3>
+                        <div class="relative w-32 h-32 rounded-full donut-ring flex items-center justify-center shadow-inner mb-4" id="dash-room-donut" style="background: conic-gradient(#f97316 0%, #e2e8f0 0%);">
+                            <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+                                <span class="text-2xl font-black text-orange-600" id="dash-room-percent">0%</span>
+                            </div>
+                        </div>
+                        <div class="w-full space-y-2 text-xs md:text-sm">
+                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-room-total">0</span></div>
+                            <div class="flex justify-between text-orange-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-room-occ">0</span></div>
+                            <div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-room-empty">0</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl shadow-md border-t-4 border-indigo-500 flex flex-col items-center">
+                        <h3 class="font-black text-indigo-800 text-lg mb-4">냉장 창고</h3>
+                        <div class="relative w-32 h-32 rounded-full donut-ring flex items-center justify-center shadow-inner mb-4" id="dash-cold-donut" style="background: conic-gradient(#6366f1 0%, #e2e8f0 0%);">
+                            <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+                                <span class="text-2xl font-black text-indigo-600" id="dash-cold-percent">0%</span>
+                            </div>
+                        </div>
+                        <div class="w-full space-y-2 text-xs md:text-sm">
+                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-cold-total">0</span></div>
+                            <div class="flex justify-between text-indigo-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-cold-occ">0</span></div>
+                            <div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-cold-empty">0</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-5 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center">
+                        <h3 class="font-black text-emerald-800 text-lg mb-4">생산 현장</h3>
+                        <div class="relative w-32 h-32 rounded-full donut-ring flex items-center justify-center shadow-inner mb-4" id="dash-floor-donut" style="background: conic-gradient(#10b981 0%, #e2e8f0 0%);">
+                            <div class="absolute inset-3 bg-white rounded-full flex flex-col items-center justify-center shadow-sm">
+                                <span class="text-2xl font-black text-emerald-600" id="dash-floor-percent">0%</span>
+                            </div>
+                        </div>
+                        <div class="w-full space-y-2 text-xs md:text-sm">
+                            <div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-floor-total">0</span></div>
+                            <div class="flex justify-between text-emerald-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-floor-occ">0</span></div>
+                            <div class="flex justify-between text-blue-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-floor-empty">0</span></div>
+                        </div>
+                    </div>
                 </div>
+
                 <div id="admin-finance-panel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200"><h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">재고자산</h3><div class="space-y-3"><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>냉장 자산</span><span id="dash-val-cold">0 원</span></div><div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>실온 자산</span><span id="dash-val-room">0 원</span></div><div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div></div></div>
-                    <div class="bg-rose-50 p-6 rounded-2xl shadow-md border border-rose-200 flex flex-col justify-center"><h3 class="text-rose-800 font-black text-lg mb-2 flex items-center">소모 원가</h3><div class="text-4xl font-black text-rose-600 text-right" id="dash-cost-out">0 원</div></div>
+                    <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200">
+                        <h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">재고자산 (현재 기준)</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>냉장 자산</span><span id="dash-val-cold">0 원</span></div>
+                            <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>실온 자산</span><span id="dash-val-room">0 원</span></div>
+                            <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>현장 자산</span><span id="dash-val-floor">0 원</span></div>
+                            <div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div>
+                        </div>
+                    </div>
+                    <div class="bg-rose-50 p-6 rounded-2xl shadow-md border border-rose-200 flex flex-col justify-center text-center">
+                        <h3 class="text-rose-800 font-black text-lg mb-2 flex items-center justify-center">선택 기간 내 소모 원가 (출고)</h3>
+                        <div class="text-4xl font-black text-rose-600" id="dash-cost-out">0 원</div>
+                        <div class="text-xs text-rose-400 mt-2 font-bold" id="dash-cost-label">일간 기준</div>
+                    </div>
                 </div>
             </div>
 
