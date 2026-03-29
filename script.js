@@ -19,7 +19,6 @@ let expandedBomRows = {};
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
-const layoutFloor = [ { id: 'FL-C', title: '생산 현장 (원재료/냉장)', cols: 20 }, { aisle: true, text: '====================' }, { id: 'FL-R', title: '생산 현장 (부자재/실온)', cols: 20 } ];
 
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
@@ -518,6 +517,26 @@ async function createWaitingPallets() {
     }
 }
 
+// 💡 [현장 칸 수 조절 로직]
+function changeFloorCols(floorId, delta) {
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 없습니다.");
+    let currentCols = parseInt(localStorage.getItem(floorId + '_cols')) || 20;
+    let newCols = currentCols + delta;
+
+    if(newCols < 1) return alert("최소 1칸 이상이어야 합니다.");
+    if(newCols > 100) return alert("최대 100칸까지 생성 가능합니다.");
+
+    // 칸을 줄일 때 해당 칸에 재고가 있는지 확인
+    if(delta < 0) {
+        let targetId = `${floorId}-${currentCols.toString().padStart(2, '0')}`;
+        let hasItem = globalOccupancy.some(item => item.location_id === targetId);
+        if(hasItem) return alert(`마지막 칸(${targetId})에 재고가 남아있어 줄일 수 없습니다.\n먼저 재고를 이동시켜주세요.`);
+    }
+
+    localStorage.setItem(floorId + '_cols', newCols);
+    renderMap();
+}
+
 function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier) {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 렉 이동을 할 수 없습니다.");
     if (movingItem && movingItem.invId === invId) { cancelMove(); return; } 
@@ -620,28 +639,78 @@ function renderMap() {
         let wGrid = document.getElementById('waiting-grid'); if(wGrid) wGrid.innerHTML = waitHtml;
 
         let vHtml = ''; if(hContainer) hContainer.innerHTML = ''; 
+        
+        // 💡 생산현장 1/2/3층 레이아웃 처리
         if(currentZone === '현장') { 
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
-            vHtml += `<div class="w-full min-w-[700px]">`; 
-            layoutFloor.forEach(col => { 
-                if(col.aisle) { vHtml += `<div class="w-full h-10 bg-yellow-50/50 flex items-center justify-center border-y-2 border-yellow-300 shadow-inner my-6 rounded-lg"><span class="text-yellow-600 font-black tracking-widest text-sm">${col.text}</span></div>`; } 
-                else { 
-                    let colorClass = col.id === 'FL-C' ? 'text-indigo-800 bg-indigo-50 border-indigo-200' : 'text-orange-800 bg-orange-50 border-orange-200'; 
-                    vHtml += `<div class="mb-4 bg-white p-5 rounded-2xl shadow-md border border-slate-200"><div class="text-lg font-black ${colorClass} p-3 rounded-lg border mb-4 shadow-sm inline-block">${col.title}</div><div class="grid grid-cols-10 gap-3">`; 
-                    for (let r = 1; r <= col.cols; r++) { 
-                        let dbId = `${col.id}-${r.toString().padStart(2, '0')}`; let searchId = dbId; let hasItem = occMap[searchId]; let cellState = hasItem ? 'cell-full' : 'cell-empty'; if(selectedCellId === dbId) cellState = 'cell-active'; 
-                        let pCount = palletMap[searchId] || 0; let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md z-10 animate-bounce">${pCount.toFixed(1)}P</div>` : ''; 
-                        let isTarget = globalSearchTargets.includes(searchId); let pulseClass = isTarget ? 'highlight-pulse' : '';
-                        let isMovingSource = (movingItem && movingItem.fromLoc === searchId); if(isMovingSource) pulseClass += ' highlight-move';
-                        
-                        let itemsInCell = globalOccupancy.filter(x => x.location_id === searchId);
-                        let dblClickAttr = (itemsInCell.length > 0 && loginMode !== 'viewer') ? `ondblclick="selectForMove('${itemsInCell[0].id}', '${itemsInCell[0].item_name}', ${itemsInCell[0].quantity}, ${pCount}, '${searchId}', '${itemsInCell[0].remarks||''}')"` : '';
+            
+            let f1Cols = parseInt(localStorage.getItem('FL-1F_cols')) || 20;
+            let f2Cols = parseInt(localStorage.getItem('FL-2F_cols')) || 20;
+            let f3Cols = parseInt(localStorage.getItem('FL-3F_cols')) || 20;
 
-                        vHtml += `<div id="cell-${dbId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${dbId}', '${dbId}')" onclick="clickCell('${dbId}', '${searchId}')" ${dblClickAttr} class="h-16 rounded-xl border-2 flex flex-col items-center justify-center text-[11px] font-black cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm hover:scale-105 transition-all">${badge}<span class="${hasItem?'text-slate-700':'text-slate-400'}">${r}번 칸</span></div>`; 
-                    } 
-                    vHtml += `</div></div>`; 
+            const floorConfig = [
+                { id: 'FL-1F', title: '생산 현장 1층', cols: f1Cols },
+                { id: 'FL-2F', title: '생산 현장 2층', cols: f2Cols },
+                { id: 'FL-3F', title: '생산 현장 3층', cols: f3Cols }
+            ];
+
+            vHtml += `<div class="w-full min-w-[700px] flex flex-col space-y-6 mt-4">`; 
+            floorConfig.forEach(col => { 
+                vHtml += `<div class="bg-white p-5 rounded-2xl shadow-md border border-slate-200">
+                    <div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-3">
+                        <div class="text-lg font-black text-emerald-800 bg-emerald-50 px-4 py-2 rounded-lg border border-emerald-200 shadow-sm">${col.title}</div>
+                        <div class="flex items-center space-x-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+                            <button onclick="changeFloorCols('${col.id}', -1)" class="bg-white hover:bg-rose-50 text-rose-600 border border-slate-300 font-bold px-3 py-1.5 rounded shadow-sm text-xs transition-colors">- 칸 줄이기</button>
+                            <span class="font-black text-slate-700 px-3 text-sm">${col.cols} 칸</span>
+                            <button onclick="changeFloorCols('${col.id}', 1)" class="bg-white hover:bg-blue-50 text-blue-600 border border-slate-300 font-bold px-3 py-1.5 rounded shadow-sm text-xs transition-colors">+ 칸 늘리기</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-5 md:grid-cols-10 gap-3">`; 
+                for (let r = 1; r <= col.cols; r++) { 
+                    let dbId = `${col.id}-${r.toString().padStart(2, '0')}`; 
+                    let searchId = dbId; 
+                    let hasItem = occMap[searchId]; 
+                    let cellState = hasItem ? 'cell-full' : 'cell-empty'; 
+                    if(selectedCellId === dbId) cellState = 'cell-active'; 
+                    
+                    let pCount = palletMap[searchId] || 0; 
+                    let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md z-10 animate-bounce">${pCount.toFixed(1)}P</div>` : ''; 
+                    let isTarget = globalSearchTargets.includes(searchId); let pulseClass = isTarget ? 'highlight-pulse' : '';
+                    let isMovingSource = (movingItem && movingItem.fromLoc === searchId); if(isMovingSource) pulseClass += ' highlight-move';
+                    
+                    let itemsInCell = globalOccupancy.filter(x => x.location_id === searchId);
+                    let dblClickAttr = (itemsInCell.length > 0 && loginMode !== 'viewer') ? `ondblclick="selectForMove('${itemsInCell[0].id}', '${itemsInCell[0].item_name}', ${itemsInCell[0].quantity}, ${pCount}, '${searchId}', '${itemsInCell[0].remarks||''}')"` : '';
+
+                    vHtml += `<div id="cell-${dbId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${dbId}', '${dbId}')" onclick="clickCell('${dbId}', '${searchId}')" ${dblClickAttr} class="h-16 rounded-xl border-2 flex flex-col items-center justify-center text-[11px] font-black cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm hover:scale-105 transition-all">${badge}<span class="${hasItem?'text-slate-700':'text-slate-400'}">${r}번 칸</span></div>`; 
                 } 
-            }); vHtml += `</div>`; 
+                vHtml += `</div></div>`; 
+            }); 
+            
+            // 구 레이아웃 데이터 호환용 영역
+            let oldItems = globalOccupancy.filter(o => o.location_id.startsWith('FL-C') || o.location_id.startsWith('FL-R'));
+            if (oldItems.length > 0) {
+                let oldIds = [...new Set(oldItems.map(o => o.location_id))].sort();
+                vHtml += `<div class="mt-8 bg-rose-50 p-5 rounded-2xl shadow-md border-2 border-rose-200">
+                    <div class="text-lg font-black text-rose-800 mb-4">이전 레이아웃 재고 (새로운 1~3층으로 이동시켜주세요)</div>
+                    <div class="grid grid-cols-5 md:grid-cols-10 gap-3">`;
+                oldIds.forEach(searchId => {
+                    let cellState = 'cell-full';
+                    if(selectedCellId === searchId) cellState = 'cell-active'; 
+                    let pCount = palletMap[searchId] || 0; 
+                    let badge = (pCount > 1) ? `<div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full shadow-md z-10">${pCount.toFixed(1)}P</div>` : ''; 
+                    
+                    let isMovingSource = (movingItem && movingItem.fromLoc === searchId); 
+                    let pulseClass = isMovingSource ? 'highlight-move' : '';
+
+                    let itemsInCell = globalOccupancy.filter(x => x.location_id === searchId);
+                    let dblClickAttr = (itemsInCell.length > 0 && loginMode !== 'viewer') ? `ondblclick="selectForMove('${itemsInCell[0].id}', '${itemsInCell[0].item_name}', ${itemsInCell[0].quantity}, ${pCount}, '${searchId}', '${itemsInCell[0].remarks||''}')"` : '';
+
+                    vHtml += `<div id="cell-${searchId}" onclick="clickCell('${searchId}', '${searchId}')" ${dblClickAttr} class="h-16 rounded-xl border-2 border-rose-300 flex flex-col items-center justify-center text-[11px] font-black cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm hover:scale-105 transition-all">${badge}<span class="text-rose-700">${searchId}</span></div>`;
+                });
+                vHtml += `</div></div>`;
+            }
+
+            vHtml += `</div>`; 
             if(vContainer) vContainer.innerHTML = vHtml; 
             return; 
         } 
@@ -805,7 +874,6 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
     } 
     else if (action === '3') { 
         if(confirm(`정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(정산/회계 내역에서도 함께 삭제됩니다)`)) { 
-            
             let targetHistories = globalHistory.filter(h => 
                 h.action_type === '입고' && 
                 h.location_id === locId && 
@@ -1054,7 +1122,7 @@ function highlightFIFO() {
     globalSearchTargets = targets.map(t => t.location_id);
     let firstLoc = globalSearchTargets[0];
     currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1";
-    updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 깜빡이로 표시합니다.`); 
+    updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 표시합니다.`); 
 }
 
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
@@ -1605,16 +1673,6 @@ function renderAccounting() {
         document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
-}
-
-function exportAccountingExcel() {
-    try {
-        const table = document.getElementById('accounting-table');
-        if(!table) return alert("다운로드할 표가 없습니다.");
-        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
-        let today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
-    } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
