@@ -16,6 +16,7 @@ let orderCart = [];
 let movingItem = null;
 let bomCart = [];
 let expandedBomRows = {}; 
+let isRightPanelVisible = true; // 패널 토글 상태 변수 추가
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
@@ -135,6 +136,19 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
+// 💡 우측 패널 토글 함수
+function toggleRightPanel() {
+    let rs = document.getElementById('right-sidebar');
+    if(!rs) return;
+    if(isRightPanelVisible) {
+        rs.classList.add('hidden'); rs.classList.remove('flex');
+        isRightPanelVisible = false;
+    } else {
+        rs.classList.remove('hidden'); rs.classList.add('flex');
+        isRightPanelVisible = true;
+    }
+}
+
 function updateZoneTabs() {
     try {
         ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => {
@@ -166,7 +180,7 @@ function updateZoneTabs() {
 function switchZone(zone) { 
     globalSearchTargets = []; currentZone = zone; selectedCellId = null; movingItem = null;
     let rs = document.getElementById('right-sidebar');
-    if(window.innerWidth < 768 && rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
+    if(window.innerWidth < 768 && rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; }
     updateZoneTabs(); renderMap(); populateWaitDropdowns();
 }
 
@@ -185,8 +199,8 @@ function switchOrderTab(tab) {
 
         let rs = document.getElementById('right-sidebar');
         if(tab === 'inventory') {
-            if(window.innerWidth >= 768 && rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); }
-            else if(rs) { if(selectedCellId) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
+            if(window.innerWidth >= 768 && rs && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); }
+            else if(rs) { if(selectedCellId && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
             renderMap();
         } else { if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
 
@@ -205,8 +219,8 @@ function showView(viewName) {
     
     let rs = document.getElementById('right-sidebar');
     if(viewName === 'order' && currentOrderTab === 'inventory') { 
-        if(window.innerWidth >= 768 && rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); } 
-        else if(rs) { if(selectedCellId) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
+        if(window.innerWidth >= 768 && rs && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } 
+        else if(rs) { if(selectedCellId && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
     } else if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
     
     let targetView = document.getElementById('view-' + viewName);
@@ -242,7 +256,7 @@ function showView(viewName) {
 
 function closeInfoPanel() { 
     let rs = document.getElementById('right-sidebar');
-    if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
+    if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; }
     selectedCellId = null; movingItem = null; renderMap(); 
 }
 
@@ -413,19 +427,12 @@ function renderOrderList() {
     }).join('');
 }
 
-// 💡 1. 발주 입고 시 대기장으로 파레트 분할하여 넣기
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
 
-    // 1. 해당 품목의 1파레트당 수량 찾기 (제품 마스터 or 자재 마스터)
-    let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) 
-             || productMaster.find(p => p.item_name === itemName && p.supplier === supplier) 
-             || finishedProductMaster.find(p => p.item_name === itemName) 
-             || productMaster.find(p => p.item_name === itemName);
-             
+    let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) || productMaster.find(p => p.item_name === itemName && p.supplier === supplier) || finishedProductMaster.find(p => p.item_name === itemName) || productMaster.find(p => p.item_name === itemName);
     let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
 
-    // 2. 분할 로직 (remaining을 pEa 단위로 쪼갬)
     let remaining = qty;
     let payloads = [];
     let waitIndex = 1;
@@ -438,7 +445,6 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
 
         for(let i = waitIndex; i <= 30; i++) { 
             let wId = `W-${i.toString().padStart(2, '0')}`; 
-            // 실제 빈 렉인지 && 페이로드 배열 안에서도 안 겹치는지
             if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) { 
                 emptyW = wId; 
                 waitIndex = i + 1; 
@@ -447,23 +453,11 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
         }
 
         if(!emptyW) {
-            if(payloads.length === 0) {
-                return alert(`대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`);
-            } else {
-                alert(`대기 렉이 부족하여 주문량의 일부(${payloads.length}박스)만 먼저 입고 처리됩니다.`);
-                break;
-            }
+            if(payloads.length === 0) { return alert(`대기장(W-01~W-30)이 꽉 찼습니다! 기존 물건을 렉으로 이동시킨 후 다시 시도해주세요.`); } 
+            else { alert(`대기 렉이 부족하여 주문량의 일부(${payloads.length}박스)만 먼저 입고 처리됩니다.`); break; }
         }
 
-        payloads.push({ 
-            location_id: emptyW, 
-            category: cat || '미분류', 
-            item_name: itemName, 
-            quantity: chunk, 
-            pallet_count: chunkPallet, 
-            production_date: todayDate, 
-            remarks: supplier 
-        }); 
+        payloads.push({ location_id: emptyW, category: cat || '미분류', item_name: itemName, quantity: chunk, pallet_count: chunkPallet, production_date: todayDate, remarks: supplier }); 
         remaining -= chunk;
     }
 
@@ -474,19 +468,11 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
 
     try {
         await fetch(`/api/history/${logId}`, { method: 'DELETE' });
-        
-        let promises = payloads.map(p => fetch('/api/inbound', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify(p) 
-        })); 
+        let promises = payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) })); 
         await Promise.all(promises); 
-        
         alert("입고 분할 처리 완료! 대기장을 확인하세요.");
         await load();
-    } catch(e) { 
-        alert("입고 처리 중 오류가 발생했습니다."); 
-    }
+    } catch(e) { alert("입고 처리 중 오류가 발생했습니다."); }
 }
 
 async function cancelOrder(logId) {
@@ -629,6 +615,9 @@ function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier
             </div>
         `;
     }
+    // 이동 시 우측 패널 무조건 열기
+    let rs = document.getElementById('right-sidebar');
+    if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
 }
 
 function cancelMove() {
@@ -863,7 +852,7 @@ async function clickCell(displayId, searchId) {
         selectedCellId = displayId; 
         renderMap(); 
         let rs = document.getElementById('right-sidebar');
-        if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); }
+        if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
         
         const panel = document.getElementById('info-panel'); 
         let floorSel = document.getElementById('floor-select');
@@ -978,27 +967,34 @@ function updateDashboard() {
     try {
         let dashPeriod = document.getElementById('dash-period');
         const period = dashPeriod ? dashPeriod.value : 'daily'; 
+        
+        let dashCostLabel = document.getElementById('dash-cost-label');
+        if(dashCostLabel) {
+            if(period === 'daily') dashCostLabel.innerText = "일간 기준";
+            else if(period === 'weekly') dashCostLabel.innerText = "주간 기준";
+            else if(period === 'monthly') dashCostLabel.innerText = "월간 기준";
+        }
+
         let startDate = new Date(); 
         startDate.setHours(0,0,0,0);
-        
         if(period === 'daily') startDate.setDate(startDate.getDate() - 1); 
         else if(period === 'weekly') startDate.setDate(startDate.getDate() - 7); 
         else if(period === 'monthly') startDate.setMonth(startDate.getMonth() - 1); 
         
-        let inPallets = 0, outPallets = 0, productionCost = 0; 
+        let productionCost = 0; 
         let allItems = [...finishedProductMaster, ...productMaster];
         
         globalHistory.forEach(log => { 
             if (!log) return;
+            if (log.action_type === '삭제(취소)') return;
+            
             let logDateStr = log.production_date || log.created_at;
             if (!logDateStr) return;
             let logDate = new Date(logDateStr);
+            
             if(logDate >= startDate) { 
-                let pallet = parseFloat(log.pallet_count) || 1;
                 let qty = parseInt(log.quantity) || 0;
-                if(log.action_type === '입고') inPallets += pallet; 
                 if(log.action_type === '출고') { 
-                    outPallets += pallet; 
                     let pInfo = allItems.find(p => String(p.item_name||"").trim() === String(log.item_name||"").trim() && String(p.supplier||"").trim() === String(log.remarks||"").trim()); 
                     if(!pInfo) pInfo = allItems.find(p => String(p.item_name||"").trim() === String(log.item_name||"").trim());
                     if(pInfo) productionCost += ((parseFloat(pInfo.unit_price) || 0) * qty); 
@@ -1006,11 +1002,13 @@ function updateDashboard() {
             } 
         }); 
         
-        let dashIn = document.getElementById('dash-in'); if(dashIn) dashIn.innerText = inPallets.toFixed(1) + ' P'; 
-        let dashOut = document.getElementById('dash-out'); if(dashOut) dashOut.innerText = outPallets.toFixed(1) + ' P'; 
-        let dashCostOut = document.getElementById('dash-cost-out'); if(dashCostOut) dashCostOut.innerText = productionCost.toLocaleString() + ' 원'; 
+        let dashCostOut = document.getElementById('dash-cost-out'); 
+        if(dashCostOut) dashCostOut.innerText = productionCost.toLocaleString() + ' 원'; 
         
-        let totalRoom = 0, occRoom = 0, totalCold = 0, occCold = 0; let valRoom = 0, valCold = 0; 
+        let totalRoom = 0, occRoom = 0, valRoom = 0; 
+        let totalCold = 0, occCold = 0, valCold = 0;
+        let totalFloor = 0, occFloor = 0, valFloor = 0;
+        
         globalOccupancy.forEach(item => { 
             if (!item) return;
             let dynP = getDynamicPalletCount(item); 
@@ -1019,39 +1017,48 @@ function updateDashboard() {
             
             let val = pInfo ? (parseFloat(pInfo.unit_price) || 0) * (parseInt(item.quantity) || 0) : 0; 
             let loc = String(item.location_id || "");
+            
             if(loc.startsWith('R-') || loc.startsWith('K')) { occRoom += dynP; valRoom += val; } 
             else if(loc.startsWith('C-') || loc.startsWith('I')) { occCold += dynP; valCold += val; } 
-            else if(!loc.startsWith('W-') && !loc.startsWith('FL-')) { valRoom += val; } 
+            else if(loc.startsWith('FL-')) { occFloor += dynP; valFloor += val; }
         }); 
         
         layoutRoom.forEach(col => { if(col.cols) totalRoom += col.cols * 2; }); totalRoom += 20; 
         layoutCold.forEach(col => { if(col.cols) totalCold += col.cols * 2; }); totalCold += 16; 
-        let totalAll = totalRoom + totalCold; let occAll = occRoom + occCold; 
         
-        let dashZoneSel = document.getElementById('dash-zone-select'); const dashZone = dashZoneSel ? dashZoneSel.value : 'ALL'; 
-        let finalOcc = occAll, finalTotal = totalAll; 
-        if(dashZone === 'ROOM') { finalOcc = occRoom; finalTotal = totalRoom; } 
-        else if(dashZone === 'COLD') { finalOcc = occCold; finalTotal = totalCold; }
+        let f1Cols = parseInt(localStorage.getItem('FL-1F_cols')) || 20;
+        let f2Cols = parseInt(localStorage.getItem('FL-2F_cols')) || 20;
+        let f3Cols = parseInt(localStorage.getItem('FL-3F_cols')) || 20;
+        totalFloor = f1Cols + f2Cols + f3Cols;
+
+        let roomCapRate = totalRoom > 0 ? Math.round((occRoom / totalRoom) * 100) : 0;
+        let dRoom = document.getElementById('dash-room-donut');
+        if(dRoom) dRoom.style.background = `conic-gradient(${roomCapRate > 100 ? '#ea580c' : '#f97316'} 0% ${Math.min(roomCapRate, 100)}%, #e2e8f0 ${Math.min(roomCapRate, 100)}% 100%)`;
+        let pRoom = document.getElementById('dash-room-percent'); if(pRoom) pRoom.innerText = roomCapRate + '%';
+        let tRoom = document.getElementById('dash-room-total'); if(tRoom) tRoom.innerText = totalRoom;
+        let oRoom = document.getElementById('dash-room-occ'); if(oRoom) oRoom.innerText = occRoom.toFixed(1);
+        let eRoom = document.getElementById('dash-room-empty'); if(eRoom) eRoom.innerText = Math.max(0, totalRoom - Math.floor(occRoom));
+
+        let coldCapRate = totalCold > 0 ? Math.round((occCold / totalCold) * 100) : 0;
+        let dCold = document.getElementById('dash-cold-donut');
+        if(dCold) dCold.style.background = `conic-gradient(${coldCapRate > 100 ? '#4f46e5' : '#6366f1'} 0% ${Math.min(coldCapRate, 100)}%, #e2e8f0 ${Math.min(coldCapRate, 100)}% 100%)`;
+        let pCold = document.getElementById('dash-cold-percent'); if(pCold) pCold.innerText = coldCapRate + '%';
+        let tCold = document.getElementById('dash-cold-total'); if(tCold) tCold.innerText = totalCold;
+        let oCold = document.getElementById('dash-cold-occ'); if(oCold) oCold.innerText = occCold.toFixed(1);
+        let eCold = document.getElementById('dash-cold-empty'); if(eCold) eCold.innerText = Math.max(0, totalCold - Math.floor(occCold));
+
+        let floorCapRate = totalFloor > 0 ? Math.round((occFloor / totalFloor) * 100) : 0;
+        let dFloor = document.getElementById('dash-floor-donut');
+        if(dFloor) dFloor.style.background = `conic-gradient(${floorCapRate > 100 ? '#059669' : '#10b981'} 0% ${Math.min(floorCapRate, 100)}%, #e2e8f0 ${Math.min(floorCapRate, 100)}% 100%)`;
+        let pFloor = document.getElementById('dash-floor-percent'); if(pFloor) pFloor.innerText = floorCapRate + '%';
+        let tFloor = document.getElementById('dash-floor-total'); if(tFloor) tFloor.innerText = totalFloor;
+        let oFloor = document.getElementById('dash-floor-occ'); if(oFloor) oFloor.innerText = occFloor.toFixed(1);
+        let eFloor = document.getElementById('dash-floor-empty'); if(eFloor) eFloor.innerText = Math.max(0, totalFloor - Math.floor(occFloor));
         
-        let capRate = finalTotal > 0 ? Math.round((finalOcc / finalTotal) * 100) : 0; 
-        let dashCapPer = document.getElementById('dash-cap-percent'); if(dashCapPer) dashCapPer.innerText = capRate + '%'; 
-        let dashCapText = document.getElementById('dash-cap-text'); if(dashCapText) dashCapText.innerText = `${finalOcc.toFixed(1)} / ${finalTotal} 파레트`; 
-        let color = capRate > 100 ? '#e11d48' : '#10b981'; 
-        let dashDonut = document.getElementById('dash-donut'); if(dashDonut) dashDonut.style.background = `conic-gradient(${color} 0% ${Math.min(capRate, 100)}%, #e2e8f0 ${Math.min(capRate, 100)}% 100%)`; 
-        
-        let elRoomTotal = document.getElementById('dash-room-total'); if(elRoomTotal) elRoomTotal.innerText = totalRoom; 
-        let elRoomOcc = document.getElementById('dash-room-occ'); if(elRoomOcc) elRoomOcc.innerText = occRoom.toFixed(1); 
-        let elRoomEmpty = document.getElementById('dash-room-empty'); if(elRoomEmpty) elRoomEmpty.innerText = Math.max(0, totalRoom - Math.floor(occRoom)); 
-        let elRoomPer = document.getElementById('dash-room-percent'); if(elRoomPer) elRoomPer.innerText = totalRoom > 0 ? Math.round((occRoom/totalRoom)*100) + '%' : '0%'; 
-        
-        let elColdTotal = document.getElementById('dash-cold-total'); if(elColdTotal) elColdTotal.innerText = totalCold; 
-        let elColdOcc = document.getElementById('dash-cold-occ'); if(elColdOcc) elColdOcc.innerText = occCold.toFixed(1); 
-        let elColdEmpty = document.getElementById('dash-cold-empty'); if(elColdEmpty) elColdEmpty.innerText = Math.max(0, totalCold - Math.floor(occCold)); 
-        let elColdPer = document.getElementById('dash-cold-percent'); if(elColdPer) elColdPer.innerText = totalCold > 0 ? Math.round((occCold/totalCold)*100) + '%' : '0%'; 
-        
-        let vRoom = document.getElementById('dash-val-room'); if(vRoom) vRoom.innerText = valRoom.toLocaleString() + ' 원'; 
-        let vCold = document.getElementById('dash-val-cold'); if(vCold) vCold.innerText = valCold.toLocaleString() + ' 원'; 
-        let vTotal = document.getElementById('dash-val-total'); if(vTotal) vTotal.innerText = (valRoom + valCold).toLocaleString() + ' 원'; 
+        let vRoomVal = document.getElementById('dash-val-room'); if(vRoomVal) vRoomVal.innerText = valRoom.toLocaleString() + ' 원'; 
+        let vColdVal = document.getElementById('dash-val-cold'); if(vColdVal) vColdVal.innerText = valCold.toLocaleString() + ' 원'; 
+        let vFloorVal = document.getElementById('dash-val-floor'); if(vFloorVal) vFloorVal.innerText = valFloor.toLocaleString() + ' 원'; 
+        let vTotal = document.getElementById('dash-val-total'); if(vTotal) vTotal.innerText = (valRoom + valCold + valFloor).toLocaleString() + ' 원'; 
     } catch(e) { console.error("Dashboard Error:", e); }
 }
 
@@ -1544,7 +1551,7 @@ function renderBomMaster() {
                 <td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm">
                     <div class="flex justify-between items-center">
                         <span>${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
-                        <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기' : '펼치기'}</span>
+                        <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기 🔼' : '펼치기 🔽'}</span>
                     </div>
                 </td>
             </tr>`;
@@ -1554,9 +1561,9 @@ function renderBomMaster() {
                     let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
                     html += `
                     <tr class="hover:bg-slate-50 transition-colors bg-white">
-                        <td class="p-2 border-b border-slate-100 pl-6 text-slate-300 text-sm font-black">-</td>
+                        <td class="p-2 border-b border-slate-100 pl-6 text-slate-300 text-sm font-black">↳</td>
                         <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-[11px] md:text-xs">${b.material_product}</td>
-                        <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-[11px] md:text-xs bg-slate-50 rounded-lg m-1 inline-block">${b.require_qty} <span class="text-[9px] font-normal text-slate-500">EA</span></td>
+                        <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-[11px] md:text-xs">${b.require_qty} <span class="text-[9px] font-normal text-slate-500">EA</span></td>
                         <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
                     </tr>`;
                 });
@@ -1654,11 +1661,12 @@ function updateAccFilters(changedFilter) {
     } catch(e) { console.error("Filter Update Error:", e); }
 }
 
+// 💡 2. 삭제 시 관리자 비밀번호 이중 확인
 async function deleteAccountingRecord(idsStr, itemName) {
     if(!isAdmin) return alert("관리자 권한이 필요합니다.");
-    const pw = prompt(`[${itemName}] 정산 내역 삭제\n관리자 비밀번호를 다시 입력하세요:`);
+    const pw = prompt(`[${itemName}] 정산 내역 삭제\n보안을 위해 관리자 비밀번호를 다시 입력하세요:`);
     if(pw !== "123456789*") return alert("비밀번호가 틀렸습니다.");
-    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(일자별로 묶인 동일 품목이 모두 삭제되며, 복구할 수 없습니다)`)) return;
+    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(해당 일자에 묶인 동일 품목 전체가 삭제되며, 복구할 수 없습니다)`)) return;
 
     try {
         let ids = idsStr.split(',');
@@ -1703,7 +1711,7 @@ function renderAccounting() {
                         supplier: hSup,
                         item_name: h.item_name,
                         quantity: 0,
-                        ids: []
+                        ids: [] // 여러 건일 경우 모두 담음
                     };
                 }
                 dailyGroups[key].quantity += h.quantity;
@@ -1727,7 +1735,7 @@ function renderAccounting() {
                 }
                 
                 let idsStr = h.ids.join(',');
-                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold">삭제</button>` : '';
+                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold transition-colors">삭제</button>` : '';
 
                 html += `<tr class="bg-white border-b border-slate-100 hover:bg-indigo-50 transition-colors">
                     <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">-</td>
@@ -1774,6 +1782,16 @@ function renderAccounting() {
         document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
+}
+
+function exportAccountingExcel() {
+    try {
+        const table = document.getElementById('accounting-table');
+        if(!table) return alert("다운로드할 표가 없습니다.");
+        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
+    } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
