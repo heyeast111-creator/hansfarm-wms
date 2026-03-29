@@ -119,6 +119,39 @@ function exportPhysicalCountExcel() {
     } catch (error) { alert("양식 다운로드 중 오류가 발생했습니다."); }
 }
 
+// 💡 1. 렉맵 모든 히스토리 엑셀 다운로드 추가
+function exportAllHistoryExcel() {
+    try {
+        if (globalHistory.length === 0) return alert("출력할 히스토리 데이터가 없습니다.");
+        
+        let sorted = [...globalHistory].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        let wsData = sorted.map(h => {
+            let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            return {
+                "처리 일시": dateStr,
+                "입고일/산란일": h.production_date || "",
+                "렉 위치": h.location_id || "",
+                "작업 구분": h.action_type || "",
+                "카테고리": h.category || "",
+                "품목명": h.item_name || "",
+                "수량(EA)": h.quantity || 0,
+                "파레트(P)": h.pallet_count || 0,
+                "비고/입고처": h.remarks || ""
+            };
+        });
+        
+        const wb = XLSX.utils.book_new(); 
+        const ws = XLSX.utils.json_to_sheet(wsData); 
+        ws['!cols'] = [{wch: 22}, {wch: 15}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 25}, {wch: 10}, {wch: 10}, {wch: 20}]; 
+        XLSX.utils.book_append_sheet(wb, ws, "전체렉히스토리"); 
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_전체렉히스토리_${today}.xlsx`);
+    } catch(e) {
+        alert("엑셀 다운로드 중 오류가 발생했습니다.");
+    }
+}
+
 function updateZoneTabs() {
     try {
         ['tab-room', 'tab-cold', 'tab-floor'].forEach(id => {
@@ -517,7 +550,6 @@ async function createWaitingPallets() {
     }
 }
 
-// 💡 [현장 칸 수 조절 로직]
 function changeFloorCols(floorId, delta) {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 없습니다.");
     let currentCols = parseInt(localStorage.getItem(floorId + '_cols')) || 20;
@@ -526,7 +558,6 @@ function changeFloorCols(floorId, delta) {
     if(newCols < 1) return alert("최소 1칸 이상이어야 합니다.");
     if(newCols > 100) return alert("최대 100칸까지 생성 가능합니다.");
 
-    // 칸을 줄일 때 해당 칸에 재고가 있는지 확인
     if(delta < 0) {
         let targetId = `${floorId}-${currentCols.toString().padStart(2, '0')}`;
         let hasItem = globalOccupancy.some(item => item.location_id === targetId);
@@ -640,7 +671,6 @@ function renderMap() {
 
         let vHtml = ''; if(hContainer) hContainer.innerHTML = ''; 
         
-        // 💡 생산현장 1/2/3층 레이아웃 처리
         if(currentZone === '현장') { 
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
             
@@ -686,7 +716,6 @@ function renderMap() {
                 vHtml += `</div></div>`; 
             }); 
             
-            // 구 레이아웃 데이터 호환용 영역
             let oldItems = globalOccupancy.filter(o => o.location_id.startsWith('FL-C') || o.location_id.startsWith('FL-R'));
             if (oldItems.length > 0) {
                 let oldIds = [...new Set(oldItems.map(o => o.location_id))].sort();
@@ -1122,7 +1151,7 @@ function highlightFIFO() {
     globalSearchTargets = targets.map(t => t.location_id);
     let firstLoc = globalSearchTargets[0];
     currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1";
-    updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 표시합니다.`); 
+    updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}\n해당 위치를 깜빡이로 표시합니다.`); 
 }
 
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
@@ -1585,14 +1614,16 @@ function updateAccFilters(changedFilter) {
     } catch(e) { console.error("Filter Update Error:", e); }
 }
 
-async function deleteAccountingRecord(logId, itemName) {
+async function deleteAccountingRecord(idsStr, itemName) {
     if(!isAdmin) return alert("관리자 권한이 필요합니다.");
-    const pw = prompt("관리자 비밀번호를 다시 입력하세요:");
+    const pw = prompt(`[${itemName}] 정산 내역 삭제\n관리자 비밀번호를 다시 입력하세요:`);
     if(pw !== "123456789*") return alert("비밀번호가 틀렸습니다.");
-    if(!confirm(`[${itemName}] 해당 입고/정산 내역을 정말 삭제하시겠습니까? (이 작업은 되돌릴 수 없습니다)`)) return;
+    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(일자별로 묶인 동일 품목이 모두 삭제되며, 복구할 수 없습니다)`)) return;
 
     try {
-        await fetch(`/api/history/${logId}`, { method: 'DELETE' });
+        let ids = idsStr.split(',');
+        let promises = ids.map(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
+        await Promise.all(promises);
         alert("정산 내역 삭제 완료!");
         await load();
     } catch(e) {
@@ -1617,33 +1648,63 @@ function renderAccounting() {
             return matchDate && matchSup && matchItem;
         });
 
-        filtered.sort((a,b) => {
-            let dateA = a.production_date ? a.production_date : a.created_at.substring(0, 10);
-            let dateB = b.production_date ? b.production_date : b.created_at.substring(0, 10);
-            return new Date(dateB) - new Date(dateA);
-        });
-
         let totalSupply = 0, totalTax = 0, totalSum = 0; let html = '';
 
-        if(groupMode === 'list') {
-            html = filtered.map((h, i) => {
+        if(groupMode === 'daily_item') {
+            let dailyGroups = {};
+            filtered.forEach(h => {
                 let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
                 let hSup = h.remarks || '기본입고처';
-                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(hSup).trim());
-                if(!pInfo) pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
+                let key = `${hDate}|${hSup}|${h.item_name}`;
+
+                if (!dailyGroups[key]) {
+                    dailyGroups[key] = {
+                        date: hDate,
+                        supplier: hSup,
+                        item_name: h.item_name,
+                        quantity: 0,
+                        ids: []
+                    };
+                }
+                dailyGroups[key].quantity += h.quantity;
+                dailyGroups[key].ids.push(h.id);
+            });
+
+            let consolidated = Object.values(dailyGroups);
+            consolidated.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+            let currentDate = '';
+            consolidated.forEach((h, i) => {
+                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(h.supplier||'').trim()) || allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
                 
                 let price = pInfo ? (parseFloat(pInfo.unit_price) || 0) : 0;
                 let supply = price * h.quantity; let tax = Math.floor(supply * 0.1); let sum = supply + tax;
                 totalSupply += supply; totalTax += tax; totalSum += sum;
-                let bgClass = i % 2 === 0 ? 'bg-white' : 'bg-slate-50'; 
                 
-                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${h.id}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold">삭제</button>` : '';
+                if (currentDate !== h.date) {
+                    html += `<tr class="bg-slate-200 border-y-2 border-slate-300"><td colspan="9" class="p-2 font-black text-slate-800 text-xs md:text-sm">일자: ${h.date}</td></tr>`;
+                    currentDate = h.date;
+                }
+                
+                let idsStr = h.ids.join(',');
+                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold">삭제</button>` : '';
 
-                return `<tr class="${bgClass} border-b border-slate-200 hover:bg-indigo-50 transition-colors"><td class="p-1.5 md:p-2 text-slate-500 text-[10px] md:text-[11px] whitespace-nowrap">${hDate}</td><td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${hSup}</td><td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-500 text-[10px] md:text-[11px]">${price.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-black text-slate-700 text-[11px] md:text-xs">${supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-rose-500 text-[10px] md:text-[11px]">${tax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-black text-blue-700 text-[11px] md:text-xs">${sum.toLocaleString()}</td><td class="p-1.5 md:p-2 text-center">${delBtn}</td></tr>`;
-            }).join('');
+                html += `<tr class="bg-white border-b border-slate-100 hover:bg-indigo-50 transition-colors">
+                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">-</td>
+                    <td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td>
+                    <td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td>
+                    <td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right text-slate-500 text-[10px] md:text-[11px]">${price.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right font-black text-slate-700 text-[11px] md:text-xs">${supply.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right font-bold text-rose-500 text-[10px] md:text-[11px]">${tax.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-right font-black text-blue-700 text-[11px] md:text-xs">${sum.toLocaleString()}</td>
+                    <td class="p-1.5 md:p-2 text-center">${delBtn}</td>
+                </tr>`;
+            });
         } else {
             let groupAggr = {};
             filtered.forEach(h => {
+                let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
                 let hSup = h.remarks || '기본입고처';
                 let key = groupMode === 'supplier' ? hSup : h.item_name; 
                 let subKey = groupMode === 'supplier' ? h.item_name : hSup;
@@ -1673,6 +1734,16 @@ function renderAccounting() {
         document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
+}
+
+function exportAccountingExcel() {
+    try {
+        const table = document.getElementById('accounting-table');
+        if(!table) return alert("다운로드할 표가 없습니다.");
+        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
+    } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
