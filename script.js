@@ -786,6 +786,7 @@ async function clickCell(displayId, searchId) {
 async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
     let action = prompt(`[${itemName}] 편집 메뉴\n\n1: 수량 수정 (EA)\n2: 날짜 수정 (YYYY-MM-DD)\n3: 기록 완전 삭제 (오입력 취소)\n\n원하시는 작업 번호를 입력하세요:`);
+    
     if (action === '1') { 
         let newQtyStr = prompt(`새로운 수량(EA)을 입력하세요:\n(현재 수량: ${qty} EA)`, qty); 
         if(newQtyStr) { 
@@ -793,10 +794,41 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
             if(newQty > 0) { 
                 let newPallet = getDynamicPalletCount({item_name: itemName, remarks: remarks, quantity: newQty}); 
                 await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_QTY', new_quantity: newQty, pallet_count: newPallet }) }); 
-                alert("수량 수정 완료!"); await load(); 
+                alert("수량 수정 완료!\n(※ 주의: 정산서의 입고 금액까지 수정하려면 3번 '완전 삭제' 후 다시 입고 잡아주세요.)"); await load(); 
             } else alert("올바른 수량을 입력하세요."); 
         } 
     } 
+    else if (action === '2') { 
+        let newDate = prompt(`새로운 날짜를 입력하세요:\n(형식: YYYY-MM-DD)`, date || ''); 
+        if(newDate !== null) { 
+            await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_DATE', new_date: newDate }) }); 
+            alert("날짜 수정 완료!"); await load(); 
+        } 
+    } 
+    else if (action === '3') { 
+        if(confirm(`⚠️ 정말 [${itemName}]의 이 재고 기록을 완전히 삭제하시겠습니까?\n(정산/회계 내역에서도 함께 삭제됩니다)`)) { 
+            
+            // 💡 1. 렉에서 지우기 전에 정산서에 남아있는 '입고 원본 히스토리'를 찾아서 폭파시킴
+            let targetHistories = globalHistory.filter(h => 
+                h.action_type === '입고' && 
+                h.location_id === locId && 
+                h.item_name === itemName && 
+                (h.remarks || '') === (remarks || '')
+            );
+            // 가장 최근에 입고된 똑같은 기록을 찾음
+            targetHistories.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            
+            if(targetHistories.length > 0) {
+                await fetch(`/api/history/${targetHistories[0].id}`, { method: 'DELETE' });
+            }
+
+            // 💡 2. 렉맵(인벤토리)에서 삭제
+            await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'DELETE' }) }); 
+            
+            alert("재고 및 정산/입고 기록 완벽 삭제 완료!"); await load(); 
+        } 
+    }
+}
     else if (action === '2') { 
         let newDate = prompt(`새로운 날짜를 입력하세요:\n(형식: YYYY-MM-DD)`, date || ''); 
         if(newDate !== null) { 
