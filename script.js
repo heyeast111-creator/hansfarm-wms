@@ -14,6 +14,7 @@ let editingProductOriginalName = null;
 let editingProductOriginalSupplier = null;
 let orderCart = []; 
 let movingItem = null;
+let bomCart = [];
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
@@ -739,7 +740,7 @@ async function clickCell(displayId, searchId) {
 
             if(recentHistory.length > 0) { 
                 recentHistory.forEach(h => { 
-                    let actionColor = h.action_type === '입고' ? 'textemerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
+                    let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
                     let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
                     histHtml += `<div class="bg-white p-2 border border-slate-200 rounded text-[10px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`; 
                 }); 
@@ -1208,53 +1209,13 @@ function importProductsExcel(e, targetType) {
     }; reader.readAsArrayBuffer(file); e.target.value = ''; 
 }
 
-function renderBomMaster() {
-    try {
-        const tbody = document.getElementById('bom-list');
-        if(!tbody) return;
-        if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
-        bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
-        tbody.innerHTML = bomMaster.map(b => {
-            let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-xs font-bold">삭제</button>` : '';
-            return `<tr class="hover:bg-slate-50 transition-colors">
-                <td class="p-2 border-b border-slate-100 font-black text-emerald-800 text-xs md:text-sm">${b.finished_product}</td>
-                <td class="p-2 border-b border-slate-100 text-center text-slate-400">➡️</td>
-                <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-xs md:text-sm">${b.material_product}</td>
-                <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-xs md:text-sm">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td>
-                <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
-            </tr>`;
-        }).join('');
-    } catch(e){}
-}
-
-function exportBomExcel() {
-    let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
-    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
-}
-
-function importBomExcel(e) {
-    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
-    const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
-    reader.onload = async function(ev) {
-        try {
-            const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-            if(json.length > 0) { 
-                await fetch('/api/bom_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
-                alert("BOM 대량 업로드 완료!"); await load(); 
-            }
-        } catch(err) { alert("업로드 처리 중 오류 발생"); }
-    }; reader.readAsArrayBuffer(file); e.target.value = '';
-}
-
-// BOM 전용 장바구니 배열
-// BOM 전용 장바구니 배열
-let bomCart = [];
+// ==========================================
+// 💡 [BOM 레시피 장바구니 로직]
+// ==========================================
 
 function updateBomDropdowns() {
     try {
         const fNames = [...new Set(finishedProductMaster.map(p => p.item_name))].filter(Boolean).sort();
-        const mNames = [...new Set(productMaster.map(p => p.item_name))].filter(Boolean).sort();
-        
         const fOptions = fNames.length > 0 ? fNames.map(name => `<option value="${name}">${name}</option>`).join('') : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
         document.getElementById('bom-finished').innerHTML = fOptions; 
 
@@ -1269,7 +1230,6 @@ function updateBomDropdowns() {
     } catch(e){}
 }
 
-// 카테고리 변경 시 자재 드롭다운 업데이트 (중복 제거 버전)
 function updateBomMaterialDropdown() {
     try {
         const cat = document.getElementById('bom-material-cat').value;
@@ -1279,8 +1239,8 @@ function updateBomMaterialDropdown() {
             filtered = productMaster.filter(p => p.category === cat);
         }
         
-        // 💡 핵심: 입고처가 달라도 품목명이 같으면 하나로 합침
-        const uniqueItemNames = [...new Set(filtered.map(p => p.item_name))].sort();
+        // 💡 1. 여기서 중복된 품목명 제거 (입고처 무시)
+        const uniqueItemNames = [...new Set(filtered.map(p => p.item_name))].filter(Boolean).sort();
         
         const mOptions = uniqueItemNames.map(name => {
             return `<option value="${name}">${name}</option>`;
@@ -1293,13 +1253,11 @@ function updateBomMaterialDropdown() {
     } catch(e){}
 }
 
-// 1. 장바구니에 자재 담기
 function addMaterialToBomCart() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     const mat = document.getElementById('bom-material').value;
     if(!mat) return alert("자재를 선택해주세요.");
     
-    // 이미 담긴 자재인지 확인
     if(bomCart.find(b => b.material === mat)) return alert("이미 조립 목록에 추가된 자재입니다.");
     
     bomCart.push({ material: mat, qty: 1, type: 'per_item' });
@@ -1319,7 +1277,6 @@ function updateBomCartType(index, val) {
     bomCart[index].type = val;
 }
 
-// 2. 장바구니 화면 그리기
 function renderBomCart() {
     const container = document.getElementById('bom-cart-list');
     if(bomCart.length === 0) {
@@ -1341,7 +1298,6 @@ function renderBomCart() {
     `).join('');
 }
 
-// 3. 서버에 일괄 저장
 async function submitBomCart() {
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 불가능합니다.");
     const finished = document.getElementById('bom-finished').value;
@@ -1367,7 +1323,7 @@ async function submitBomCart() {
                 headers: {'Content-Type':'application/json'}, 
                 body: JSON.stringify({ 
                     finished_product: finished, 
-                    material_product: item.material, // 💡 이제 깔끔하게 품목명만 들어갑니다.
+                    material_product: item.material, 
                     require_qty: finalQty 
                 }) 
             });
@@ -1384,11 +1340,53 @@ async function submitBomCart() {
     }
 }
 
+function renderBomMaster() {
+    try {
+        const tbody = document.getElementById('bom-list');
+        if(!tbody) return;
+        if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
+        bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
+        tbody.innerHTML = bomMaster.map(b => {
+            let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-xs font-bold">삭제</button>` : '';
+            return `<tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-2 border-b border-slate-100 font-black text-emerald-800 text-xs md:text-sm">${b.finished_product}</td>
+                <td class="p-2 border-b border-slate-100 text-center text-slate-400">➡️</td>
+                <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-xs md:text-sm">${b.material_product}</td>
+                <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-xs md:text-sm">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td>
+                <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
+            </tr>`;
+        }).join('');
+    } catch(e){}
+}
+
 async function deleteBom(id) { 
     if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; 
     try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } 
 }
+
+function exportBomExcel() {
+    let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
+    const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
+}
+
+function importBomExcel(e) {
+    if(loginMode === 'viewer') return alert("👁️ 뷰어 모드에서는 사용할 수 없습니다.");
+    const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+            if(json.length > 0) { 
+                await fetch('/api/bom_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
+                alert("BOM 대량 업로드 완료!"); await load(); 
+            }
+        } catch(err) { alert("업로드 처리 중 오류 발생"); }
+    }; reader.readAsArrayBuffer(file); e.target.value = '';
+}
+
+// ==========================================
+// 💡 [정산/회계 로직] (에러 방어 로직 추가됨)
+// ==========================================
 
 function toggleAccDateInput() {
     let type = document.getElementById('acc-type').value;
@@ -1473,7 +1471,7 @@ function renderAccounting() {
         filtered.forEach(h => {
             let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
             let hSup = h.remarks || '기본입고처';
-            let hItem = h.item_name;
+            let hItem = h.item_name || '이름없음';
             let key = `${hDate}|${hSup}|${hItem}`;
             
             if(!groupedLog[key]) { groupedLog[key] = { date: hDate, supplier: hSup, item_name: hItem, quantity: 0 }; }
@@ -1487,8 +1485,11 @@ function renderAccounting() {
 
         if(groupMode === 'list') {
             html = consolidated.map((h, i) => {
-                let pInfo = allItems.find(p => String(p.item_name).trim() === String(h.item_name).trim() && String(p.supplier).trim() === String(h.supplier).trim());
-                let price = pInfo ? pInfo.unit_price : 0;
+                // 💡 안전한 검색: 정보가 꼬여있어도 에러 안나게 처리
+                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(h.supplier||'').trim());
+                if(!pInfo) pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
+                
+                let price = pInfo ? (parseFloat(pInfo.unit_price) || 0) : 0;
                 let supply = price * h.quantity; let tax = Math.floor(supply * 0.1); let sum = supply + tax;
                 totalSupply += supply; totalTax += tax; totalSum += sum;
                 let bgClass = i % 2 === 0 ? 'bg-white' : 'bg-slate-50'; 
@@ -1499,8 +1500,11 @@ function renderAccounting() {
             let groupAggr = {};
             consolidated.forEach(h => {
                 let key = groupMode === 'supplier' ? h.supplier : h.item_name; let subKey = groupMode === 'supplier' ? h.item_name : h.supplier;
-                let pInfo = allItems.find(p => String(p.item_name).trim() === String(h.item_name).trim() && String(p.supplier).trim() === String(h.supplier).trim());
-                let price = pInfo ? pInfo.unit_price : 0;
+                
+                let pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim() && String(p.supplier||'').trim() === String(h.supplier||'').trim());
+                if(!pInfo) pInfo = allItems.find(p => String(p.item_name||'').trim() === String(h.item_name||'').trim());
+                
+                let price = pInfo ? (parseFloat(pInfo.unit_price) || 0) : 0;
                 let supply = price * h.quantity; let tax = Math.floor(supply * 0.1); let sum = supply + tax;
 
                 if(!groupAggr[key]) groupAggr[key] = { totalQty: 0, totalSupply: 0, totalTax: 0, totalSum: 0, details: {} };
