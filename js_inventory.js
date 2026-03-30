@@ -1,6 +1,3 @@
-// ==========================================
-// [재고/발주] - 상단 탭 및 구역 전환 로직
-// ==========================================
 function switchOrderTab(tab) {
     try {
         currentOrderTab = tab;
@@ -66,70 +63,7 @@ function switchZone(zone) {
 function toggleMapSearch() { const container = document.getElementById('map-search-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 function toggleWaitContainer() { const container = document.getElementById('wait-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 
-// ==========================================
-// [재고/발주] - 공용 헬퍼 및 엑셀 다운로드
-// ==========================================
-function getDynamicPalletCount(itemObj) {
-    if(!itemObj) return 0;
-    let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
-    let targetSup = String(supplier).trim();
-    let pInfo = finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim()) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim());
-    if (pInfo && pInfo.pallet_ea > 0) return quantity / pInfo.pallet_ea;
-    return itemObj.pallet_count || 1;
-}
-
-function exportPhysicalCountExcel() {
-    try {
-        let wsData = [];
-        if (globalOccupancy.length === 0) { wsData = [{"위치": "", "카테고리": "", "품목명": "", "입고처": "", "전산수량(EA)": "", "실사수량(EA)": "", "차이": "", "비고": ""}]; } 
-        else {
-            let sortedData = [...globalOccupancy].sort((a, b) => a.location_id.localeCompare(b.location_id));
-            wsData = sortedData.map(item => ({ "위치": item.location_id, "카테고리": item.category || "", "품목명": item.item_name || "", "입고처": item.remarks || "기본입고처", "전산수량(EA)": item.quantity, "실사수량(EA)": "", "차이": "", "비고": "" }));
-        }
-        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData);
-        ws['!cols'] = [{wch: 15}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 10}, {wch: 20}];
-        XLSX.utils.book_append_sheet(wb, ws, "재고실사양식");
-        let today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `한스팜_재고실사양식_${today}.xlsx`);
-    } catch (error) { alert("양식 다운로드 중 오류가 발생했습니다."); }
-}
-
-function exportAllHistoryExcel() {
-    try {
-        if (globalHistory.length === 0) return alert("출력할 히스토리 데이터가 없습니다.");
-        let sorted = [...globalHistory].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-        let wsData = sorted.map(h => {
-            let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
-            return { "처리 일시": dateStr, "입고일/산란일": h.production_date || "", "렉 위치": h.location_id || "", "작업 구분": h.action_type || "", "카테고리": h.category || "", "품목명": h.item_name || "", "수량(EA)": h.quantity || 0, "파레트(P)": h.pallet_count || 0, "비고/입고처": h.remarks || "" };
-        });
-        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); 
-        ws['!cols'] = [{wch: 22}, {wch: 15}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 25}, {wch: 10}, {wch: 10}, {wch: 20}]; 
-        XLSX.utils.book_append_sheet(wb, ws, "전체렉히스토리"); 
-        let today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `한스팜_전체렉히스토리_${today}.xlsx`);
-    } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
-}
-
-function showHistoryModal(locId) {
-    let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-    document.getElementById('history-modal-title').innerText = `${locId} 전체 기록`;
-    let html = '';
-    locHistory.forEach(h => {
-        let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
-        let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
-        html += `<div class="bg-slate-50 p-3 border border-slate-200 rounded text-[11px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`;
-    });
-    document.getElementById('history-modal-content').innerHTML = html;
-    document.getElementById('history-modal').classList.remove('hidden'); document.getElementById('history-modal').classList.add('flex');
-}
-
-function closeHistoryModal() {
-    document.getElementById('history-modal').classList.add('hidden'); document.getElementById('history-modal').classList.remove('flex');
-}
-
-// ==========================================
-// [재고/발주] - 렉맵 렌더링 및 조작
-// ==========================================
+// --- 렉맵 랜더링 및 조작 ---
 function changeFloorCols(floorId, delta) {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 없습니다.");
     let currentCols = parseInt(localStorage.getItem(floorId + '_cols')) || 20;
@@ -291,7 +225,7 @@ function renderMap() {
             let itemsInCell = globalOccupancy.filter(x => x.location_id === searchId);
             let dblClickAttr = (itemsInCell.length > 0 && loginMode !== 'viewer') ? `ondblclick="selectForMove('${itemsInCell[0].id}', '${itemsInCell[0].item_name}', ${itemsInCell[0].quantity}, ${pCount}, '${searchId}', '${itemsInCell[0].remarks||''}')"` : '';
 
-            hHtml += `<div id="cell-${displayId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${displayId}', '${dbId}')" onclick="clickCell('${displayId}', '${searchId}')" ${dblClickAttr} class="h-10 md:w-14 h-10 rounded-[3px] flex items-center justify-center text-[10px] md:text-[11px] font-bold cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm">${badge}${crossFloorBadge}${displayId}</div>`; 
+                    hHtml += `<div id="cell-${displayId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${displayId}', '${dbId}')" onclick="clickCell('${displayId}', '${searchId}')" ${dblClickAttr} class="h-10 md:w-14 h-10 rounded-[3px] flex items-center justify-center text-[10px] md:text-[11px] font-bold cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm">${badge}${crossFloorBadge}${displayId}</div>`; 
         } 
         hHtml += `</div>`; 
         if(hContainer) hContainer.innerHTML = hHtml; 
@@ -528,7 +462,7 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
 }
 
 // ==========================================
-// [재고/발주] - 대기장 박스 생성 로직
+// [대기장 생성 로직]
 // ==========================================
 function getWaitZoneSourceItems() {
     if (currentZone === '실온') return productMaster.filter(p => p.category && !p.category.includes('원란'));
@@ -626,7 +560,7 @@ async function createWaitingPallets() {
 }
 
 // ==========================================
-// [재고/발주] - 스캔 및 재고조회 로직
+// [재고 조회 / 스캔 기능]
 // ==========================================
 function updateMapSearchCategoryDropdown() {
     try {
@@ -770,7 +704,7 @@ function findItemLocationFromSummary() {
 }
 
 // ==========================================
-// [재고/발주] - 발주 장바구니 및 내역
+// [발주 장바구니 및 내역]
 // ==========================================
 function toggleOrderCart() {
     const el = document.getElementById('order-cart-container');
@@ -888,7 +822,7 @@ function renderOrderList() {
             actionBtns = `<button onclick="receiveOrder('${o.id}', '${o.item_name}', ${o.quantity}, ${o.pallet_count}, '${o.remarks}', '${o.category || ''}')" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-2 py-1.5 rounded shadow-sm transition-colors text-xs">입고처리</button>
             <button onclick="cancelOrder('${o.id}')" class="bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold px-2 py-1.5 rounded transition-colors text-xs">취소</button>`;
         }
-        return `<tr class="hover:bg-slate-50 transition-colors">
+        return `<tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
             <td class="p-3 text-slate-500 font-bold">${o.created_at.substring(0,10)}</td>
             <td class="p-3 font-black text-rose-600">${o.remarks || '기본'}</td>
             <td class="p-3 font-black text-slate-800">${o.item_name}</td>
@@ -954,7 +888,7 @@ async function cancelOrder(logId) {
 }
 
 // ==========================================
-// [재고/발주] - 안전재고 (위험재고)
+// [안전 재고 및 5P 로직]
 // ==========================================
 function renderSafetyStock() { 
     const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
@@ -982,13 +916,7 @@ function renderSafetyStock() {
     materialProducts.forEach(p => {
         let key = p.item_name;
         if (!aggregatedItems[key]) {
-            aggregatedItems[key] = {
-                category: p.category || '미분류',
-                item_name: p.item_name,
-                suppliers: new Set(),
-                total_qty: 0,
-                total_pallet: 0
-            };
+            aggregatedItems[key] = { category: p.category || '미분류', item_name: p.item_name, suppliers: new Set(), total_qty: 0, total_pallet: 0 };
         }
         if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier);
     });
@@ -998,9 +926,7 @@ function renderSafetyStock() {
         if(aggregatedItems[key]) {
             aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0);
             aggregatedItems[key].total_pallet += getDynamicPalletCount(item);
-            if (item.remarks && item.remarks !== '기본입고처') {
-                aggregatedItems[key].suppliers.add(item.remarks);
-            }
+            if (item.remarks && item.remarks !== '기본입고처') { aggregatedItems[key].suppliers.add(item.remarks); }
         }
     });
 
