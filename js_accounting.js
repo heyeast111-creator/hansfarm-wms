@@ -32,6 +32,7 @@ function updateDashboard() {
             
             if(logDate >= startDate) { 
                 let qty = parseInt(log.quantity) || 0;
+                // 출고 기록만 소모 원가로 집계
                 if(log.action_type === '출고') { 
                     let pInfo = allItems.find(p => String(p.item_name||"").trim() === String(log.item_name||"").trim() && String(p.supplier||"").trim() === String(log.remarks||"").trim()); 
                     if(!pInfo) pInfo = allItems.find(p => String(p.item_name||"").trim() === String(log.item_name||"").trim());
@@ -47,6 +48,7 @@ function updateDashboard() {
         let totalCold = 0, occCold = 0, valCold = 0;
         let totalFloor = 0, occFloor = 0, valFloor = 0;
         
+        // 현재 재고를 기준으로 자산 및 적재량 계산
         globalOccupancy.forEach(item => { 
             if (!item) return;
             let dynP = getDynamicPalletCount(item); 
@@ -61,7 +63,7 @@ function updateDashboard() {
             else if(loc.startsWith('FL-')) { occFloor += dynP; valFloor += val; }
         }); 
         
-        layoutRoom.forEach(col => { if(col.cols) totalRoom += col.cols * 2; }); totalRoom += 20; 
+        layoutRoom.forEach(col => { if(col.cols) totalRoom += col.cols * 2; }); totalRoom += 20; // 대기장 여유분 등 포함
         layoutCold.forEach(col => { if(col.cols) totalCold += col.cols * 2; }); totalCold += 16; 
         
         let f1Cols = parseInt(localStorage.getItem('FL-1F_cols')) || 20;
@@ -69,6 +71,7 @@ function updateDashboard() {
         let f3Cols = parseInt(localStorage.getItem('FL-3F_cols')) || 20;
         totalFloor = f1Cols + f2Cols + f3Cols;
 
+        // 1. 실온 창고
         let roomCapRate = totalRoom > 0 ? Math.round((occRoom / totalRoom) * 100) : 0;
         let dRoom = document.getElementById('dash-room-donut');
         if(dRoom) dRoom.style.background = `conic-gradient(${roomCapRate > 100 ? '#ea580c' : '#f97316'} 0% ${Math.min(roomCapRate, 100)}%, #e2e8f0 ${Math.min(roomCapRate, 100)}% 100%)`;
@@ -77,6 +80,7 @@ function updateDashboard() {
         let oRoom = document.getElementById('dash-room-occ'); if(oRoom) oRoom.innerText = occRoom.toFixed(1);
         let eRoom = document.getElementById('dash-room-empty'); if(eRoom) eRoom.innerText = Math.max(0, totalRoom - Math.floor(occRoom));
 
+        // 2. 냉장 창고
         let coldCapRate = totalCold > 0 ? Math.round((occCold / totalCold) * 100) : 0;
         let dCold = document.getElementById('dash-cold-donut');
         if(dCold) dCold.style.background = `conic-gradient(${coldCapRate > 100 ? '#4f46e5' : '#6366f1'} 0% ${Math.min(coldCapRate, 100)}%, #e2e8f0 ${Math.min(coldCapRate, 100)}% 100%)`;
@@ -85,6 +89,7 @@ function updateDashboard() {
         let oCold = document.getElementById('dash-cold-occ'); if(oCold) oCold.innerText = occCold.toFixed(1);
         let eCold = document.getElementById('dash-cold-empty'); if(eCold) eCold.innerText = Math.max(0, totalCold - Math.floor(occCold));
 
+        // 3. 생산 현장
         let floorCapRate = totalFloor > 0 ? Math.round((occFloor / totalFloor) * 100) : 0;
         let dFloor = document.getElementById('dash-floor-donut');
         if(dFloor) dFloor.style.background = `conic-gradient(${floorCapRate > 100 ? '#059669' : '#10b981'} 0% ${Math.min(floorCapRate, 100)}%, #e2e8f0 ${Math.min(floorCapRate, 100)}% 100%)`;
@@ -93,6 +98,7 @@ function updateDashboard() {
         let oFloor = document.getElementById('dash-floor-occ'); if(oFloor) oFloor.innerText = occFloor.toFixed(1);
         let eFloor = document.getElementById('dash-floor-empty'); if(eFloor) eFloor.innerText = Math.max(0, totalFloor - Math.floor(occFloor));
         
+        // 하단 자산 가치
         let vRoomVal = document.getElementById('dash-val-room'); if(vRoomVal) vRoomVal.innerText = valRoom.toLocaleString() + ' 원'; 
         let vColdVal = document.getElementById('dash-val-cold'); if(vColdVal) vColdVal.innerText = valCold.toLocaleString() + ' 원'; 
         let vFloorVal = document.getElementById('dash-val-floor'); if(vFloorVal) vFloorVal.innerText = valFloor.toLocaleString() + ' 원'; 
@@ -201,6 +207,7 @@ function renderAccounting() {
 
         let totalSupply = 0, totalTax = 0, totalSum = 0; let html = '';
 
+        // 💡 1. 일자별/품목별 요약 모드 (기본값)
         if(groupMode === 'daily_item') {
             let dailyGroups = {};
             filtered.forEach(h => {
@@ -232,16 +239,17 @@ function renderAccounting() {
                 let supply = price * h.quantity; let tax = Math.floor(supply * 0.1); let sum = supply + tax;
                 totalSupply += supply; totalTax += tax; totalSum += sum;
                 
+                // 날짜가 바뀔 때마다 구분선 역할을 하는 헤더 행 추가
                 if (currentDate !== h.date) {
-                    html += `<tr class="bg-slate-200 border-y-2 border-slate-300"><td colspan="9" class="p-2 font-black text-slate-800 text-xs md:text-sm">일자: ${h.date}</td></tr>`;
+                    html += `<tr class="bg-slate-200 border-y-2 border-slate-300"><td colspan="9" class="p-2 font-black text-slate-800 text-xs md:text-sm pl-4">📅 일자: ${h.date}</td></tr>`;
                     currentDate = h.date;
                 }
                 
                 let idsStr = h.ids.join(',');
-                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold transition-colors">삭제</button>` : '';
+                let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold transition-colors shadow-sm">삭제</button>` : '';
 
                 html += `<tr class="bg-white border-b border-slate-100 hover:bg-indigo-50 transition-colors">
-                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">-</td>
+                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center font-black">↳</td>
                     <td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td>
                     <td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td>
                     <td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td>
@@ -252,10 +260,11 @@ function renderAccounting() {
                     <td class="p-1.5 md:p-2 text-center">${delBtn}</td>
                 </tr>`;
             });
-        } else {
+        } 
+        // 💡 2. 업체별 또는 품목별 누적 요약 모드
+        else {
             let groupAggr = {};
             filtered.forEach(h => {
-                let hDate = h.production_date ? h.production_date : h.created_at.substring(0, 10);
                 let hSup = h.remarks || '기본입고처';
                 let key = groupMode === 'supplier' ? hSup : h.item_name; 
                 let subKey = groupMode === 'supplier' ? h.item_name : hSup;
@@ -274,11 +283,11 @@ function renderAccounting() {
 
             for(let key in groupAggr) {
                 let g = groupAggr[key]; totalSupply += g.totalSupply; totalTax += g.totalTax; totalSum += g.totalSum;
-                html += `<tr class="bg-indigo-100 border-b-2 border-indigo-200"><td colspan="3" class="p-2 font-black text-indigo-900 text-xs md:text-sm">[${key}] 누적 요약</td><td class="p-2 text-right font-black text-indigo-700 text-[11px] md:text-xs">${g.totalQty.toLocaleString()}</td><td class="p-2 text-right">-</td><td class="p-2 text-right font-black text-slate-800 text-[11px] md:text-xs">${g.totalSupply.toLocaleString()}</td><td class="p-2 text-right font-bold text-rose-600 text-[11px] md:text-xs">${g.totalTax.toLocaleString()}</td><td class="p-2 text-right font-black text-blue-800 text-[11px] md:text-xs">${g.totalSum.toLocaleString()}</td><td class="p-2"></td></tr>`;
+                html += `<tr class="bg-indigo-100 border-b-2 border-indigo-200"><td colspan="3" class="p-2 font-black text-indigo-900 text-xs md:text-sm pl-4">📁 [${key}] 누적 요약</td><td class="p-2 text-right font-black text-indigo-700 text-[11px] md:text-xs">${g.totalQty.toLocaleString()}</td><td class="p-2 text-right">-</td><td class="p-2 text-right font-black text-slate-800 text-[11px] md:text-xs">${g.totalSupply.toLocaleString()}</td><td class="p-2 text-right font-bold text-rose-600 text-[11px] md:text-xs">${g.totalTax.toLocaleString()}</td><td class="p-2 text-right font-black text-blue-800 text-[11px] md:text-xs">${g.totalSum.toLocaleString()}</td><td class="p-2"></td></tr>`;
                 
                 for(let subKey in g.details) {
                     let d = g.details[subKey]; let dTax = Math.floor(d.supply * 0.1); let dSum = d.supply + dTax; let displaySup = groupMode === 'supplier' ? key : subKey; let displayItem = groupMode === 'item' ? key : subKey;
-                    html += `<tr class="bg-white border-b border-slate-100 opacity-90"><td class="p-1.5 md:p-2 text-center text-[10px] text-slate-400">상세항목</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displaySup}</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displayItem}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-500 text-[10px] md:text-[11px]">${d.qty.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-400 text-[9px]">-</td><td class="p-1.5 md:p-2 text-right text-slate-600 text-[10px] md:text-[11px]">${d.supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-rose-400 text-[10px] md:text-[11px]">${dTax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-blue-600 text-[10px] md:text-[11px]">${dSum.toLocaleString()}</td><td class="p-1.5 md:p-2"></td></tr>`;
+                    html += `<tr class="bg-white border-b border-slate-100 opacity-90"><td class="p-1.5 md:p-2 text-center text-[10px] text-slate-400 font-black">↳</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displaySup}</td><td class="p-1.5 md:p-2 font-bold text-slate-600 text-[10px] md:text-[11px]">${displayItem}</td><td class="p-1.5 md:p-2 text-right font-bold text-indigo-500 text-[10px] md:text-[11px]">${d.qty.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-slate-400 text-[9px]">-</td><td class="p-1.5 md:p-2 text-right text-slate-600 text-[10px] md:text-[11px]">${d.supply.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right text-rose-400 text-[10px] md:text-[11px]">${dTax.toLocaleString()}</td><td class="p-1.5 md:p-2 text-right font-bold text-blue-600 text-[10px] md:text-[11px]">${dSum.toLocaleString()}</td><td class="p-1.5 md:p-2"></td></tr>`;
                 }
             }
         }
