@@ -16,7 +16,7 @@ let orderCart = [];
 let movingItem = null;
 let bomCart = [];
 let expandedBomRows = {}; 
-let isRightPanelVisible = true; 
+let isRightPanelVisible = false; // 💡 기본은 숨겨둠
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
@@ -136,15 +136,15 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
+// 💡 4. 우측 패널 토글 로직
 function toggleRightPanel() {
     let rs = document.getElementById('right-sidebar');
     if(!rs) return;
+    isRightPanelVisible = !isRightPanelVisible;
     if(isRightPanelVisible) {
-        rs.classList.add('hidden'); rs.classList.remove('flex');
-        isRightPanelVisible = false;
-    } else {
         rs.classList.remove('hidden'); rs.classList.add('flex');
-        isRightPanelVisible = true;
+    } else {
+        rs.classList.add('hidden'); rs.classList.remove('flex');
     }
 }
 
@@ -198,10 +198,11 @@ function switchOrderTab(tab) {
 
         let rs = document.getElementById('right-sidebar');
         if(tab === 'inventory') {
-            if(window.innerWidth >= 768 && rs && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); }
-            else if(rs) { if(selectedCellId && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
+            if(isRightPanelVisible && rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); }
             renderMap();
-        } else { if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
+        } else { 
+            if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); } 
+        }
 
         if(tab === 'search') updateSummarySupplierDropdown();
         if(tab === 'safety') renderSafetyStock();
@@ -218,9 +219,10 @@ function showView(viewName) {
     
     let rs = document.getElementById('right-sidebar');
     if(viewName === 'order' && currentOrderTab === 'inventory') { 
-        if(window.innerWidth >= 768 && rs && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } 
-        else if(rs) { if(selectedCellId && isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
-    } else if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
+        if(isRightPanelVisible && rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); } 
+    } else {
+        if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); }
+    }
     
     let targetView = document.getElementById('view-' + viewName);
     if(targetView) { targetView.classList.remove('hidden'); targetView.classList.add('flex'); }
@@ -1201,11 +1203,10 @@ function highlightFIFO() {
 
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
 
-// 💡 4. 품목 마스터 + 현재 재고 통합하여 5P 미만 항목 오름차순 표시
+// 💡 3. 안전재고(위험재고) 기준 변경: 타겟 P(파레트) 기준 미만인 항목 오름차순, 중복 자재 합산
 function renderSafetyStock() { 
     const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
     
-    // 1. 제품, 원란 제외 -> 순수 자재만 추출
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     
     let supSelect = document.getElementById('safe-filter-sup');
@@ -1213,7 +1214,6 @@ function renderSafetyStock() {
     let curSup = supSelect ? supSelect.value : 'ALL';
     let curCat = catSelect ? catSelect.value : 'ALL';
 
-    // 필터 드롭다운 세팅
     if(supSelect && supSelect.options.length <= 1) {
         let sups = [...new Set(materialProducts.map(p => p.supplier))].filter(Boolean).sort();
         supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + sups.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -1225,7 +1225,6 @@ function renderSafetyStock() {
         catSelect.value = curCat;
     }
 
-    // 2. "품목명"을 기준으로 데이터를 하나로 완벽하게 통합
     let aggregatedItems = {};
     
     materialProducts.forEach(p => {
@@ -1242,10 +1241,8 @@ function renderSafetyStock() {
         if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier);
     });
 
-    // 3. 렉맵 재고를 순회하며 품목명 기준으로 총합 계산 (풍년 + 잎성 합산)
     globalOccupancy.forEach(item => {
         let key = item.item_name;
-        // 자재 마스터에 있는 품목만 합산
         if(aggregatedItems[key]) {
             aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0);
             aggregatedItems[key].total_pallet += getDynamicPalletCount(item);
@@ -1255,24 +1252,19 @@ function renderSafetyStock() {
         }
     });
 
-    // 4. 기준치(5P) 미만 필터링
     let monitoredList = [];
     
     Object.values(aggregatedItems).forEach(info => {
-        // 드롭다운 필터 적용
         if(curSup !== 'ALL' && !info.suppliers.has(curSup)) return;
         if(curCat !== 'ALL' && info.category !== curCat) return;
 
-        // 💡 모든 업체 합산 파레트가 타겟(5P) 미만일 때만 리스트에 추가
         if (info.total_pallet < targetPallets) {
             monitoredList.push(info);
         }
     });
 
-    // 5. 파레트 적은 순서대로 오름차순 정렬
     monitoredList.sort((a, b) => a.total_pallet - b.total_pallet);
     
-    // 화면 출력
     let html = ''; 
     if(monitoredList.length === 0) { 
         html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">조건에 맞는 위험 재고(${targetPallets}P 미만)가 없습니다.</td></tr>`; 
@@ -1617,21 +1609,22 @@ function renderBomMaster() {
             <tr class="hover:bg-indigo-50 transition-colors cursor-pointer border-b border-slate-300 bg-slate-100" onclick="toggleBomRow('${fp}')">
                 <td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm">
                     <div class="flex justify-between items-center">
-                        <span>${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
+                        <span>📦 ${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
                         <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기 🔼' : '펼치기 🔽'}</span>
                     </div>
                 </td>
             </tr>`;
 
+            // 💡 BOM 리스트 확장 시 CSS 디자인 수정 (배경색 흰색으로 통일)
             if(isOpen) {
                 items.forEach(b => {
                     let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
                     html += `
                     <tr class="hover:bg-slate-50 transition-colors bg-white">
-                        <td class="p-2 border-b border-slate-100 pl-6 text-slate-300 text-sm font-black">↳</td>
-                        <td class="p-2 border-b border-slate-100 font-bold text-indigo-800 text-[11px] md:text-xs">${b.material_product}</td>
-                        <td class="p-2 border-b border-slate-100 text-right font-black text-slate-700 text-[11px] md:text-xs">${b.require_qty} <span class="text-[9px] font-normal text-slate-500">EA</span></td>
-                        <td class="p-2 border-b border-slate-100 text-center">${delBtn}</td>
+                        <td class="p-3 pl-8 text-slate-400 font-black border-b border-slate-100">↳</td>
+                        <td class="p-3 font-bold text-indigo-800 text-xs md:text-sm border-b border-slate-100">${b.material_product}</td>
+                        <td class="p-3 text-right font-black text-slate-700 text-xs md:text-sm border-b border-slate-100">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td>
+                        <td class="p-3 text-center border-b border-slate-100">${delBtn}</td>
                     </tr>`;
                 });
             }
@@ -1730,9 +1723,9 @@ function updateAccFilters(changedFilter) {
 
 async function deleteAccountingRecord(idsStr, itemName) {
     if(!isAdmin) return alert("관리자 권한이 필요합니다.");
-    const pw = prompt(`[${itemName}] 정산 내역 삭제\n관리자 비밀번호를 다시 입력하세요:`);
+    const pw = prompt(`[${itemName}] 정산 내역 삭제\n보안을 위해 관리자 비밀번호를 다시 입력하세요:`);
     if(pw !== "123456789*") return alert("비밀번호가 틀렸습니다.");
-    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(일자별로 묶인 동일 품목이 모두 삭제되며, 복구할 수 없습니다)`)) return;
+    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(해당 일자에 묶인 동일 품목 전체가 삭제되며, 복구할 수 없습니다)`)) return;
 
     try {
         let ids = idsStr.split(',');
@@ -1804,7 +1797,7 @@ function renderAccounting() {
                 let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold transition-colors">삭제</button>` : '';
 
                 html += `<tr class="bg-white border-b border-slate-100 hover:bg-indigo-50 transition-colors">
-                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">↳</td>
+                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">-</td>
                     <td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td>
                     <td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td>
                     <td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td>
@@ -1848,6 +1841,16 @@ function renderAccounting() {
         document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
+}
+
+function exportAccountingExcel() {
+    try {
+        const table = document.getElementById('accounting-table');
+        if(!table) return alert("다운로드할 표가 없습니다.");
+        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
+    } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
