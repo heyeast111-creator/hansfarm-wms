@@ -22,7 +22,7 @@ function switchProductTab(tab) {
         if(tab === 'fp') renderProductMaster('finished');
         if(tab === 'pm') renderProductMaster('materials');
         if(tab === 'bom') { updateBomDropdowns(); renderBomMaster(); }
-    } catch(e) {}
+    } catch(e) { console.error("Product Tab Error:", e); }
 }
 
 // ==========================================
@@ -44,7 +44,7 @@ function populateProductFilters(targetType) {
         
         if(cats.includes(curCat)) filterCat.value = curCat;
         if(sups.includes(curSup)) filterSup.value = curSup;
-    } catch(e){}
+    } catch(e){ console.error("Filter Populate Error:", e); }
 }
 
 function renderProductMaster(targetType) { 
@@ -90,7 +90,7 @@ function renderProductMaster(targetType) {
             if(filtered.length > 0) tbody.innerHTML = listHtml; 
             else tbody.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">검색 결과가 없습니다.</td></tr>`; 
         }
-    } catch(e){}
+    } catch(e){ console.error("Render Product Error:", e); }
 }
 
 function editProductSetup(cat, name, supplier, usage, price, ea, targetType) { 
@@ -186,7 +186,7 @@ function updateBomDropdowns() {
             catSelect.innerHTML = catOptions;
             updateBomMaterialDropdown(); 
         }
-    } catch(e){}
+    } catch(e){ console.error(e); }
 }
 
 function updateBomMaterialDropdown() {
@@ -208,7 +208,7 @@ function updateBomMaterialDropdown() {
         if(matSelect) {
             matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
         }
-    } catch(e){}
+    } catch(e){ console.error(e); }
 }
 
 function addMaterialToBomCart() {
@@ -348,7 +348,7 @@ function renderBomMaster() {
         });
 
         tbody.innerHTML = html;
-    } catch(e){}
+    } catch(e){ console.error("Render BOM Error:", e); }
 }
 
 async function deleteBom(id) { 
