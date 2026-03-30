@@ -3,10 +3,19 @@
 // ==========================================
 let currentProductionBOM = [];
 
-// 좌측 메뉴나 하단 네비게이션에서 '생산관리' 탭을 누르면 드롭다운 업데이트
-document.addEventListener('click', function(e) {
-    if(e.target.closest('.target-production')) {
-        setTimeout(initProductionView, 100); 
+// 💡 화면이 표시될 때마다 드롭다운을 확실하게 업데이트하는 무적의 코드 (MutationObserver)
+const prodObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.target.classList.contains('flex')) {
+            initProductionView();
+        }
+    });
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    const prodView = document.getElementById('view-production');
+    if(prodView) {
+        prodObserver.observe(prodView, { attributes: true, attributeFilter: ['class'] });
     }
 });
 
