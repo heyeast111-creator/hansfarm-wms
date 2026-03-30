@@ -890,9 +890,30 @@ async function cancelOrder(logId) {
 // ==========================================
 // [안전 재고 및 5P 로직]
 // ==========================================
+// ==========================================
+// [안전재고 설정] - 2가지 모드 (파레트 부족 / 버팀일수)
+// ==========================================
+function toggleSafeMode() {
+    const mode = document.getElementById('safe-mode').value;
+    if(mode === 'pallet') {
+        document.getElementById('target-pallet-container').classList.remove('hidden');
+        document.getElementById('target-pallet-container').classList.add('flex');
+        document.getElementById('target-days-container').classList.add('hidden');
+        document.getElementById('target-days-container').classList.remove('flex');
+    } else {
+        document.getElementById('target-days-container').classList.remove('hidden');
+        document.getElementById('target-days-container').classList.add('flex');
+        document.getElementById('target-pallet-container').classList.add('hidden');
+        document.getElementById('target-pallet-container').classList.remove('flex');
+    }
+    renderSafetyStock();
+}
+
 function renderSafetyStock() { 
-    const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
-    
+    const mode = document.getElementById('safe-mode') ? document.getElementById('safe-mode').value : 'pallet';
+    const thead = document.getElementById('safety-thead');
+    const tbody = document.getElementById('safety-list');
+
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     
     let supSelect = document.getElementById('safe-filter-sup');
@@ -916,9 +937,17 @@ function renderSafetyStock() {
     materialProducts.forEach(p => {
         let key = p.item_name;
         if (!aggregatedItems[key]) {
-            aggregatedItems[key] = { category: p.category || '미분류', item_name: p.item_name, suppliers: new Set(), total_qty: 0, total_pallet: 0 };
+            aggregatedItems[key] = {
+                category: p.category || '미분류',
+                item_name: p.item_name,
+                suppliers: new Set(),
+                total_qty: 0,
+                total_pallet: 0,
+                daily_usage: p.daily_usage || 0
+            };
         }
         if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier);
+        if(p.daily_usage > aggregatedItems[key].daily_usage) aggregatedItems[key].daily_usage = p.daily_usage;
     });
 
     globalOccupancy.forEach(item => {
@@ -926,7 +955,9 @@ function renderSafetyStock() {
         if(aggregatedItems[key]) {
             aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0);
             aggregatedItems[key].total_pallet += getDynamicPalletCount(item);
-            if (item.remarks && item.remarks !== '기본입고처') { aggregatedItems[key].suppliers.add(item.remarks); }
+            if (item.remarks && item.remarks !== '기본입고처') {
+                aggregatedItems[key].suppliers.add(item.remarks);
+            }
         }
     });
 
@@ -936,34 +967,90 @@ function renderSafetyStock() {
         if(curSup !== 'ALL' && !info.suppliers.has(curSup)) return;
         if(curCat !== 'ALL' && info.category !== curCat) return;
 
-        if (info.total_pallet < targetPallets) {
-            monitoredList.push(info);
+        if(mode === 'pallet') {
+            const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
+            if (info.total_pallet < targetPallets) monitoredList.push(info);
+        } else {
+            if (info.daily_usage > 0) monitoredList.push(info);
         }
     });
 
-    monitoredList.sort((a, b) => a.total_pallet - b.total_pallet);
+    let html = '';
     
-    let html = ''; 
-    if(monitoredList.length === 0) { 
-        html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">조건에 맞는 위험 재고(${targetPallets}P 미만)가 없습니다.</td></tr>`; 
-    } else { 
-        monitoredList.forEach(p => { 
-            let supsStr = Array.from(p.suppliers).join(', ');
-            if(!supsStr) supsStr = '기본입고처';
+    if (mode === 'pallet') {
+        thead.innerHTML = `<tr>
+            <th class="p-3 md:p-4 font-black">카테고리</th>
+            <th class="p-3 md:p-4 font-black">품목명 (입고처)</th>
+            <th class="p-3 md:p-4 font-black text-right">현재 총 재고 (EA)</th>
+            <th class="p-3 md:p-4 font-black text-right">현재 파레트 (P)</th>
+            <th class="p-3 md:p-4 font-black text-center">상태 및 발주</th>
+        </tr>`;
 
-            let actionBtn = `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>`; 
-            let statusHtml = `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험 (${p.total_pallet.toFixed(1)}P)</span><br>${actionBtn}`; 
-            
-            html += `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
-                <td class="p-3 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
-                <td class="p-3 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${supsStr}]</span></td>
-                <td class="p-3 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.total_qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
-                <td class="p-3 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.total_pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
-                <td class="p-3 md:p-4 text-center">${statusHtml}</td>
-            </tr>`; 
-        }); 
-    } 
-    document.getElementById('safety-list').innerHTML = html; 
+        monitoredList.sort((a, b) => a.total_pallet - b.total_pallet);
+
+        if(monitoredList.length === 0) { 
+            html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">조건에 맞는 위험 재고가 없습니다.</td></tr>`; 
+        } else {
+            monitoredList.forEach(p => { 
+                let supsStr = Array.from(p.suppliers).join(', ');
+                if(!supsStr) supsStr = '기본입고처';
+
+                let actionBtn = `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>`; 
+                let statusHtml = `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험 (${p.total_pallet.toFixed(1)}P)</span><br>${actionBtn}`; 
+                
+                html += `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+                    <td class="p-3 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
+                    <td class="p-3 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${supsStr}]</span></td>
+                    <td class="p-3 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.total_qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
+                    <td class="p-3 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.total_pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
+                    <td class="p-3 md:p-4 text-center">${statusHtml}</td>
+                </tr>`; 
+            });
+        }
+    } else {
+        const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7;
+        
+        thead.innerHTML = `<tr>
+            <th class="p-3 md:p-4 font-black">카테고리</th>
+            <th class="p-3 md:p-4 font-black">품목명 (입고처)</th>
+            <th class="p-3 md:p-4 font-black text-right">총 재고 (EA)</th>
+            <th class="p-3 md:p-4 font-black text-right">일 소모량 (EA)</th>
+            <th class="p-3 md:p-4 font-black text-center">버팀 일수 (예상 소진일)</th>
+            <th class="p-3 md:p-4 font-black text-center">상태 및 발주</th>
+        </tr>`;
+
+        monitoredList.forEach(p => p.days_left = p.total_qty / p.daily_usage);
+        monitoredList.sort((a, b) => a.days_left - b.days_left);
+
+        if(monitoredList.length === 0) { 
+            html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다. (품목관리에서 소모량을 등록해주세요)</td></tr>`; 
+        } else {
+            monitoredList.forEach(p => { 
+                let supsStr = Array.from(p.suppliers).join(', ');
+                if(!supsStr) supsStr = '기본입고처';
+
+                let isDanger = p.days_left < targetDays;
+                let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>` : ''; 
+                let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험</span><br>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">여유</span>`; 
+                
+                let progressPer = Math.min((p.days_left / targetDays) * 100, 100);
+
+                html += `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+                    <td class="p-3 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
+                    <td class="p-3 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${supsStr}]</span></td>
+                    <td class="p-3 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.total_qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
+                    <td class="p-3 md:p-4 text-right font-black text-slate-500 text-sm md:text-lg">${p.daily_usage.toLocaleString()}</td>
+                    <td class="p-3 md:p-4 text-center">
+                        <div class="w-full bg-slate-200 rounded-full h-2 mb-1 max-w-[120px] mx-auto overflow-hidden"><div class="h-2 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-blue-500'}" style="width: ${progressPer}%"></div></div>
+                        <span class="text-[10px] md:text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-blue-600'}">${p.days_left.toFixed(1)} 일 버팀</span>
+                    </td>
+                    <td class="p-3 md:p-4 text-center">${statusHtml}</td>
+                </tr>`; 
+            });
+        }
+    }
+    
+    tbody.innerHTML = html; 
 }
 
 function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`[${supplier}] 수량(EA):`, "1000개"); if(!moq) return; const leadTime = prompt(`납기일:`, "최대한 빠르게"); const text = `[발주 요청서]\n수신: ${supplier}\n\n안녕하세요, 한스팜입니다.\n아래 품목 발주 요청드립니다.\n\n- 품목명: ${itemName}\n- 발주수량: ${moq}\n- 납기요청: ${leadTime}\n\n확인 후 회신 부탁드립니다. 감사합니다.`; navigator.clipboard.writeText(text.replace(/\\n/g, '\n')).then(() => { alert("복사 완료"); }); }
