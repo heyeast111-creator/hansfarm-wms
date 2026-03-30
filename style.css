@@ -1,0 +1,66 @@
+/* 기본 스타일 */
+body {
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #333;
+}
+
+/* 사이드바 스타일 */
+#sidebar {
+    transition: transform 0.3s ease-in-out;
+}
+
+#sidebar.w-0 {
+    transform: translateX(-100%);
+}
+
+#sidebar.w-64 {
+    transform: translateX(0);
+}
+
+/* 우측 패널 스타일 */
+#right-panel {
+    transition: transform 0.3s ease-in-out;
+}
+
+#right-panel.w-0 {
+    transform: translateX(100%);
+}
+
+#right-panel.w-96 {
+    transform: translateX(0);
+}
+
+/* 대시보드 카드 스타일 */
+.dashboard-card {
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    padding: 24px;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 768px) {
+    #sidebar {
+        width: 100%;
+        transform: translateX(-100%);
+    }
+
+    #sidebar.open {
+        transform: translateX(0);
+    }
+
+    #right-panel {
+        width: 100%;
+        transform: translateX(100%);
+    }
+
+    #right-panel.open {
+        transform: translateX(0);
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
