@@ -16,7 +16,7 @@ let orderCart = [];
 let movingItem = null;
 let bomCart = [];
 let expandedBomRows = {}; 
-let isRightPanelVisible = true; // 패널 토글 상태 변수 추가
+let isRightPanelVisible = true; 
 
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
@@ -136,7 +136,6 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
-// 💡 우측 패널 토글 함수
 function toggleRightPanel() {
     let rs = document.getElementById('right-sidebar');
     if(!rs) return;
@@ -1203,25 +1202,57 @@ function highlightFIFO() {
 
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
 
+// 💡 3. 안전재고(위험재고) 기준 변경: 타겟 P(파레트) 기준 미만인 항목 오름차순
 function renderSafetyStock() { 
-    const targetDays = parseInt(document.getElementById('safe-days-target').value) || 7; let currentTotals = {}; 
-    globalOccupancy.forEach(item => { let key = item.item_name + "|" + item.remarks; currentTotals[key] = (currentTotals[key] || 0) + item.quantity; }); 
-    let html = ''; let monitoredProducts = productMaster.filter(p => p.daily_usage > 0); 
-    if(monitoredProducts.length === 0) { html = `<tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">일간 소모량이 등록된 자재가 없습니다.</td></tr>`; } 
-    else { 
-        monitoredProducts.forEach(p => { 
-            let key = p.item_name + "|" + p.supplier; let totalQty = currentTotals[key] || 0; let safeDaysLeft = totalQty / p.daily_usage; let isDanger = safeDaysLeft < targetDays; 
-            let actionBtn = isDanger ? `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>` : ''; 
-            let statusHtml = isDanger ? `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험</span><br>${actionBtn}` : `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs">여유</span>`; 
-            html += `<tr class="hover:bg-slate-50 transition-colors ${isDanger ? 'bg-rose-50/30' : ''}">
+    const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
+    
+    let currentTotals = {}; 
+    globalOccupancy.forEach(item => { 
+        let key = item.item_name + "|" + (item.remarks || "기본입고처"); 
+        if(!currentTotals[key]) currentTotals[key] = { qty: 0, pallet: 0 };
+        currentTotals[key].qty += item.quantity; 
+        currentTotals[key].pallet += getDynamicPalletCount(item);
+    }); 
+    
+    let allItems = [...finishedProductMaster, ...productMaster];
+    let monitoredList = [];
+    let uniqueItems = new Set();
+    
+    allItems.forEach(p => { 
+        let sup = p.supplier || "기본입고처"; 
+        let key = p.item_name + "|" + sup; 
+        
+        if(uniqueItems.has(key)) return;
+        uniqueItems.add(key);
+        
+        let t = currentTotals[key] || { qty: 0, pallet: 0 }; 
+        
+        if (t.pallet < targetPallets) {
+            monitoredList.push({
+                category: p.category,
+                item_name: p.item_name,
+                supplier: sup,
+                qty: t.qty,
+                pallet: t.pallet
+            });
+        }
+    }); 
+
+    monitoredList.sort((a, b) => a.pallet - b.pallet);
+    
+    let html = ''; 
+    if(monitoredList.length === 0) { 
+        html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">기준치(${targetPallets}P) 미만인 재고가 없습니다.</td></tr>`; 
+    } else { 
+        monitoredList.forEach(p => { 
+            let actionBtn = `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>`; 
+            let statusHtml = `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험 (${p.pallet.toFixed(1)}P)</span><br>${actionBtn}`; 
+            
+            html += `<tr class="hover:bg-slate-50 transition-colors bg-rose-50/30">
                 <td class="p-2 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
                 <td class="p-2 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td>
-                <td class="p-2 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${totalQty.toLocaleString()}</td>
-                <td class="p-2 md:p-4 text-right font-bold text-xs md:text-sm text-slate-500">${p.daily_usage.toLocaleString()} / 일</td>
-                <td class="p-2 md:p-4 text-center">
-                    <div class="w-full bg-slate-200 rounded-full h-2 mb-1 max-w-[100px] md:max-w-[150px] mx-auto overflow-hidden"><div class="h-2 rounded-full ${isDanger ? 'bg-rose-500' : 'bg-emerald-500'}" style="width: ${Math.min((safeDaysLeft/targetDays)*100, 100)}%"></div></div>
-                    <span class="text-[10px] md:text-xs font-bold ${isDanger ? 'text-rose-600' : 'text-slate-500'}">${safeDaysLeft.toFixed(1)} 일 버팀</span>
-                </td>
+                <td class="p-2 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
+                <td class="p-2 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
                 <td class="p-2 md:p-4 text-center">${statusHtml}</td>
             </tr>`; 
         }); 
@@ -1661,12 +1692,11 @@ function updateAccFilters(changedFilter) {
     } catch(e) { console.error("Filter Update Error:", e); }
 }
 
-// 💡 2. 삭제 시 관리자 비밀번호 이중 확인
 async function deleteAccountingRecord(idsStr, itemName) {
     if(!isAdmin) return alert("관리자 권한이 필요합니다.");
-    const pw = prompt(`[${itemName}] 정산 내역 삭제\n보안을 위해 관리자 비밀번호를 다시 입력하세요:`);
+    const pw = prompt(`[${itemName}] 정산 내역 삭제\n관리자 비밀번호를 다시 입력하세요:`);
     if(pw !== "123456789*") return alert("비밀번호가 틀렸습니다.");
-    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(해당 일자에 묶인 동일 품목 전체가 삭제되며, 복구할 수 없습니다)`)) return;
+    if(!confirm(`해당 입고/정산 내역을 정말 삭제하시겠습니까?\n(일자별로 묶인 동일 품목이 모두 삭제되며, 복구할 수 없습니다)`)) return;
 
     try {
         let ids = idsStr.split(',');
@@ -1711,7 +1741,7 @@ function renderAccounting() {
                         supplier: hSup,
                         item_name: h.item_name,
                         quantity: 0,
-                        ids: [] // 여러 건일 경우 모두 담음
+                        ids: []
                     };
                 }
                 dailyGroups[key].quantity += h.quantity;
@@ -1782,16 +1812,6 @@ function renderAccounting() {
         document.getElementById('acc-list').innerHTML = html || `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 조건에 내역이 없습니다.</td></tr>`; 
         document.getElementById('acc-supply').innerText = totalSupply.toLocaleString() + ' 원'; document.getElementById('acc-tax').innerText = totalTax.toLocaleString() + ' 원'; document.getElementById('acc-total').innerText = totalSum.toLocaleString() + ' 원'; 
     } catch(e) { console.error(e); }
-}
-
-function exportAccountingExcel() {
-    try {
-        const table = document.getElementById('accounting-table');
-        if(!table) return alert("다운로드할 표가 없습니다.");
-        const wb = XLSX.utils.table_to_book(table, {sheet: "정산내역"});
-        let today = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `한스팜_정산회계_${today}.xlsx`);
-    } catch (error) { console.error(error); alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
