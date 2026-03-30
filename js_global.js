@@ -1,5 +1,5 @@
 // ==========================================
-// 공용 전역 변수 (모든 파일에서 공유됨)
+// 전역 변수 (오직 이 파일에서만 단 한 번 선언)
 // ==========================================
 let globalOccupancy = []; 
 let productMaster = []; 
@@ -20,6 +20,9 @@ let movingItem = null;
 let bomCart = [];
 let expandedBomRows = {}; 
 let isRightPanelVisible = false; 
+
+const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
+const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
 
 // ==========================================
 // 시스템 로딩 및 로그인
@@ -103,7 +106,7 @@ function adminLogin() {
 }
 
 // ==========================================
-// 뷰(화면) 전환 로직
+// 공통 UI / 헬퍼 기능
 // ==========================================
 function showView(viewName) {
     movingItem = null;
@@ -172,5 +175,62 @@ function closeInfoPanel() {
     selectedCellId = null; movingItem = null; renderMap(); 
 }
 
-// 초기 로드 실행
+function getDynamicPalletCount(itemObj) {
+    if(!itemObj) return 0;
+    let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
+    let targetSup = String(supplier).trim();
+    let pInfo = finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim()) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim());
+    if (pInfo && pInfo.pallet_ea > 0) return quantity / pInfo.pallet_ea;
+    return itemObj.pallet_count || 1;
+}
+
+function showHistoryModal(locId) {
+    let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    document.getElementById('history-modal-title').innerText = `${locId} 전체 기록`;
+    let html = '';
+    locHistory.forEach(h => {
+        let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
+        let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
+        html += `<div class="bg-slate-50 p-3 border border-slate-200 rounded text-[11px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`;
+    });
+    document.getElementById('history-modal-content').innerHTML = html;
+    document.getElementById('history-modal').classList.remove('hidden'); document.getElementById('history-modal').classList.add('flex');
+}
+
+function closeHistoryModal() {
+    document.getElementById('history-modal').classList.add('hidden'); document.getElementById('history-modal').classList.remove('flex');
+}
+
+function exportPhysicalCountExcel() {
+    try {
+        let wsData = [];
+        if (globalOccupancy.length === 0) { wsData = [{"위치": "", "카테고리": "", "품목명": "", "입고처": "", "전산수량(EA)": "", "실사수량(EA)": "", "차이": "", "비고": ""}]; } 
+        else {
+            let sortedData = [...globalOccupancy].sort((a, b) => a.location_id.localeCompare(b.location_id));
+            wsData = sortedData.map(item => ({ "위치": item.location_id, "카테고리": item.category || "", "품목명": item.item_name || "", "입고처": item.remarks || "기본입고처", "전산수량(EA)": item.quantity, "실사수량(EA)": "", "차이": "", "비고": "" }));
+        }
+        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData);
+        ws['!cols'] = [{wch: 15}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 10}, {wch: 20}];
+        XLSX.utils.book_append_sheet(wb, ws, "재고실사양식");
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_재고실사양식_${today}.xlsx`);
+    } catch (error) { alert("양식 다운로드 중 오류가 발생했습니다."); }
+}
+
+function exportAllHistoryExcel() {
+    try {
+        if (globalHistory.length === 0) return alert("출력할 히스토리 데이터가 없습니다.");
+        let sorted = [...globalHistory].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        let wsData = sorted.map(h => {
+            let dateStr = new Date(h.created_at).toLocaleString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            return { "처리 일시": dateStr, "입고일/산란일": h.production_date || "", "렉 위치": h.location_id || "", "작업 구분": h.action_type || "", "카테고리": h.category || "", "품목명": h.item_name || "", "수량(EA)": h.quantity || 0, "파레트(P)": h.pallet_count || 0, "비고/입고처": h.remarks || "" };
+        });
+        const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); 
+        ws['!cols'] = [{wch: 22}, {wch: 15}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 25}, {wch: 10}, {wch: 10}, {wch: 20}]; 
+        XLSX.utils.book_append_sheet(wb, ws, "전체렉히스토리"); 
+        let today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `한스팜_전체렉히스토리_${today}.xlsx`);
+    } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
+}
+
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
