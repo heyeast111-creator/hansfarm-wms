@@ -1205,37 +1205,59 @@ function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
 function renderSafetyStock() { 
     const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
     
+    // 제품 제외, 원란 제외 -> 순수 '자재'만 추출
+    let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
+    
+    let supSelect = document.getElementById('safe-filter-sup');
+    let catSelect = document.getElementById('safe-filter-cat');
+    let curSup = supSelect ? supSelect.value : 'ALL';
+    let curCat = catSelect ? catSelect.value : 'ALL';
+
+    // 드롭다운에 카테고리/입고처 리스트 세팅 (최초 1회 또는 추가 시)
+    if(supSelect && supSelect.options.length <= 1) {
+        let sups = [...new Set(materialProducts.map(p => p.supplier))].filter(Boolean).sort();
+        supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + sups.map(s => `<option value="${s}">${s}</option>`).join('');
+        supSelect.value = curSup;
+    }
+    if(catSelect && catSelect.options.length <= 1) {
+        let cats = [...new Set(materialProducts.map(p => p.category))].filter(Boolean).sort();
+        catSelect.innerHTML = `<option value="ALL">전체 카테고리</option>` + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+        catSelect.value = curCat;
+    }
+
     let currentTotals = {}; 
     let uniqueItemsMap = {};
 
-    // 1. 마스터 데이터 등록 품목
-    [...finishedProductMaster, ...productMaster].forEach(p => {
+    materialProducts.forEach(p => {
         let sup = p.supplier || "기본입고처";
         let key = p.item_name + "|" + sup;
         uniqueItemsMap[key] = { category: p.category || '미분류', item_name: p.item_name, supplier: sup };
     });
 
-    // 2. 현재 창고 재고 (마스터에 없더라도)
     globalOccupancy.forEach(item => { 
         let sup = item.remarks || "기본입고처"; 
         let key = item.item_name + "|" + sup; 
         
-        if(!uniqueItemsMap[key]) {
-            uniqueItemsMap[key] = { category: item.category || '미분류', item_name: item.item_name, supplier: sup };
+        // 마스터에 등록된 자재만 합산 (제품, 원란은 렉에 있어도 무시)
+        if(uniqueItemsMap[key]) {
+            if(!currentTotals[key]) currentTotals[key] = { qty: 0, pallet: 0 };
+            currentTotals[key].qty += item.quantity; 
+            currentTotals[key].pallet += getDynamicPalletCount(item);
         }
-
-        if(!currentTotals[key]) currentTotals[key] = { qty: 0, pallet: 0 };
-        currentTotals[key].qty += item.quantity; 
-        currentTotals[key].pallet += getDynamicPalletCount(item);
     }); 
     
     let monitoredList = [];
     
     Object.keys(uniqueItemsMap).forEach(key => {
         let info = uniqueItemsMap[key];
+        
+        // 드롭다운 필터 조건 검사
+        if(curSup !== 'ALL' && info.supplier !== curSup) return;
+        if(curCat !== 'ALL' && info.category !== curCat) return;
+
         let t = currentTotals[key] || { qty: 0, pallet: 0 };
         
-        // 5P 미만 필터링
+        // 세팅한 기준치(P) 미만인 것만 골라냄
         if (t.pallet < targetPallets) {
             monitoredList.push({
                 category: info.category,
@@ -1247,22 +1269,23 @@ function renderSafetyStock() {
         }
     });
 
+    // 파레트가 적은 것부터(오름차순) 정렬
     monitoredList.sort((a, b) => a.pallet - b.pallet);
     
     let html = ''; 
     if(monitoredList.length === 0) { 
-        html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">기준치(${targetPallets}P) 미만인 재고가 없습니다.</td></tr>`; 
+        html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">조건에 맞는 위험 재고(${targetPallets}P 미만)가 없습니다.</td></tr>`; 
     } else { 
         monitoredList.forEach(p => { 
             let actionBtn = `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>`; 
             let statusHtml = `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험 (${p.pallet.toFixed(1)}P)</span><br>${actionBtn}`; 
             
-            html += `<tr class="hover:bg-slate-50 transition-colors bg-rose-50/30">
-                <td class="p-2 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
-                <td class="p-2 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td>
-                <td class="p-2 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
-                <td class="p-2 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
-                <td class="p-2 md:p-4 text-center">${statusHtml}</td>
+            html += `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
+                <td class="p-3 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
+                <td class="p-3 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td>
+                <td class="p-3 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
+                <td class="p-3 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
+                <td class="p-3 md:p-4 text-center">${statusHtml}</td>
             </tr>`; 
         }); 
     } 
