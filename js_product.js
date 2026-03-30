@@ -1,5 +1,5 @@
 // ==========================================
-// [품목관리] - 제품 및 자재 마스터 탭 제어
+// [품목관리] - 상단 탭 전환 로직
 // ==========================================
 function switchProductTab(tab) {
     try {
@@ -25,6 +25,9 @@ function switchProductTab(tab) {
     } catch(e) {}
 }
 
+// ==========================================
+// [품목관리] - 제품 및 자재 마스터 (조회, 등록, 수정, 엑셀)
+// ==========================================
 function populateProductFilters(targetType) {
     try {
         let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
@@ -64,7 +67,7 @@ function renderProductMaster(targetType) {
 
         const listHtml = filtered.map(p => { 
             let isEditing = (editingProductOriginalName === p.item_name && editingProductOriginalSupplier === p.supplier);
-            let rowBg = isEditing ? 'bg-yellow-100 border-2 border-yellow-400' : 'hover:bg-slate-50 border-b border-slate-100';
+            let rowBg = isEditing ? 'bg-yellow-100 border-2 border-yellow-400' : 'hover:bg-slate-50 border-b border-slate-100 bg-white';
             let delBtn = isAdmin ? `<button onclick="deleteProduct('${p.item_name}', '${p.supplier}', '${targetType}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-xs font-bold">삭제</button>` : ''; 
             let badgeColor = targetType === 'finished' ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-600';
             
@@ -167,7 +170,7 @@ function importProductsExcel(e, targetType) {
 }
 
 // ==========================================
-// [품목관리] - BOM 레시피 장바구니 및 내역
+// [품목관리] - BOM 레시피 관리
 // ==========================================
 function updateBomDropdowns() {
     try {
@@ -329,6 +332,7 @@ function renderBomMaster() {
                 </td>
             </tr>`;
 
+            // 💡 BOM 리스트 디자인 버그 수정 (흰 배경, 깔끔한 구분선)
             if(isOpen) {
                 items.forEach(b => {
                     let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
