@@ -170,26 +170,21 @@ function importProductsExcel(e, targetType) {
 }
 
 // ==========================================
-// [품목관리] - BOM 레시피 관리 (이름+카테고리 중복 처리)
+// [품목관리] - BOM 레시피 관리 (이름+카테고리 종속 드롭다운)
 // ==========================================
 function updateBomDropdowns() {
     try {
-        let fList = [];
-        let fSet = new Set();
-        // 제품 드롭다운에 카테고리 정보 포함
-        finishedProductMaster.forEach(p => {
-            let key = (p.category || '미분류') + "|" + p.item_name;
-            if(!fSet.has(key) && p.item_name) { fSet.add(key); fList.push(p); }
-        });
-        fList.sort((a, b) => a.item_name.localeCompare(b.item_name));
-
-        const fOptions = fList.length > 0 
-            ? fList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('') 
-            : `<option value="">[제품 마스터]에 제품을 등록해주세요</option>`;
+        // 1. 완제품 카테고리 세팅
+        const fCats = [...new Set(finishedProductMaster.map(p => p.category))].filter(Boolean).sort();
+        const fCatOptions = `<option value="ALL">전체 카테고리</option>` + fCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
-        let finSelect = document.getElementById('bom-finished');
-        if(finSelect) finSelect.innerHTML = fOptions; 
+        const fCatSelect = document.getElementById('bom-finished-cat');
+        if(fCatSelect) {
+            fCatSelect.innerHTML = fCatOptions;
+            updateBomFinishedDropdown(); 
+        }
 
+        // 2. 자재 카테고리 세팅
         const mCats = [...new Set(productMaster.map(p => p.category))].filter(Boolean).sort();
         const catOptions = `<option value="ALL">전체 카테고리</option>` + mCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
@@ -201,6 +196,34 @@ function updateBomDropdowns() {
     } catch(e){ console.error(e); }
 }
 
+// 💡 1번 항목: 완제품 카테고리에 맞춰 제품 드롭다운 필터링
+function updateBomFinishedDropdown() {
+    try {
+        const cat = document.getElementById('bom-finished-cat').value;
+        let filtered = finishedProductMaster;
+        
+        if (cat !== 'ALL') {
+            filtered = finishedProductMaster.filter(p => p.category === cat);
+        }
+        
+        let fList = [];
+        let fSet = new Set();
+        filtered.forEach(p => {
+            let key = (p.category || '미분류') + "|" + p.item_name;
+            if(!fSet.has(key) && p.item_name) { fSet.add(key); fList.push(p); }
+        });
+        fList.sort((a, b) => a.item_name.localeCompare(b.item_name));
+
+        const fOptions = fList.length > 0 
+            ? fList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('') 
+            : `<option value="">해당 카테고리에 제품이 없습니다</option>`;
+        
+        let finSelect = document.getElementById('bom-finished');
+        if(finSelect) finSelect.innerHTML = fOptions; 
+    } catch(e){ console.error(e); }
+}
+
+// 💡 3번 항목: 자재 카테고리에 맞춰 자재 드롭다운 필터링
 function updateBomMaterialDropdown() {
     try {
         const cat = document.getElementById('bom-material-cat').value;
@@ -212,7 +235,6 @@ function updateBomMaterialDropdown() {
         
         let mList = [];
         let mSet = new Set();
-        // 자재 드롭다운에도 카테고리 정보 포함
         filtered.forEach(p => {
             let key = (p.category || '미분류') + "|" + p.item_name;
             if(!mSet.has(key) && p.item_name) { mSet.add(key); mList.push(p); }
@@ -238,7 +260,6 @@ function addMaterialToBomCart() {
     const matName = matOpt.value;
     const matCat = matOpt.getAttribute('data-cat');
     
-    // 💡 핵심: 이름과 카테고리가 둘 다 일치해야만 중복 처리 (이름이 같아도 카테고리가 다르면 통과)
     if(bomCart.find(b => b.material === matName && b.category === matCat)) {
         return alert("이미 조립 목록에 추가된 자재입니다.");
     }
@@ -296,7 +317,6 @@ async function submitBomCart() {
     for(let i=0; i<bomCart.length; i++) {
         if(bomCart[i].qty <= 0) return alert(`[${bomCart[i].material}]의 수량을 0보다 크게 입력하세요.`);
         
-        // 💡 핵심: 완제품과 자재의 '이름'과 '카테고리'가 둘 다 일치할 때만 차단
         if(finName === bomCart[i].material && finCat === bomCart[i].category) {
             return alert("완제품과 완벽히 동일한(이름과 카테고리가 같은) 자재를 구성품으로 넣을 수 없습니다!");
         }
@@ -310,7 +330,6 @@ async function submitBomCart() {
             }
             finalQty = Math.round(finalQty * 10000) / 10000;
 
-            // 백엔드에는 이름만 넘겨줌 (기존 DB 구조 유지)
             return fetch('/api/bom', { 
                 method: 'POST', 
                 headers: {'Content-Type':'application/json'}, 
