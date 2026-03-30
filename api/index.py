@@ -33,13 +33,14 @@ async def serve_ui():
         return FileResponse(path)
     return HTMLResponse(f"<h1>HTML 파일을 찾을 수 없습니다. (경로: {path})</h1>", status_code=404)
 
-@app.get("/script.js")
-@app.get("/api/script.js")
-async def serve_script():
-    path = os.path.join(ROOT_DIR, "script.js")
+# 어떤 이름의 js 파일이든 다 화면으로 보내주는 마법의 라우터
+@app.get("/{file_name}.js")
+@app.get("/api/{file_name}.js")
+async def serve_js(file_name: str):
+    path = os.path.join(ROOT_DIR, f"{file_name}.js")
     if os.path.exists(path):
         return FileResponse(path)
-    return HTMLResponse("JS Not Found", status_code=404)
+    return HTMLResponse(f"{file_name}.js Not Found", status_code=404)
 
 @app.get("/logo.jpg")
 @app.get("/api/logo.jpg")
