@@ -27,7 +27,7 @@ function initProductionView() {
     let bomFpNames = [...new Set(bomMaster.map(b => b.finished_product))].sort();
     
     if (bomFpNames.length === 0) {
-        fpSelect.innerHTML = `<option value="">[품목관리>BOM설정]에서 BOM을을 먼저 등록해주세요</option>`;
+        fpSelect.innerHTML = `<option value="">[품목관리>BOM설정]에서 레시피를 먼저 등록해주세요</option>`;
         return;
     }
 
@@ -77,7 +77,7 @@ function getMaterialOptionsHTML(selectedMaterial) {
 function updateProductionMaterial(index, newVal) {
     // 사용자가 스왑(변경)한 자재명 업데이트
     currentProductionBOM[index].target_material = newVal;
-    renderProductionBOM(); // 재고 상태 다시 체크해서 화면 갱신
+    renderProductionBOM(); // 현장 재고 상태 다시 체크해서 화면 갱신
 }
 
 function renderProductionBOM() {
@@ -86,14 +86,16 @@ function renderProductionBOM() {
 
     let html = '';
     currentProductionBOM.forEach((item, idx) => {
-        // 선택된 target_material 의 현재 총 창고 재고 합산
-        let currentStock = globalOccupancy.filter(o => o.item_name === item.target_material).reduce((sum, o) => sum + o.quantity, 0);
+        // 💡 핵심 변경: 창고 전체가 아니라 "현장(FL-)"에 있는 재고만 합산
+        let floorStock = globalOccupancy
+            .filter(o => o.item_name === item.target_material && String(o.location_id).startsWith('FL-'))
+            .reduce((sum, o) => sum + o.quantity, 0);
         
         // 재고 상태 뱃지 (넉넉하면 녹색, 부족하면 빨간색+경고)
-        let isEnough = currentStock >= item.required_qty;
+        let isEnough = floorStock >= item.required_qty;
         let stockHtml = isEnough 
-            ? `<div class="text-emerald-600 font-black text-xs md:text-sm">${currentStock.toLocaleString()} EA <span class="text-[10px] block font-bold text-slate-500">(충분)</span></div>` 
-            : `<div class="text-rose-600 font-black text-xs md:text-sm animate-pulse">${currentStock.toLocaleString()} EA <span class="text-[10px] block font-bold text-rose-400">(부족!)</span></div>`;
+            ? `<div class="text-emerald-600 font-black text-xs md:text-sm">${floorStock.toLocaleString()} EA <span class="text-[10px] block font-bold text-slate-500">(현장 충분)</span></div>` 
+            : `<div class="text-rose-600 font-black text-xs md:text-sm animate-pulse">${floorStock.toLocaleString()} EA <span class="text-[10px] block font-bold text-rose-400">(현장 부족!)</span></div>`;
 
         // 원본과 다르게 스왑했으면 원본 이름에 취소선 그어서 시각적 피드백
         let originalNameStyle = (item.original_material !== item.target_material) ? 'line-through text-slate-400' : 'text-slate-700';
@@ -119,14 +121,17 @@ function renderProductionBOM() {
 async function executeProduction() {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 실적을 등록할 수 없습니다.");
     
-    // 1. 재고 부족 검증 및 차감 계획(FIFO) 수립
+    // 1. "현장" 재고 부족 검증 및 차감 계획(FIFO) 수립
     let deductionPlan = []; 
     let productionErrors = [];
 
     for (let req of currentProductionBOM) {
         let needed = req.required_qty;
         
-        let availableItems = globalOccupancy.filter(o => o.item_name === req.target_material);
+        // 💡 핵심 변경: 현장(FL-) 렉맵에서만 해당 자재를 긁어옴
+        let availableItems = globalOccupancy.filter(o => o.item_name === req.target_material && String(o.location_id).startsWith('FL-'));
+        
+        // 산란일/입고일이 오래된 순서(FIFO)로 정렬
         availableItems.sort((a, b) => {
             let tA = a.production_date ? new Date(a.production_date).getTime() : Infinity;
             let tB = b.production_date ? new Date(b.production_date).getTime() : Infinity;
@@ -136,10 +141,11 @@ async function executeProduction() {
         let totalAvail = availableItems.reduce((sum, item) => sum + item.quantity, 0);
         
         if (totalAvail < needed) {
-            productionErrors.push(`- [${req.target_material}] (필요: ${needed}EA / 현재고: ${totalAvail}EA)`);
+            productionErrors.push(`- [${req.target_material}] (필요: ${needed}EA / 현장재고: ${totalAvail}EA)`);
             continue;
         }
 
+        // 오래된 현장 렉부터 순차적으로 차감 수량 배분
         for (let item of availableItems) {
             if (needed <= 0) break;
             
@@ -153,48 +159,69 @@ async function executeProduction() {
                 quantity: deductQty,
                 pallet_count: dynP
             });
+            
             needed -= deductQty;
         }
     }
 
     if (productionErrors.length > 0) {
-        return alert("❌ 재고가 부족하여 생산 실적을 등록할 수 없습니다:\n\n" + productionErrors.join("\n"));
+        return alert("❌ 현장(생산구역)에 자재가 부족합니다!\n창고에서 현장으로 먼저 렉 이동을 해주세요:\n\n" + productionErrors.join("\n"));
     }
 
     let fpName = document.getElementById('prod-finished-item').value;
     let fpQty = parseInt(document.getElementById('prod-qty').value);
 
-    if(!confirm(`[생산 최종 확인]\n\n완제품 [${fpName}] ${fpQty.toLocaleString()}EA를 생산 등록하시겠습니까?\n(목록에 지정된 자재들이 오래된 재고부터 자동 출고 차감됩니다.)`)) return;
+    if(!confirm(`[생산 최종 확인]\n\n완제품 [${fpName}] ${fpQty.toLocaleString()}EA를 생산 등록하시겠습니까?\n(지정된 자재들이 '생산 현장'에서 자동 차감됩니다.)`)) return;
 
     try {
+        // 2. 현장 자재 일괄 자동 출고(차감) 처리
         let outPromises = deductionPlan.map(plan => 
-            fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(plan) })
+            fetch('/api/outbound', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(plan) 
+            })
         );
         await Promise.all(outPromises);
 
+        // 3. 완제품 입고 처리 (생산현장 1층 1번칸 FL-1F-01 로 임시 적재)
         let pInfo = finishedProductMaster.find(p => p.item_name === fpName);
         let fpCat = pInfo ? pInfo.category : '미분류';
         let fpPallet = getDynamicPalletCount({item_name: fpName, remarks: "자체생산", quantity: fpQty});
         let today = new Date().toISOString().split('T')[0];
 
         await fetch('/api/inbound', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ location_id: 'FL-1F-01', category: fpCat, item_name: fpName, quantity: fpQty, pallet_count: fpPallet, production_date: today, remarks: "자체생산" })
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                location_id: 'FL-1F-01', // 생산현장 입고
+                category: fpCat,
+                item_name: fpName,
+                quantity: fpQty,
+                pallet_count: fpPallet,
+                production_date: today,
+                remarks: "자체생산"
+            })
         });
 
-        alert("생산 실적 등록 및 자재 자동 차감이 완벽하게 처리되었습니다!\n\n(생산된 완제품은 렉맵의 '생산 현장(FL-1F-01)'에 적재되었습니다. 이후 렉 이동으로 알맞은 위치에 넣어주세요.)");
+        alert("🎉 생산 실적 등록 및 자재 자동 차감이 완벽하게 처리되었습니다!\n\n(생산된 완제품은 렉맵의 '생산 현장(FL-1F-01)'에 적재되었습니다. 이후 렉 이동으로 알맞은 위치에 넣어주세요.)");
         
+        // 화면 초기화
         currentProductionBOM = [];
         document.getElementById('prod-qty').value = 1;
         document.getElementById('btn-execute-production').classList.add('hidden');
         renderProductionBOM();
+        
+        // 전체 데이터 다시 로드
         await load(); 
 
-    } catch(e) { alert("서버 통신 중 오류가 발생했습니다."); }
+    } catch(e) {
+        alert("서버 통신 중 오류가 발생했습니다. (일부만 차감되었을 수 있으니 히스토리를 확인하세요)");
+    }
 }
 
 // ==========================================
-// 💡 [추가됨] 생산 실적 엑셀 일괄 업로드 로직
+// 💡 생산 실적 엑셀 일괄 업로드 로직 (현장 재고 검증)
 // ==========================================
 function exportProductionExcel() {
     let wsData = [{"생산일자(YYYY-MM-DD)": "", "완제품명": "", "생산수량(EA)": ""}];
@@ -264,27 +291,29 @@ async function importProductionExcel(e) {
 
             if(errors.length > 0) return alert("❌ 업로드 실패 (아래 오류를 해결해주세요):\n\n" + errors.join("\n"));
 
-            // 2. 전체 재고 검사 (합산된 자재가 창고에 충분한지 확인)
+            // 2. 전체 "현장" 재고 검사 (합산된 자재가 현장에 충분한지 확인)
             for(let mat in materialNeeds) {
                 let needed = materialNeeds[mat];
-                let availableItems = globalOccupancy.filter(o => o.item_name === mat);
+                // 💡 핵심 변경: 현장(FL-) 렉맵에서만 검사
+                let availableItems = globalOccupancy.filter(o => o.item_name === mat && String(o.location_id).startsWith('FL-'));
                 let totalAvail = availableItems.reduce((sum, item) => sum + item.quantity, 0);
 
                 if(totalAvail < needed) {
-                    errors.push(`- [${mat}] (전체 필요: ${needed.toLocaleString()}EA / 창고 재고: ${totalAvail.toLocaleString()}EA)`);
+                    errors.push(`- [${mat}] (전체 필요: ${needed.toLocaleString()}EA / 현장 재고: ${totalAvail.toLocaleString()}EA)`);
                 }
             }
 
-            if(errors.length > 0) return alert("❌ 창고 재고가 부족하여 일괄 생산을 처리할 수 없습니다:\n\n" + errors.join("\n"));
+            if(errors.length > 0) return alert("❌ 현장(생산구역) 재고가 부족합니다! 창고에서 현장으로 렉 이동을 해주세요:\n\n" + errors.join("\n"));
 
-            if(!confirm(`총 ${inboundPlan.length}건의 생산 실적을 일괄 등록하시겠습니까?\n\n(※ 표준 BOM에 지정된 자재들이 창고에서 FIFO 방식으로 자동 출고됩니다.)`)) return;
+            if(!confirm(`총 ${inboundPlan.length}건의 생산 실적을 일괄 등록하시겠습니까?\n\n(※ 표준 BOM에 지정된 자재들이 '생산 현장'에서 FIFO 방식으로 자동 출고됩니다.)`)) return;
 
             // 3. 자재 차감 상세 계획(FIFO) 세우기
             for(let mat in materialNeeds) {
                 let needed = materialNeeds[mat];
-                let availableItems = globalOccupancy.filter(o => o.item_name === mat);
+                // 현장(FL-) 재고만 가져옴
+                let availableItems = globalOccupancy.filter(o => o.item_name === mat && String(o.location_id).startsWith('FL-'));
                 
-                // 오래된 재고부터 쓰기 위한 정렬
+                // 오래된 현장 재고부터 쓰기 위한 정렬
                 availableItems.sort((a, b) => {
                     let tA = a.production_date ? new Date(a.production_date).getTime() : Infinity;
                     let tB = b.production_date ? new Date(b.production_date).getTime() : Infinity;
@@ -323,7 +352,7 @@ async function importProductionExcel(e) {
             );
             await Promise.all(inPromises);
 
-            alert("생산 실적 등록 및 자재 차감이 완벽하게 완료되었습니다!");
+            alert("🎉 엑셀 일괄 생산 실적 등록 및 자재 차감이 완벽하게 완료되었습니다!");
             await load(); // 시스템 최신화
 
         } catch(err) {
