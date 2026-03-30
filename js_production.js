@@ -27,7 +27,7 @@ function initProductionView() {
     let bomFpNames = [...new Set(bomMaster.map(b => b.finished_product))].sort();
     
     if (bomFpNames.length === 0) {
-        fpSelect.innerHTML = `<option value="">[품목관리>BOM설정]에서 레시피를 먼저 등록해주세요</option>`;
+        fpSelect.innerHTML = `<option value="">[품목관리>BOM설정]에서 BOM을을 먼저 등록해주세요</option>`;
         return;
     }
 
@@ -182,7 +182,7 @@ async function executeProduction() {
             body: JSON.stringify({ location_id: 'FL-1F-01', category: fpCat, item_name: fpName, quantity: fpQty, pallet_count: fpPallet, production_date: today, remarks: "자체생산" })
         });
 
-        alert("🎉 생산 실적 등록 및 자재 자동 차감이 완벽하게 처리되었습니다!\n\n(생산된 완제품은 렉맵의 '생산 현장(FL-1F-01)'에 적재되었습니다. 이후 렉 이동으로 알맞은 위치에 넣어주세요.)");
+        alert("생산 실적 등록 및 자재 자동 차감이 완벽하게 처리되었습니다!\n\n(생산된 완제품은 렉맵의 '생산 현장(FL-1F-01)'에 적재되었습니다. 이후 렉 이동으로 알맞은 위치에 넣어주세요.)");
         
         currentProductionBOM = [];
         document.getElementById('prod-qty').value = 1;
@@ -323,7 +323,7 @@ async function importProductionExcel(e) {
             );
             await Promise.all(inPromises);
 
-            alert("🎉 엑셀 일괄 생산 실적 등록 및 자재 차감이 완벽하게 완료되었습니다!");
+            alert("생산 실적 등록 및 자재 차감이 완벽하게 완료되었습니다!");
             await load(); // 시스템 최신화
 
         } catch(err) {
