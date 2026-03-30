@@ -1205,7 +1205,7 @@ function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
 function renderSafetyStock() { 
     const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
     
-    // 제품 제외, 원란 제외 -> 순수 '자재'만 추출
+    // 제품, 원란 제외 -> 자재만 추출
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     
     let supSelect = document.getElementById('safe-filter-sup');
@@ -1213,7 +1213,7 @@ function renderSafetyStock() {
     let curSup = supSelect ? supSelect.value : 'ALL';
     let curCat = catSelect ? catSelect.value : 'ALL';
 
-    // 드롭다운에 카테고리/입고처 리스트 세팅 (최초 1회 또는 추가 시)
+    // 필터 드롭다운 세팅
     if(supSelect && supSelect.options.length <= 1) {
         let sups = [...new Set(materialProducts.map(p => p.supplier))].filter(Boolean).sort();
         supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + sups.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -1228,17 +1228,26 @@ function renderSafetyStock() {
     let currentTotals = {}; 
     let uniqueItemsMap = {};
 
+    // 💡 핵심 1: '품목명'을 기준으로 하나로 묶기 (업체가 다르면 배열에 추가)
     materialProducts.forEach(p => {
+        let key = p.item_name;
         let sup = p.supplier || "기본입고처";
-        let key = p.item_name + "|" + sup;
-        uniqueItemsMap[key] = { category: p.category || '미분류', item_name: p.item_name, supplier: sup };
+        
+        if (!uniqueItemsMap[key]) {
+            uniqueItemsMap[key] = { 
+                category: p.category || '미분류', 
+                item_name: p.item_name, 
+                suppliers: new Set([sup]) 
+            };
+        } else {
+            uniqueItemsMap[key].suppliers.add(sup);
+        }
     });
 
+    // 💡 핵심 2: 창고에 있는 재고도 '품목명' 기준으로 싹 다 합산
     globalOccupancy.forEach(item => { 
-        let sup = item.remarks || "기본입고처"; 
-        let key = item.item_name + "|" + sup; 
+        let key = item.item_name;
         
-        // 마스터에 등록된 자재만 합산 (제품, 원란은 렉에 있어도 무시)
         if(uniqueItemsMap[key]) {
             if(!currentTotals[key]) currentTotals[key] = { qty: 0, pallet: 0 };
             currentTotals[key].qty += item.quantity; 
@@ -1251,25 +1260,25 @@ function renderSafetyStock() {
     Object.keys(uniqueItemsMap).forEach(key => {
         let info = uniqueItemsMap[key];
         
-        // 드롭다운 필터 조건 검사
-        if(curSup !== 'ALL' && info.supplier !== curSup) return;
+        // 필터 조건 검사 (해당 품목의 공급사 목록 중 선택한 공급사가 있는지)
+        if(curSup !== 'ALL' && !info.suppliers.has(curSup)) return;
         if(curCat !== 'ALL' && info.category !== curCat) return;
 
         let t = currentTotals[key] || { qty: 0, pallet: 0 };
         
-        // 세팅한 기준치(P) 미만인 것만 골라냄
+        // 5P(기준치) 미만인 것만 추출
         if (t.pallet < targetPallets) {
             monitoredList.push({
                 category: info.category,
                 item_name: info.item_name,
-                supplier: info.supplier,
+                supplier: Array.from(info.suppliers).join(', '), // 여러 업체면 콤마로 이어붙임
                 qty: t.qty,
                 pallet: t.pallet
             });
         }
     });
 
-    // 파레트가 적은 것부터(오름차순) 정렬
+    // 파레트 적은 순으로 정렬 (오름차순)
     monitoredList.sort((a, b) => a.pallet - b.pallet);
     
     let html = ''; 
