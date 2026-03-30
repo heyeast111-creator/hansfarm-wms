@@ -614,7 +614,6 @@ function selectForMove(invId, itemName, maxQty, currentPallet, fromLoc, supplier
             </div>
         `;
     }
-    // 이동 시 우측 패널 무조건 열기
     let rs = document.getElementById('right-sidebar');
     if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
 }
@@ -1202,41 +1201,51 @@ function highlightFIFO() {
 
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
 
-// 💡 3. 안전재고(위험재고) 기준 변경: 타겟 P(파레트) 기준 미만인 항목 오름차순
+// 💡 4. 품목 마스터 + 현재 재고 통합하여 5P 미만 항목 오름차순 표시
 function renderSafetyStock() { 
     const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
     
     let currentTotals = {}; 
+    let uniqueItemsMap = {};
+
+    // 1. 마스터 데이터 등록 품목
+    [...finishedProductMaster, ...productMaster].forEach(p => {
+        let sup = p.supplier || "기본입고처";
+        let key = p.item_name + "|" + sup;
+        uniqueItemsMap[key] = { category: p.category || '미분류', item_name: p.item_name, supplier: sup };
+    });
+
+    // 2. 현재 창고 재고 (마스터에 없더라도)
     globalOccupancy.forEach(item => { 
-        let key = item.item_name + "|" + (item.remarks || "기본입고처"); 
+        let sup = item.remarks || "기본입고처"; 
+        let key = item.item_name + "|" + sup; 
+        
+        if(!uniqueItemsMap[key]) {
+            uniqueItemsMap[key] = { category: item.category || '미분류', item_name: item.item_name, supplier: sup };
+        }
+
         if(!currentTotals[key]) currentTotals[key] = { qty: 0, pallet: 0 };
         currentTotals[key].qty += item.quantity; 
         currentTotals[key].pallet += getDynamicPalletCount(item);
     }); 
     
-    let allItems = [...finishedProductMaster, ...productMaster];
     let monitoredList = [];
-    let uniqueItems = new Set();
     
-    allItems.forEach(p => { 
-        let sup = p.supplier || "기본입고처"; 
-        let key = p.item_name + "|" + sup; 
+    Object.keys(uniqueItemsMap).forEach(key => {
+        let info = uniqueItemsMap[key];
+        let t = currentTotals[key] || { qty: 0, pallet: 0 };
         
-        if(uniqueItems.has(key)) return;
-        uniqueItems.add(key);
-        
-        let t = currentTotals[key] || { qty: 0, pallet: 0 }; 
-        
+        // 5P 미만 필터링
         if (t.pallet < targetPallets) {
             monitoredList.push({
-                category: p.category,
-                item_name: p.item_name,
-                supplier: sup,
+                category: info.category,
+                item_name: info.item_name,
+                supplier: info.supplier,
                 qty: t.qty,
                 pallet: t.pallet
             });
         }
-    }); 
+    });
 
     monitoredList.sort((a, b) => a.pallet - b.pallet);
     
@@ -1768,7 +1777,7 @@ function renderAccounting() {
                 let delBtn = isAdmin ? `<button onclick="deleteAccountingRecord('${idsStr}', '${h.item_name}')" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-2 py-1 rounded text-[10px] font-bold transition-colors">삭제</button>` : '';
 
                 html += `<tr class="bg-white border-b border-slate-100 hover:bg-indigo-50 transition-colors">
-                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">-</td>
+                    <td class="p-1.5 md:p-2 text-slate-400 text-[10px] text-center">↳</td>
                     <td class="p-1.5 md:p-2 font-bold text-slate-700 text-[11px] md:text-xs truncate max-w-[100px]">${h.supplier}</td>
                     <td class="p-1.5 md:p-2 font-black text-slate-800 text-[11px] md:text-xs truncate max-w-[120px]">${h.item_name}</td>
                     <td class="p-1.5 md:p-2 text-right font-bold text-indigo-600 text-[11px] md:text-xs">${h.quantity.toLocaleString()}</td>
