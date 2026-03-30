@@ -1205,7 +1205,7 @@ function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
 function renderSafetyStock() { 
     const targetPallets = parseFloat(document.getElementById('safe-pallet-target').value) || 5; 
     
-    // 제품, 원란 제외 -> 자재만 추출
+    // 1. 제품, 원란 제외 -> 순수 자재만 추출
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     
     let supSelect = document.getElementById('safe-filter-sup');
@@ -1225,75 +1225,70 @@ function renderSafetyStock() {
         catSelect.value = curCat;
     }
 
-    let currentTotals = {}; 
-    let uniqueItemsMap = {};
-
-    // 💡 핵심 1: '품목명'을 기준으로 하나로 묶기 (업체가 다르면 배열에 추가)
+    // 2. "품목명"을 기준으로 데이터를 하나로 완벽하게 통합
+    let aggregatedItems = {};
+    
     materialProducts.forEach(p => {
         let key = p.item_name;
-        let sup = p.supplier || "기본입고처";
-        
-        if (!uniqueItemsMap[key]) {
-            uniqueItemsMap[key] = { 
-                category: p.category || '미분류', 
-                item_name: p.item_name, 
-                suppliers: new Set([sup]) 
+        if (!aggregatedItems[key]) {
+            aggregatedItems[key] = {
+                category: p.category || '미분류',
+                item_name: p.item_name,
+                suppliers: new Set(),
+                total_qty: 0,
+                total_pallet: 0
             };
-        } else {
-            uniqueItemsMap[key].suppliers.add(sup);
+        }
+        if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier);
+    });
+
+    // 3. 렉맵 재고를 순회하며 품목명 기준으로 총합 계산 (풍년 + 잎성 합산)
+    globalOccupancy.forEach(item => {
+        let key = item.item_name;
+        // 자재 마스터에 있는 품목만 합산
+        if(aggregatedItems[key]) {
+            aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0);
+            aggregatedItems[key].total_pallet += getDynamicPalletCount(item);
+            if (item.remarks && item.remarks !== '기본입고처') {
+                aggregatedItems[key].suppliers.add(item.remarks);
+            }
         }
     });
 
-    // 💡 핵심 2: 창고에 있는 재고도 '품목명' 기준으로 싹 다 합산
-    globalOccupancy.forEach(item => { 
-        let key = item.item_name;
-        
-        if(uniqueItemsMap[key]) {
-            if(!currentTotals[key]) currentTotals[key] = { qty: 0, pallet: 0 };
-            currentTotals[key].qty += item.quantity; 
-            currentTotals[key].pallet += getDynamicPalletCount(item);
-        }
-    }); 
-    
+    // 4. 기준치(5P) 미만 필터링
     let monitoredList = [];
     
-    Object.keys(uniqueItemsMap).forEach(key => {
-        let info = uniqueItemsMap[key];
-        
-        // 필터 조건 검사 (해당 품목의 공급사 목록 중 선택한 공급사가 있는지)
+    Object.values(aggregatedItems).forEach(info => {
+        // 드롭다운 필터 적용
         if(curSup !== 'ALL' && !info.suppliers.has(curSup)) return;
         if(curCat !== 'ALL' && info.category !== curCat) return;
 
-        let t = currentTotals[key] || { qty: 0, pallet: 0 };
-        
-        // 5P(기준치) 미만인 것만 추출
-        if (t.pallet < targetPallets) {
-            monitoredList.push({
-                category: info.category,
-                item_name: info.item_name,
-                supplier: Array.from(info.suppliers).join(', '), // 여러 업체면 콤마로 이어붙임
-                qty: t.qty,
-                pallet: t.pallet
-            });
+        // 💡 모든 업체 합산 파레트가 타겟(5P) 미만일 때만 리스트에 추가
+        if (info.total_pallet < targetPallets) {
+            monitoredList.push(info);
         }
     });
 
-    // 파레트 적은 순으로 정렬 (오름차순)
-    monitoredList.sort((a, b) => a.pallet - b.pallet);
+    // 5. 파레트 적은 순서대로 오름차순 정렬
+    monitoredList.sort((a, b) => a.total_pallet - b.total_pallet);
     
+    // 화면 출력
     let html = ''; 
     if(monitoredList.length === 0) { 
         html = `<tr><td colspan="5" class="p-10 text-center text-slate-400 font-bold">조건에 맞는 위험 재고(${targetPallets}P 미만)가 없습니다.</td></tr>`; 
     } else { 
         monitoredList.forEach(p => { 
+            let supsStr = Array.from(p.suppliers).join(', ');
+            if(!supsStr) supsStr = '기본입고처';
+
             let actionBtn = `<button onclick="generateKakaoText('${p.item_name}')" class="mt-2 block w-full bg-yellow-400 hover:bg-yellow-500 text-slate-800 text-[10px] px-2 py-1.5 rounded shadow-sm font-black transition-colors">발주 복사</button>`; 
-            let statusHtml = `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험 (${p.pallet.toFixed(1)}P)</span><br>${actionBtn}`; 
+            let statusHtml = `<span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-full font-black text-[10px] md:text-xs animate-pulse">위험 (${p.total_pallet.toFixed(1)}P)</span><br>${actionBtn}`; 
             
             html += `<tr class="hover:bg-slate-50 transition-colors bg-white border-b border-slate-100">
                 <td class="p-3 md:p-4 text-slate-500 text-xs md:text-sm font-bold">${p.category}</td>
-                <td class="p-3 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${p.supplier}]</span></td>
-                <td class="p-3 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
-                <td class="p-3 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
+                <td class="p-3 md:p-4 text-slate-800 font-black text-xs md:text-sm">${p.item_name} <span class="text-rose-600 text-[10px] block md:inline md:text-xs">[${supsStr}]</span></td>
+                <td class="p-3 md:p-4 text-right font-bold text-sm md:text-lg text-indigo-700">${p.total_qty.toLocaleString()} <span class="text-xs text-slate-500 font-normal">EA</span></td>
+                <td class="p-3 md:p-4 text-right font-black text-rose-600 text-sm md:text-lg">${p.total_pallet.toFixed(1)} <span class="text-xs text-rose-400 font-normal">P</span></td>
                 <td class="p-3 md:p-4 text-center">${statusHtml}</td>
             </tr>`; 
         }); 
