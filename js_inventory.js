@@ -1,6 +1,12 @@
 // ==========================================
 // [재고/발주] - 상단 탭 및 구역 전환 로직
 // ==========================================
+window.floorFilterMap = window.floorFilterMap || { 'FL-1F': true, 'FL-2F': true, 'FL-3F': true };
+window.areaFilterMap = window.areaFilterMap || { 'R': true, 'M': true, 'P': true, 'G': true };
+
+function toggleFloorFilter(fId) { window.floorFilterMap[fId] = !window.floorFilterMap[fId]; renderMap(); }
+function toggleAreaFilter(aKey) { window.areaFilterMap[aKey] = !window.areaFilterMap[aKey]; renderMap(); }
+
 function switchOrderTab(tab) {
     try {
         currentOrderTab = tab;
@@ -66,9 +72,6 @@ function switchZone(zone) {
 function toggleMapSearch() { const container = document.getElementById('map-search-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 function toggleWaitContainer() { const container = document.getElementById('wait-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 
-// ==========================================
-// [재고/발주] - 공용 헬퍼
-// ==========================================
 function getDynamicPalletCount(itemObj) {
     if(!itemObj) return 0;
     let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
@@ -78,9 +81,6 @@ function getDynamicPalletCount(itemObj) {
     return itemObj.pallet_count || 1;
 }
 
-// ==========================================
-// [재고/발주] - 렉맵 렌더링 (현장 구역 분리 적용)
-// ==========================================
 function changeFloorCols(areaId, delta) {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 없습니다.");
     let currentCols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
@@ -124,10 +124,27 @@ function renderMap() {
 
         let vHtml = ''; if(hContainer) hContainer.innerHTML = ''; 
         
-        // 💡 생산 현장 특화 렌더링 (구역 분리 로직)
+        // 💡 생산 현장 렌더링 (층별/구역별 토글 추가)
         if(currentZone === '현장') { 
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
             
+            vHtml += `
+            <div class="bg-white p-3 md:p-4 rounded-2xl shadow-sm border border-slate-200 mb-6 flex flex-wrap gap-4 items-center">
+                <div class="flex items-center space-x-2 md:space-x-4 border-r pr-4 border-slate-300">
+                    <span class="text-xs md:text-sm font-black text-slate-500">층별 토글:</span>
+                    <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center"><input type="checkbox" ${window.floorFilterMap['FL-1F']?'checked':''} onchange="toggleFloorFilter('FL-1F')" class="mr-1">1층</label>
+                    <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center"><input type="checkbox" ${window.floorFilterMap['FL-2F']?'checked':''} onchange="toggleFloorFilter('FL-2F')" class="mr-1">2층</label>
+                    <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center"><input type="checkbox" ${window.floorFilterMap['FL-3F']?'checked':''} onchange="toggleFloorFilter('FL-3F')" class="mr-1">3층</label>
+                </div>
+                <div class="flex items-center space-x-2 md:space-x-4">
+                    <span class="text-xs md:text-sm font-black text-slate-500">창고 토글:</span>
+                    <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-orange-600"><input type="checkbox" ${window.areaFilterMap['R']?'checked':''} onchange="toggleAreaFilter('R')" class="mr-1">원란</label>
+                    <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-blue-600"><input type="checkbox" ${window.areaFilterMap['M']?'checked':''} onchange="toggleAreaFilter('M')" class="mr-1">자재</label>
+                    <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-emerald-600"><input type="checkbox" ${window.areaFilterMap['P']?'checked':''} onchange="toggleAreaFilter('P')" class="mr-1">제품</label>
+                    <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-slate-600"><input type="checkbox" ${window.areaFilterMap['G']?'checked':''} onchange="toggleAreaFilter('G')" class="mr-1">일반(3층)</label>
+                </div>
+            </div>`;
+
             const prodSiteConfig = [
                 { id: 'FL-1F', name: '🏢 생산현장 1층', areas: [
                     { key: 'R', title: '🥚 원란창고', color: 'orange', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', textColor: 'text-orange-800' },
@@ -143,13 +160,17 @@ function renderMap() {
                 ]}
             ];
 
-            vHtml += `<div class="w-full min-w-[800px] flex flex-col space-y-10 mt-4">`; 
+            vHtml += `<div class="w-full min-w-[800px] flex flex-col space-y-10">`; 
             prodSiteConfig.forEach(floorInfo => { 
+                if(!window.floorFilterMap[floorInfo.id]) return; // 층 숨김 처리
+
                 vHtml += `<div class="bg-white p-6 rounded-3xl shadow-lg border border-slate-300">
                     <div class="text-xl font-black text-slate-800 mb-6 flex items-center"><span class="bg-slate-800 text-white px-3 py-1 rounded-lg mr-3 text-sm">${floorInfo.id}</span> ${floorInfo.name}</div>
                     <div class="flex flex-col space-y-6">`;
                 
                 floorInfo.areas.forEach(area => {
+                    if(!window.areaFilterMap[area.key]) return; // 창고 숨김 처리
+
                     let areaId = `${floorInfo.id}-${area.key}`;
                     let cols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
 
@@ -186,7 +207,7 @@ function renderMap() {
             return; 
         } 
         
-        // --- 실온/냉장 렌더링 로직 (기존 유지) ---
+        // --- 실온/냉장 렌더링 ---
         let aisleText = document.getElementById('aisle-text'); if(aisleText) { aisleText.classList.remove('hidden'); aisleText.innerText = "통로 (Aisle)"; }
         const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold; const prefix = currentZone === '실온' ? 'R-' : 'C-'; 
 
@@ -306,7 +327,6 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
     try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); alert("출고 완료"); await load(); } catch(e) {} 
 }
 
-// --- 발주/안전재고 관련 (기존 코드 유지) ---
 function renderSafetyStock() { 
     const mode = document.getElementById('safe-mode') ? document.getElementById('safe-mode').value : 'pallet';
     const thead = document.getElementById('safety-thead');
@@ -333,22 +353,21 @@ function renderSafetyStock() {
 function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`수량:`, "1000"); const text = `[발주요청] 한스팜입니다. ${itemName} ${moq}EA 발주 부탁드립니다.`; navigator.clipboard.writeText(text).then(() => alert("복사완료")); }
 function toggleSafeMode() { const mode = document.getElementById('safe-mode').value; document.getElementById('target-pallet-container').classList.toggle('hidden', mode!=='pallet'); document.getElementById('target-days-container').classList.toggle('hidden', mode==='pallet'); renderSafetyStock(); }
 
-// --- 나머지 발주/조회 (기존 코드 유지) ---
-function populateWaitDropdowns() { /* 기존 js_inventory.js 의 대기장 드롭다운 로직 그대로 */ }
-function updateWaitCategoryDropdown() { /* 기존 로직 */ }
-function updateWaitItemDropdown() { /* 기존 로직 */ }
-async function createWaitingPallets() { /* 기존 로직 */ }
-function updateSummarySupplierDropdown() { /* 기존 로직 */ }
-function updateSummaryCategoryDropdown() { /* 기존 로직 */ }
-function updateSummaryItemDropdown() { /* 기존 로직 */ }
-function calculateSummary() { /* 기존 로직 */ }
-function findItemLocationFromSummary() { /* 기존 로직 */ }
-function updateOrderCartDropdowns() { /* 기존 로직 */ }
-function updateOrderCartCategoryDropdown() { /* 기존 로직 */ }
-function updateOrderCartItemDropdown() { /* 기존 로직 */ }
-function addOrderCartItem() { /* 기존 로직 */ }
-function renderOrderCart() { /* 기존 로직 */ }
-async function submitOrderCart() { /* 기존 로직 */ }
-function renderOrderList() { /* 기존 로직 */ }
-async function receiveOrder() { /* 기존 로직 */ }
-async function cancelOrder() { /* 기존 로직 */ }
+function populateWaitDropdowns() { /* ... */ }
+function updateWaitCategoryDropdown() { /* ... */ }
+function updateWaitItemDropdown() { /* ... */ }
+async function createWaitingPallets() { /* ... */ }
+function updateSummarySupplierDropdown() { /* ... */ }
+function updateSummaryCategoryDropdown() { /* ... */ }
+function updateSummaryItemDropdown() { /* ... */ }
+function calculateSummary() { /* ... */ }
+function findItemLocationFromSummary() { /* ... */ }
+function updateOrderCartDropdowns() { /* ... */ }
+function updateOrderCartCategoryDropdown() { /* ... */ }
+function updateOrderCartItemDropdown() { /* ... */ }
+function addOrderCartItem() { /* ... */ }
+function renderOrderCart() { /* ... */ }
+async function submitOrderCart() { /* ... */ }
+function renderOrderList() { /* ... */ }
+async function receiveOrder() { /* ... */ }
+async function cancelOrder() { /* ... */ }
