@@ -170,12 +170,16 @@ function importProductsExcel(e, targetType) {
 }
 
 // ==========================================
-// [품목관리] - BOM 레시피 관리 (이름+카테고리 종속 드롭다운)
+// [품목관리] - BOM 레시피 관리 (이름+카테고리 종속 드롭다운 및 기등록 제외)
 // ==========================================
 function updateBomDropdowns() {
     try {
-        // 1. 완제품 카테고리 세팅
-        const fCats = [...new Set(finishedProductMaster.map(p => p.category))].filter(Boolean).sort();
+        // 💡 1. 완제품 카테고리 세팅 (이미 BOM 있는 건 제외하기 위한 준비)
+        const existingBOMs = new Set(bomMaster.map(b => b.finished_product));
+        // BOM에 아직 등록 안 된 완제품들만 남김
+        const availableFinishedProducts = finishedProductMaster.filter(p => !existingBOMs.has(p.item_name));
+
+        const fCats = [...new Set(availableFinishedProducts.map(p => p.category))].filter(Boolean).sort();
         const fCatOptions = `<option value="ALL">전체 카테고리</option>` + fCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
         const fCatSelect = document.getElementById('bom-finished-cat');
@@ -184,7 +188,7 @@ function updateBomDropdowns() {
             updateBomFinishedDropdown(); 
         }
 
-        // 2. 자재 카테고리 세팅
+        // 2. 자재 카테고리 세팅 (자재는 제한 없음)
         const mCats = [...new Set(productMaster.map(p => p.category))].filter(Boolean).sort();
         const catOptions = `<option value="ALL">전체 카테고리</option>` + mCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
@@ -196,14 +200,17 @@ function updateBomDropdowns() {
     } catch(e){ console.error(e); }
 }
 
-// 💡 1번 항목: 완제품 카테고리에 맞춰 제품 드롭다운 필터링
+// 💡 1번 항목: 완제품 카테고리에 맞춰 제품 드롭다운 필터링 (기등록 제품 제외)
 function updateBomFinishedDropdown() {
     try {
         const cat = document.getElementById('bom-finished-cat').value;
-        let filtered = finishedProductMaster;
+        const existingBOMs = new Set(bomMaster.map(b => b.finished_product));
+        
+        // 기등록된 완제품은 애초에 목록에서 뺌
+        let filtered = finishedProductMaster.filter(p => !existingBOMs.has(p.item_name));
         
         if (cat !== 'ALL') {
-            filtered = finishedProductMaster.filter(p => p.category === cat);
+            filtered = filtered.filter(p => p.category === cat);
         }
         
         let fList = [];
@@ -216,7 +223,7 @@ function updateBomFinishedDropdown() {
 
         const fOptions = fList.length > 0 
             ? fList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('') 
-            : `<option value="">해당 카테고리에 제품이 없습니다</option>`;
+            : `<option value="">선택 가능한(미등록) 제품이 없습니다</option>`;
         
         let finSelect = document.getElementById('bom-finished');
         if(finSelect) finSelect.innerHTML = fOptions; 
