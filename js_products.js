@@ -109,29 +109,72 @@ function cancelEdit(targetType) {
     renderProductMaster(targetType);
 }
 
+// 💡 수정됨: 낙관적 UI 업데이트 적용 (클릭 즉시 화면부터 반영)
 async function submitProduct(targetType) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const prefix = targetType === 'finished' ? 'fp' : 'pm';
-    const cat = document.getElementById(`${prefix}-cat`).value.trim(); const name = document.getElementById(`${prefix}-name`).value.trim(); const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
+    const cat = document.getElementById(`${prefix}-cat`).value.trim(); 
+    const name = document.getElementById(`${prefix}-name`).value.trim(); 
+    const supplier = document.getElementById(`${prefix}-supplier`).value.trim() || (targetType==='finished'?'자체생산':'기본입고처'); 
+    const usage = parseInt(document.getElementById(`${prefix}-usage`).value) || 0; 
+    const price = parseInt(document.getElementById(`${prefix}-price`).value) || 0; 
+    const ea = parseInt(document.getElementById(`${prefix}-pallet-ea`).value) || 1; 
+    
     if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
     const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
+    let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
+
     try { 
         if(editingProductOriginalName) { 
+            // ⚡ 1. 화면 즉시 반영 (낙관적 업데이트)
+            let idx = dataArray.findIndex(p => p.item_name === editingProductOriginalName && p.supplier === editingProductOriginalSupplier);
+            if(idx !== -1) {
+                dataArray[idx] = { category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea };
+            }
+            alert("수정 완료"); 
+            cancelEdit(targetType); // 렌더링 호출 포함됨
+            updateBomDropdowns();
+
+            // ⚡ 2. 백엔드 통신 (비동기)
             await fetch(`${endpoint}?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-            alert("수정 완료"); cancelEdit(targetType);
         } else { 
+            // ⚡ 1. 화면 즉시 반영 (낙관적 업데이트)
+            dataArray.push({ category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea });
+            alert("등록 완료"); 
+            document.getElementById(`${prefix}-name`).value = ''; 
+            document.getElementById(`${prefix}-supplier`).value = ''; 
+            populateProductFilters(targetType);
+            renderProductMaster(targetType);
+            updateBomDropdowns();
+
+            // ⚡ 2. 백엔드 통신 (비동기)
             await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
-            alert("등록 완료"); document.getElementById(`${prefix}-name`).value = ''; document.getElementById(`${prefix}-supplier`).value = ''; 
         } 
-        await load();
+        // 약간의 딜레이 후 백엔드 데이터와 최종 완벽 동기화
+        setTimeout(() => { load(); }, 300);
     } catch(e) { alert("서버 통신 실패"); } 
 }
 
+// 💡 수정됨: 삭제 시 낙관적 UI 업데이트 적용
 async function deleteProduct(name, supplier, targetType) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
+    
+    // ⚡ 1. 화면 즉시 반영
+    let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
+    let idx = dataArray.findIndex(p => p.item_name === name && p.supplier === supplier);
+    if(idx !== -1) dataArray.splice(idx, 1);
+    
+    populateProductFilters(targetType);
+    renderProductMaster(targetType);
+    updateBomDropdowns();
+
     const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-    try { await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); await load(); } catch(e) {} 
+    try { 
+        // ⚡ 2. 백엔드 통신
+        await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); 
+        setTimeout(() => { load(); }, 300); 
+    } catch(e) {} 
 }
 
 async function deleteAllProducts(targetType) { 
@@ -174,9 +217,8 @@ function importProductsExcel(e, targetType) {
 // ==========================================
 function updateBomDropdowns() {
     try {
-        // 💡 1. 완제품 카테고리 세팅 (이미 BOM 있는 건 제외하기 위한 준비)
+        // 1. 완제품 카테고리 세팅 (이미 BOM 있는 건 제외하기 위한 준비)
         const existingBOMs = new Set(bomMaster.map(b => b.finished_product));
-        // BOM에 아직 등록 안 된 완제품들만 남김
         const availableFinishedProducts = finishedProductMaster.filter(p => !existingBOMs.has(p.item_name));
 
         const fCats = [...new Set(availableFinishedProducts.map(p => p.category))].filter(Boolean).sort();
@@ -200,18 +242,14 @@ function updateBomDropdowns() {
     } catch(e){ console.error(e); }
 }
 
-// 💡 1번 항목: 완제품 카테고리에 맞춰 제품 드롭다운 필터링 (기등록 제품 제외)
+// 1번 항목: 완제품 카테고리에 맞춰 제품 드롭다운 필터링 (기등록 제품 제외)
 function updateBomFinishedDropdown() {
     try {
         const cat = document.getElementById('bom-finished-cat').value;
         const existingBOMs = new Set(bomMaster.map(b => b.finished_product));
         
-        // 기등록된 완제품은 애초에 목록에서 뺌
         let filtered = finishedProductMaster.filter(p => !existingBOMs.has(p.item_name));
-        
-        if (cat !== 'ALL') {
-            filtered = filtered.filter(p => p.category === cat);
-        }
+        if (cat !== 'ALL') filtered = filtered.filter(p => p.category === cat);
         
         let fList = [];
         let fSet = new Set();
@@ -230,15 +268,13 @@ function updateBomFinishedDropdown() {
     } catch(e){ console.error(e); }
 }
 
-// 💡 3번 항목: 자재 카테고리에 맞춰 자재 드롭다운 필터링
+// 3번 항목: 자재 카테고리에 맞춰 자재 드롭다운 필터링
 function updateBomMaterialDropdown() {
     try {
         const cat = document.getElementById('bom-material-cat').value;
         let filtered = productMaster;
         
-        if (cat !== 'ALL') {
-            filtered = productMaster.filter(p => p.category === cat);
-        }
+        if (cat !== 'ALL') filtered = productMaster.filter(p => p.category === cat);
         
         let mList = [];
         let mSet = new Set();
@@ -251,9 +287,7 @@ function updateBomMaterialDropdown() {
         const mOptions = mList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('');
         
         const matSelect = document.getElementById('bom-material');
-        if(matSelect) {
-            matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
-        }
+        if(matSelect) matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
     } catch(e){ console.error(e); }
 }
 
@@ -330,33 +364,30 @@ async function submitBomCart() {
     }
 
     try {
-        let promises = bomCart.map(item => {
-            let finalQty = item.qty;
-            if (item.type === 'per_box') {
-                finalQty = 1 / item.qty;
-            }
+        // ⚡ 낙관적 업데이트를 위해 UI에 즉시 추가할 임시 데이터
+        let tempId = 'temp-' + Date.now();
+        bomCart.forEach(item => {
+            let finalQty = item.type === 'per_box' ? 1 / item.qty : item.qty;
             finalQty = Math.round(finalQty * 10000) / 10000;
+            bomMaster.push({ id: tempId, finished_product: finName, material_product: item.material, require_qty: finalQty });
+        });
+        
+        renderBomMaster();
+        updateBomDropdowns();
+        bomCart = []; 
+        renderBomCart();
 
-            return fetch('/api/bom', { 
-                method: 'POST', 
-                headers: {'Content-Type':'application/json'}, 
-                body: JSON.stringify({ 
-                    finished_product: finName, 
-                    material_product: item.material, 
-                    require_qty: finalQty 
-                }) 
-            });
+        let promises = bomCart.map(item => {
+            let finalQty = item.type === 'per_box' ? 1 / item.qty : item.qty;
+            finalQty = Math.round(finalQty * 10000) / 10000;
+            return fetch('/api/bom', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ finished_product: finName, material_product: item.material, require_qty: finalQty }) });
         });
         
         await Promise.all(promises); 
-        
         alert("레시피 일괄 등록 완료!");
-        bomCart = []; 
-        renderBomCart();
-        await load(); 
-    } catch(e) {
-        alert("서버 통신 실패");
-    }
+        setTimeout(() => { load(); }, 300); 
+
+    } catch(e) { alert("서버 통신 실패"); }
 }
 
 function toggleBomRow(fpName) {
@@ -414,9 +445,20 @@ function renderBomMaster() {
 async function deleteBom(id) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; 
-    try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } 
+    
+    // ⚡ 낙관적 UI
+    let idx = bomMaster.findIndex(b => String(b.id) === String(id));
+    if(idx !== -1) bomMaster.splice(idx, 1);
+    renderBomMaster();
+    updateBomDropdowns();
+
+    try { 
+        await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); 
+        setTimeout(() => { load(); }, 300); 
+    } catch(e) {} 
 }
 
+// 💡 엑셀 업로드 관련
 function exportBomExcel() {
     let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
     const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
