@@ -3,7 +3,9 @@
 // ==========================================
 window.floorFilterMap = window.floorFilterMap || { 'FL-1F': true, 'FL-2F': true, 'FL-3F': true };
 window.areaFilterMap = window.areaFilterMap || { 'R': true, 'M': true, 'P': true, 'G': true };
+window.isMapFilterOpen = window.isMapFilterOpen || false; // 토글 상태 저장
 
+function toggleMapFilters() { window.isMapFilterOpen = !window.isMapFilterOpen; renderMap(); }
 function toggleFloorFilter(fId) { window.floorFilterMap[fId] = !window.floorFilterMap[fId]; renderMap(); }
 function toggleAreaFilter(aKey) { window.areaFilterMap[aKey] = !window.areaFilterMap[aKey]; renderMap(); }
 
@@ -72,9 +74,6 @@ function switchZone(zone) {
 function toggleMapSearch() { const container = document.getElementById('map-search-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 function toggleWaitContainer() { const container = document.getElementById('wait-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 
-// ==========================================
-// [재고/발주] - 공용 헬퍼 및 맵 렌더링
-// ==========================================
 function getDynamicPalletCount(itemObj) {
     if(!itemObj) return 0;
     let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
@@ -108,8 +107,17 @@ function renderMap() {
         const floor = floorSelect ? floorSelect.value : "1"; 
         const vContainer = document.getElementById('vertical-racks'); 
         const hContainer = document.getElementById('horizontal-rack'); 
+        const mapContainer = document.getElementById('map-container'); // 💡 맵 박스 전체 제어
+        
         const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item); }); 
         
+        // 💡 생산 현장일 때 박스 폭 100% 꽉 채우기
+        if(currentZone === '현장') {
+            if(mapContainer) { mapContainer.classList.remove('w-fit', 'min-w-max'); mapContainer.classList.add('w-full'); }
+        } else {
+            if(mapContainer) { mapContainer.classList.remove('w-full'); mapContainer.classList.add('w-fit', 'min-w-max'); }
+        }
+
         let waitHtml = '';
         for(let i=1; i<=30; i++) {
             let wId = `W-${i.toString().padStart(2, '0')}`;
@@ -127,25 +135,32 @@ function renderMap() {
 
         let vHtml = ''; if(hContainer) hContainer.innerHTML = ''; 
         
-        // 💡 생산 현장 렌더링 (가로스크롤 제거 및 토글 상단 콤팩트 배치)
+        // 💡 생산 현장 렌더링 (버튼형 토글 상단 배치 + 꽉 차는 그리드)
         if(currentZone === '현장') { 
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
             
-            // 토글 메뉴를 콤팩트하게 상단에 배치
+            // 토글 메뉴를 버튼 밖으로 분리하고 아코디언처럼 제작
             vHtml += `
-            <div class="w-full bg-white p-3 rounded-xl shadow-sm border border-slate-200 mb-4 flex flex-col md:flex-row gap-3 items-start md:items-center sticky top-0 z-10">
-                <div class="flex items-center space-x-3 md:border-r border-slate-300 pr-3">
-                    <span class="text-[11px] md:text-xs font-black text-slate-500">🏢 층별 표시:</span>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-bold flex items-center"><input type="checkbox" ${window.floorFilterMap['FL-1F']?'checked':''} onchange="toggleFloorFilter('FL-1F')" class="mr-1">1층</label>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-bold flex items-center"><input type="checkbox" ${window.floorFilterMap['FL-2F']?'checked':''} onchange="toggleFloorFilter('FL-2F')" class="mr-1">2층</label>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-bold flex items-center"><input type="checkbox" ${window.floorFilterMap['FL-3F']?'checked':''} onchange="toggleFloorFilter('FL-3F')" class="mr-1">3층</label>
-                </div>
-                <div class="flex flex-wrap items-center gap-3">
-                    <span class="text-[11px] md:text-xs font-black text-slate-500">분류 표시:</span>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-black flex items-center text-orange-600"><input type="checkbox" ${window.areaFilterMap['R']?'checked':''} onchange="toggleAreaFilter('R')" class="mr-1">원란</label>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-black flex items-center text-blue-600"><input type="checkbox" ${window.areaFilterMap['M']?'checked':''} onchange="toggleAreaFilter('M')" class="mr-1">자재</label>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-black flex items-center text-emerald-600"><input type="checkbox" ${window.areaFilterMap['P']?'checked':''} onchange="toggleAreaFilter('P')" class="mr-1">제품</label>
-                    <label class="cursor-pointer text-[11px] md:text-xs font-black flex items-center text-slate-600"><input type="checkbox" ${window.areaFilterMap['G']?'checked':''} onchange="toggleAreaFilter('G')" class="mr-1">일반(3층)</label>
+            <div class="w-full mb-6">
+                <button onclick="toggleMapFilters()" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-black py-3 px-6 rounded-xl shadow-md transition-colors flex justify-between items-center text-sm md:text-base border-b-4 border-slate-900">
+                    <span>⚙️ 현장 창고 보기 설정 (클릭하여 열기/닫기)</span>
+                    <span class="text-xl leading-none">${window.isMapFilterOpen ? '▲' : '▼'}</span>
+                </button>
+                
+                <div class="${window.isMapFilterOpen ? 'flex' : 'hidden'} bg-white p-5 rounded-b-xl shadow-lg border-x border-b border-slate-300 flex-col md:flex-row gap-6 items-start md:items-center -mt-2 pt-6">
+                    <div class="flex items-center space-x-4 md:border-r border-slate-300 pr-6">
+                        <span class="text-xs md:text-sm font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">🏢 층별 표시</span>
+                        <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-1F']?'checked':''} onchange="toggleFloorFilter('FL-1F')" class="mr-1.5 w-4 h-4">1층</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-2F']?'checked':''} onchange="toggleFloorFilter('FL-2F')" class="mr-1.5 w-4 h-4">2층</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-3F']?'checked':''} onchange="toggleFloorFilter('FL-3F')" class="mr-1.5 w-4 h-4">3층</label>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <span class="text-xs md:text-sm font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">📦 분류 표시</span>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-orange-600 hover:text-orange-700 transition-colors"><input type="checkbox" ${window.areaFilterMap['R']?'checked':''} onchange="toggleAreaFilter('R')" class="mr-1.5 w-4 h-4 accent-orange-600">원란</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-blue-600 hover:text-blue-700 transition-colors"><input type="checkbox" ${window.areaFilterMap['M']?'checked':''} onchange="toggleAreaFilter('M')" class="mr-1.5 w-4 h-4 accent-blue-600">자재</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-emerald-600 hover:text-emerald-700 transition-colors"><input type="checkbox" ${window.areaFilterMap['P']?'checked':''} onchange="toggleAreaFilter('P')" class="mr-1.5 w-4 h-4 accent-emerald-600">제품</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-slate-600 hover:text-slate-800 transition-colors"><input type="checkbox" ${window.areaFilterMap['G']?'checked':''} onchange="toggleAreaFilter('G')" class="mr-1.5 w-4 h-4 accent-slate-600">일반(3층)</label>
+                    </div>
                 </div>
             </div>`;
 
@@ -164,7 +179,6 @@ function renderMap() {
                 ]}
             ];
 
-            // 가로 스크롤 제거를 위해 w-full 로 변경하고 그리드 크기 조정
             vHtml += `<div class="w-full flex flex-col space-y-6">`; 
             prodSiteConfig.forEach(floorInfo => { 
                 if(!window.floorFilterMap[floorInfo.id]) return;
@@ -179,16 +193,16 @@ function renderMap() {
                     let areaId = `${floorInfo.id}-${area.key}`;
                     let cols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
 
-                    vHtml += `<div class="${area.bgColor} p-3 md:p-4 rounded-xl border ${area.borderColor} shadow-sm">
+                    vHtml += `<div class="${area.bgColor} p-3 md:p-4 rounded-xl border ${area.borderColor} shadow-sm w-full">
                         <div class="flex justify-between items-center mb-3 pb-2 border-b ${area.borderColor}">
                             <div class="text-xs md:text-sm font-black ${area.textColor}">${area.title}</div>
                             <div class="flex items-center space-x-1">
-                                <button onclick="changeFloorCols('${areaId}', -1)" class="bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 font-bold px-2 py-0.5 rounded text-[10px]">-</button>
+                                <button onclick="changeFloorCols('${areaId}', -1)" class="bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 font-bold px-2 py-0.5 rounded text-[10px] shadow-sm">-</button>
                                 <span class="font-black text-slate-700 text-[10px] md:text-xs px-1">${cols} 칸</span>
-                                <button onclick="changeFloorCols('${areaId}', 1)" class="bg-white hover:bg-blue-50 text-blue-600 border border-slate-200 font-bold px-2 py-0.5 rounded text-[10px]">+</button>
+                                <button onclick="changeFloorCols('${areaId}', 1)" class="bg-white hover:bg-blue-50 text-blue-600 border border-slate-200 font-bold px-2 py-0.5 rounded text-[10px] shadow-sm">+</button>
                             </div>
                         </div>
-                        <div class="grid grid-cols-5 md:grid-cols-10 gap-1.5 md:gap-2">`;
+                        <div class="grid grid-cols-[repeat(auto-fill,minmax(42px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(50px,1fr))] gap-1.5 md:gap-2">`;
                     
                     for (let r = 1; r <= cols; r++) { 
                         let dbId = `${areaId}-${r.toString().padStart(2, '0')}`; 
@@ -201,8 +215,7 @@ function renderMap() {
                         let isTarget = globalSearchTargets.includes(dbId); let pulseClass = isTarget ? 'highlight-pulse' : '';
                         if(movingItem && movingItem.fromLoc === dbId) pulseClass += ' highlight-move';
                         
-                        // h-10, text-[9px] 로 셀 사이즈 축소 (가로 스크롤 방지)
-                        vHtml += `<div id="cell-${dbId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${dbId}', '${dbId}')" onclick="clickCell('${dbId}', '${dbId}')" class="h-10 md:h-12 rounded border-2 flex flex-col items-center justify-center text-[9px] font-black cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm hover:scale-105 transition-all">${badge}<span class="${hasItem?'text-slate-700':'text-slate-400'}">${r}</span></div>`; 
+                        vHtml += `<div id="cell-${dbId}" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event, '${dbId}', '${dbId}')" onclick="clickCell('${dbId}', '${dbId}')" class="h-10 md:h-12 rounded border flex flex-col items-center justify-center text-[10px] font-black cursor-pointer rack-cell ${cellState} ${pulseClass} shadow-sm hover:scale-105 transition-all">${badge}<span class="${hasItem?'text-slate-700':'text-slate-400'}">${r}</span></div>`; 
                     } 
                     vHtml += `</div></div>`;
                 });
@@ -363,7 +376,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// [재고조회/발주/안전재고] - 누락된 복원 함수들 (100% 꽉 채움)
+// [재고조회/발주/안전재고] - 100% 완전 복원 (생략 없음)
 // ==========================================
 function updateMapSearchCategoryDropdown() {
     let sourceItems = [];
