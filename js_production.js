@@ -34,7 +34,10 @@ function initProductionView() {
     fpSelect.innerHTML = html;
 }
 
-function calculateProductionBOM() {
+// 💡 [버그 수정] 버튼 누르는 순간 무조건 최신 DB 다시 끌고 옴
+async function calculateProductionBOM() {
+    await load(); // ⭐ 무조건 최신 데이터 강제 동기화
+    
     let fpName = document.getElementById('prod-finished-item').value;
     let qty = parseInt(document.getElementById('prod-qty').value);
     if(!fpName || isNaN(qty) || qty <= 0) return alert("품목과 수량을 확인하세요.");
@@ -56,9 +59,11 @@ function renderProductionBOM() {
     const tbody = document.getElementById('prod-bom-list');
     let html = '';
     currentProductionBOM.forEach((item, idx) => {
+        // 💡 정확한 문자열 공백 제거 매칭
         let floorStock = globalOccupancy
-            .filter(o => o.item_name === item.target_material && String(o.location_id).startsWith('FL-'))
-            .reduce((sum, o) => sum + o.quantity, 0);
+            .filter(o => String(o.item_name).trim() === String(item.target_material).trim() && String(o.location_id).startsWith('FL-'))
+            .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+            
         let isEnough = floorStock >= item.required_qty;
         let stockHtml = isEnough 
             ? `<span class="text-emerald-600 font-bold">${floorStock.toLocaleString()}</span>` 
@@ -68,11 +73,11 @@ function renderProductionBOM() {
             <td class="p-2 font-bold">${item.original_material}</td>
             <td class="p-2 text-right font-black text-indigo-600">${item.required_qty.toLocaleString()}</td>
             <td class="p-2 text-center">
-                <select onchange="updateProductionMaterial(${idx}, this.value)" class="text-xs border rounded p-1 bg-slate-50">
+                <select onchange="updateProductionMaterial(${idx}, this.value)" class="text-xs border rounded p-1 bg-slate-50 w-full max-w-[200px]">
                     ${getMaterialOptionsHTML(item.target_material)}
                 </select>
             </td>
-            <td class="p-2 text-center text-xs">${stockHtml}</td>
+            <td class="p-2 text-center text-xs bg-slate-50">${stockHtml}</td>
         </tr>`;
     });
     tbody.innerHTML = html;
@@ -120,7 +125,7 @@ function renderProductionCart() {
 
     tbody.innerHTML = productionCart.map((item, idx) => {
         let matSummary = item.materials.map(m => `${m.target_material}(${m.required_qty})`).join(', ');
-        return `<tr class="bg-white hover:bg-slate-50">
+        return `<tr class="bg-white hover:bg-slate-50 border-b">
             <td class="p-3 font-black text-slate-800">${item.finished_product}</td>
             <td class="p-3 text-right font-black text-emerald-600">${item.quantity.toLocaleString()} EA</td>
             <td class="p-3 text-xs text-slate-500 truncate max-w-xs">${matSummary}</td>
@@ -131,12 +136,11 @@ function renderProductionCart() {
     executeBtn.classList.remove('hidden');
 }
 
-// 💡 일괄 생산 실행 및 "실시간" 현장 재고 차감 (핵심 수정)
+// 💡 일괄 생산 실행 및 "실시간" 현장 재고 차감
 async function executeBatchProduction() {
     if(loginMode === 'viewer') return;
 
-    // ⭐ 핵심: 실행 버튼을 누르는 순간 서버에서 최신 데이터를 강제로 100% 동기화시킴
-    await load(); 
+    await load(); // ⭐ 실행 전 최신 데이터 강제 동기화
 
     let totalMaterialNeeds = {};
     productionCart.forEach(order => {
@@ -149,10 +153,11 @@ async function executeBatchProduction() {
     let errors = [];
     for(let matName in totalMaterialNeeds) {
         let floorStock = globalOccupancy
-            .filter(o => o.item_name === matName && String(o.location_id).startsWith('FL-'))
-            .reduce((sum, o) => sum + o.quantity, 0);
+            .filter(o => String(o.item_name).trim() === String(matName).trim() && String(o.location_id).startsWith('FL-'))
+            .reduce((sum, o) => sum + parseInt(o.quantity || 0), 0);
+            
         if(floorStock < totalMaterialNeeds[matName]) {
-            errors.push(`- ${matName} (합산필요: ${totalMaterialNeeds[matName].toLocaleString()}, 최신 현장재고: ${floorStock.toLocaleString()})`);
+            errors.push(`- ${matName} (합산필요: ${totalMaterialNeeds[matName].toLocaleString()}EA, 최신 현장재고: ${floorStock.toLocaleString()}EA)`);
         }
     }
 
@@ -163,7 +168,7 @@ async function executeBatchProduction() {
     try {
         for(let matName in totalMaterialNeeds) {
             let needed = totalMaterialNeeds[matName];
-            let avail = globalOccupancy.filter(o => o.item_name === matName && String(o.location_id).startsWith('FL-'));
+            let avail = globalOccupancy.filter(o => String(o.item_name).trim() === String(matName).trim() && String(o.location_id).startsWith('FL-'));
             avail.sort((a,b) => (a.production_date || '') > (b.production_date || '') ? 1 : -1);
 
             for(let item of avail) {
@@ -206,7 +211,6 @@ function exportProductionExcel() {
     XLSX.writeFile(wb, `한스팜_생산실적_업로드양식_${today}.xlsx`);
 }
 
-// 💡 엑셀 업로드 시에도 실시간 검증 적용
 async function importProductionExcel(e) {
     if(loginMode === 'viewer') return alert("뷰어 모드 불가");
     const file = e.target.files[0]; if(!file) return;
@@ -219,8 +223,7 @@ async function importProductionExcel(e) {
             const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
             if(json.length === 0) return alert("데이터가 없습니다.");
 
-            // ⭐ 실시간 재고 동기화
-            await load();
+            await load(); // ⭐ 엑셀 업로드 시에도 무조건 최신 데이터 강제 동기화
 
             let deductionPlan = [];
             let inboundPlan = [];
@@ -262,8 +265,8 @@ async function importProductionExcel(e) {
 
             for(let mat in materialNeeds) {
                 let needed = materialNeeds[mat];
-                let availableItems = globalOccupancy.filter(o => o.item_name === mat && String(o.location_id).startsWith('FL-'));
-                let totalAvail = availableItems.reduce((sum, item) => sum + item.quantity, 0);
+                let availableItems = globalOccupancy.filter(o => String(o.item_name).trim() === String(mat).trim() && String(o.location_id).startsWith('FL-'));
+                let totalAvail = availableItems.reduce((sum, item) => sum + parseInt(item.quantity || 0), 0);
 
                 if(totalAvail < needed) {
                     errors.push(`- [${mat}] (전체 필요: ${needed.toLocaleString()}EA / 현장 재고: ${totalAvail.toLocaleString()}EA)`);
@@ -276,7 +279,7 @@ async function importProductionExcel(e) {
 
             for(let mat in materialNeeds) {
                 let needed = materialNeeds[mat];
-                let availableItems = globalOccupancy.filter(o => o.item_name === mat && String(o.location_id).startsWith('FL-'));
+                let availableItems = globalOccupancy.filter(o => String(o.item_name).trim() === String(mat).trim() && String(o.location_id).startsWith('FL-'));
                 availableItems.sort((a, b) => (a.production_date || '') > (b.production_date || '') ? 1 : -1);
 
                 for(let item of availableItems) {
