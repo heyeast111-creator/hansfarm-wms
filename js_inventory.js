@@ -114,7 +114,6 @@ function renderMap() {
         
         const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item); }); 
         
-        // 💡 생산 현장일 때 박스 폭 100% 꽉 채우기 (레이아웃 붕괴 원인 해결)
         if(currentZone === '현장') {
             if(mapContainer) { mapContainer.classList.remove('w-fit', 'min-w-max'); mapContainer.classList.add('w-full'); }
             if(vContainer) { vContainer.classList.remove('items-end'); vContainer.classList.add('flex-col', 'items-center', 'w-full'); }
@@ -140,7 +139,6 @@ function renderMap() {
 
         let vHtml = ''; if(hContainer) hContainer.innerHTML = ''; 
         
-        // 💡 생산 현장 렌더링 (팝업식 버튼 토글 + 꽉 차는 그리드 + 유령 재고 표시)
         if(currentZone === '현장') { 
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
             
@@ -226,11 +224,9 @@ function renderMap() {
                 vHtml += `</div></div>`; 
             }); 
             
-            // ⭐ 유령 재고(이전 레이아웃 데이터) 색출 로직
             const newPatterns = ['FL-1F-R-', 'FL-1F-M-', 'FL-1F-P-', 'FL-2F-M-', 'FL-2F-P-', 'FL-3F-G-'];
             let oldGhostItems = globalOccupancy.filter(o => {
                 if (!String(o.location_id).startsWith('FL-')) return false;
-                // 새로운 구역 패턴에 맞지 않는 것들은 모두 유령 재고로 간주
                 return !newPatterns.some(pat => String(o.location_id).startsWith(pat));
             });
             
@@ -297,6 +293,16 @@ async function clickCell(displayId, searchId) {
         if (movingItem) {
             if (movingItem.fromLoc === searchId) { cancelMove(); return; } 
             let toLoc = searchId;
+            
+            // 💡 층 묻는 로직 복원 (대기장, 현장 렉이 아닐 때만)
+            if (!toLoc.startsWith('W-') && !toLoc.startsWith('FL-')) {
+                let floor = prompt(`[${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
+                if(floor !== "1" && floor !== "2") { cancelMove(); return; }
+                const prefix = currentZone === '실온' ? 'R-' : (currentZone === '냉장' ? 'C-' : ''); 
+                const baseId = displayId.replace(/([A-Z])([0-9]+)/, (m, p1, p2) => `${prefix}${p1}-${p2.padStart(2, '0')}`);
+                toLoc = floor === "1" ? baseId : `${baseId}-2F`;
+            }
+
             let qtyStr = prompt(`이동할 수량(EA)을 입력하세요.\n(최대 ${movingItem.maxQty}EA)`, movingItem.maxQty);
             if(!qtyStr) { cancelMove(); return; }
             let qty = parseInt(qtyStr);
@@ -356,13 +362,26 @@ function onWaitDragStart(event, wId) {
 }
 function onDragOver(event) { event.preventDefault(); event.currentTarget.classList.add('border-indigo-500', 'border-4', 'border-dashed'); }
 function onDragLeave(event) { event.currentTarget.classList.remove('border-indigo-500', 'border-4', 'border-dashed'); }
+
 async function onDrop(event, displayId, dbBaseId) {
     if(loginMode === 'viewer') return; event.preventDefault(); event.currentTarget.classList.remove('border-indigo-500', 'border-4', 'border-dashed');
     let invId = event.dataTransfer.getData("invId"); let itemName = event.dataTransfer.getData("itemName"); let maxQty = parseInt(event.dataTransfer.getData("maxQty")); let fromLoc = event.dataTransfer.getData("fromLoc"); let supplier = event.dataTransfer.getData("supplier");
     if(!invId) return;
+
+    let toLoc = dbBaseId;
+    
+    // 💡 층 묻는 로직 복원 (대기장, 현장 렉이 아닐 때만)
+    if (!toLoc.startsWith('W-') && !toLoc.startsWith('FL-')) {
+        let floor = prompt(`[${itemName}]을(를) ${displayId}의 몇 층으로 이동할까요?\n(1 또는 2 입력)`, "1");
+        if(floor !== "1" && floor !== "2") return;
+        toLoc = floor === "1" ? dbBaseId : `${dbBaseId}-2F`;
+    }
+
+    if(fromLoc === toLoc) return;
+
     let qtyStr = prompt(`이동 수량(EA) (최대 ${maxQty})`, maxQty); if(!qtyStr) return; let qty = parseInt(qtyStr);
     let movePallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty});
-    try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: dbBaseId, item_name: itemName, quantity: qty, pallet_count: movePallet }) }); await load(); } catch(e) {}
+    try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc, item_name: itemName, quantity: qty, pallet_count: movePallet }) }); await load(); } catch(e) {}
 }
 
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
