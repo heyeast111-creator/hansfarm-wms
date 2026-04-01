@@ -73,25 +73,25 @@
 
             <div class="flex-1 relative overflow-hidden flex flex-col">
                 <div id="subview-inventory" class="flex flex-col h-full w-full absolute inset-0 bg-slate-200">
-                    <header class="h-auto md:h-16 bg-white border-b border-slate-300 flex flex-col md:flex-row items-center justify-between px-4 md:px-6 pt-2 md:pt-4 shrink-0 shadow-sm z-10">
-                        <div class="flex space-x-1 w-full md:w-auto overflow-x-auto custom-scrollbar pb-1 md:pb-0">
-                            <button id="tab-room" onclick="switchZone('실온')" class="whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-orange-500 text-white font-bold rounded-t-lg shadow-inner text-sm md:text-base">실온 (Room)</button>
-                            <button id="tab-cold" onclick="switchZone('냉장')" class="whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200 text-sm md:text-base">냉장 (Cold)</button>
-                            <button id="tab-floor" onclick="switchZone('현장')" class="whitespace-nowrap px-4 md:px-8 py-2 md:py-2.5 bg-slate-100 border-x border-t border-slate-300 text-slate-500 font-bold rounded-t-lg hover:bg-slate-200 text-sm md:text-base">생산 현장</button>
+                    <header class="bg-white border-b border-slate-300 flex flex-col xl:flex-row items-start xl:items-center justify-between p-4 shrink-0 shadow-sm z-10 gap-4 w-full">
+                        <div class="flex space-x-2 overflow-x-auto w-full xl:w-auto custom-scrollbar pb-2 xl:pb-0 shrink-0">
+                            <button id="tab-room" onclick="switchZone('실온')" class="whitespace-nowrap px-4 md:px-6 py-2 bg-orange-500 text-white font-bold rounded-lg shadow-inner text-sm">실온 (Room)</button>
+                            <button id="tab-cold" onclick="switchZone('냉장')" class="whitespace-nowrap px-4 md:px-6 py-2 bg-slate-100 border border-slate-300 text-slate-500 font-bold rounded-lg hover:bg-slate-200 text-sm">냉장 (Cold)</button>
+                            <button id="tab-floor" onclick="switchZone('현장')" class="whitespace-nowrap px-4 md:px-6 py-2 bg-slate-100 border border-slate-300 text-slate-500 font-bold rounded-lg hover:bg-slate-200 text-sm">생산 현장</button>
                         </div>
-                        <div class="flex items-center space-x-2 md:space-x-4 pb-2 w-full md:w-auto justify-between md:justify-end mt-2 md:mt-0">
-                            <button onclick="toggleRightPanel()" class="px-2 md:px-4 py-1.5 bg-slate-100 border border-slate-300 text-slate-700 font-black rounded-md hover:bg-slate-200 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">우측 패널 켬/끔</button>
-                            <div class="hidden md:block w-px h-6 bg-slate-300"></div>
-                            <button onclick="toggleWaitContainer()" class="px-2 md:px-4 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded-md hover:bg-emerald-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">대기장</button>
-                            <button onclick="toggleMapSearch()" class="px-2 md:px-4 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded-md hover:bg-indigo-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">스캔창</button>
+                        
+                        <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+                            <button onclick="toggleRightPanel()" class="px-3 py-1.5 bg-slate-100 border border-slate-300 text-slate-700 font-black rounded hover:bg-slate-200 text-xs shadow-sm whitespace-nowrap">우측 패널 켬/끔</button>
+                            <button onclick="toggleWaitContainer()" class="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded hover:bg-emerald-100 text-xs shadow-sm whitespace-nowrap">대기장</button>
+                            <button onclick="toggleMapSearch()" class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded hover:bg-indigo-100 text-xs shadow-sm whitespace-nowrap">스캔창</button>
                             <div id="fifo-btn-container" class="hidden flex items-center">
-                                <button onclick="highlightFIFO()" class="px-2 md:px-4 py-1.5 bg-rose-100 border border-rose-300 text-rose-700 font-black rounded-md hover:bg-rose-200 text-xs md:text-sm flex items-center shadow-sm whitespace-nowrap">선입선출 추천</button>
+                                <button onclick="highlightFIFO()" class="px-3 py-1.5 bg-rose-100 border border-rose-300 text-rose-700 font-black rounded hover:bg-rose-200 text-xs shadow-sm whitespace-nowrap">선입선출 추천</button>
                             </div>
-                            <button onclick="exportAllHistoryExcel()" class="px-2 md:px-4 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 font-black rounded-md hover:bg-blue-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">히스토리 엑셀</button>
-                            <button onclick="closeInventory()" class="px-2 md:px-4 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-black rounded-md hover:bg-purple-100 text-xs md:text-sm flex items-center shadow-sm transition-colors whitespace-nowrap">재고마감</button>
-                            <div class="flex items-center space-x-2">
-                                <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-xs md:text-sm rounded-md px-2 md:px-4 py-1.5 shadow-sm"><option value="1">1층 (1F)</option><option value="2">2층 (2F)</option></select>
-                                <button onclick="load()" class="p-1.5 bg-white border border-slate-300 rounded hover:bg-slate-100"><svg class="w-4 h-4 md:w-5 md:h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
+                            <button onclick="exportAllHistoryExcel()" class="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 font-black rounded hover:bg-blue-100 text-xs shadow-sm whitespace-nowrap">히스토리 엑셀</button>
+                            <button onclick="closeInventory()" class="px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-black rounded hover:bg-purple-100 text-xs shadow-sm whitespace-nowrap">재고마감</button>
+                            <div class="flex items-center space-x-2 border-l border-slate-300 pl-2">
+                                <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-xs rounded px-2 py-1.5"><option value="1">1층 (1F)</option><option value="2">2층 (2F)</option></select>
+                                <button onclick="load()" class="p-1.5 bg-white border border-slate-300 rounded hover:bg-slate-100"><svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
                             </div>
                         </div>
                     </header>
@@ -117,16 +117,16 @@
                             </div>
                             <div class="flex-1 overflow-y-auto p-3 bg-slate-100 grid grid-cols-3 gap-2 content-start custom-scrollbar" id="waiting-grid"></div>
                         </div>
-                        <div class="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-slate-200 h-[50vh] md:h-full relative overflow-hidden">
-                            <div id="map-search-container" class="hidden bg-white p-3 md:p-4 border-b border-slate-200 w-full flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3 items-center md:items-end shrink-0 text-center shadow-sm z-10 absolute top-0 left-0">
+                        <div class="flex-1 flex flex-col rounded-xl h-[50vh] md:h-full relative overflow-hidden">
+                            <div id="map-search-container" class="hidden bg-white p-3 md:p-4 border-b border-slate-200 w-full flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3 items-center md:items-end shrink-0 text-center shadow-md z-20 absolute top-0 left-0 rounded-t-xl">
                                 <div class="w-full md:w-1/4 text-left"><label class="block text-[10px] font-bold text-slate-500 mb-1">구역 카테고리</label><select id="map-search-category" onchange="updateMapSearchItemDropdown()" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"></select></div>
                                 <div class="w-full md:w-2/4 text-left"><label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 검색</label><input type="text" id="map-search-keyword" list="map-search-item-list" placeholder="검색어 입력" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"><datalist id="map-search-item-list"></datalist></div>
                                 <div class="w-full md:w-1/4 text-left flex space-x-2 md:block"><div class="flex-1"><label class="block text-[10px] font-bold text-slate-500 mb-1">찾을 개수(렉)</label><input type="number" id="map-search-count" value="1" min="1" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"></div><div class="flex flex-1 space-x-1 md:mt-2 items-end md:hidden"><button onclick="executeMapSearch()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded shadow text-xs">스캔</button><button onclick="clearSearchTargets()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-2 rounded shadow-sm text-xs">리셋</button></div></div>
                                 <button onclick="executeMapSearch()" class="hidden md:block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow transition-colors text-sm whitespace-nowrap">FIFO 스캔</button>
                                 <button onclick="clearSearchTargets()" class="hidden md:block bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-3 rounded shadow-sm transition-colors text-sm whitespace-nowrap">초기화</button>
                             </div>
-                            <div class="w-full flex-1 overflow-auto custom-scrollbar p-2 md:p-10">
-                                <div class="w-fit min-w-max bg-white p-4 md:p-10 rounded-xl shadow-xl border border-slate-300 transition-all mx-auto" id="map-container">
+                            <div class="w-full flex-1 overflow-auto custom-scrollbar p-2 md:p-6" id="map-scroller">
+                                <div class="transition-all mx-auto w-fit min-w-max" id="map-container">
                                     <div id="vertical-racks" class="flex items-end"></div>
                                     <div class="h-10 md:h-14 w-full flex items-center justify-center text-slate-400 font-black tracking-[0.2em] md:tracking-[0.5em] bg-yellow-50/50 border-y-2 border-yellow-300 my-4 shadow-inner text-xs md:text-sm" id="aisle-text">통로 (Aisle)</div>
                                     <div class="flex justify-end md:pr-[168px]" id="horizontal-rack"></div>
@@ -479,7 +479,7 @@
 
         <div id="view-production" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-auto z-10">
             <div class="flex flex-col md:flex-row justify-between items-center mb-6">
-                <h1 class="text-2xl md:text-3xl font-black text-emerald-800">생산 실적 등록 (장바구니 방식)</h1>
+                <h1 class="text-2xl md:text-3xl font-black text-emerald-800 mb-4 md:mb-0">생산 실적 등록 (자재 자동 출고)</h1>
                 <div class="flex space-x-2">
                     <button onclick="exportProductionExcel()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold py-2 px-4 rounded-lg shadow-sm text-sm transition-colors whitespace-nowrap">양식 다운</button>
                     <button onclick="document.getElementById('production-upload').click()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors text-sm whitespace-nowrap">엑셀 일괄 등록</button>
@@ -488,9 +488,9 @@
             
             <div class="flex flex-col md:flex-row gap-6 mb-8">
                 <div class="w-full md:w-1/3 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit">
-                    <h2 class="text-lg font-black text-slate-700 mb-4 border-b pb-2">1. 생산 품목 선택</h2>
+                    <h2 class="text-lg font-black text-slate-700 mb-4 border-b pb-2">1. 생산 실적 수동 입력</h2>
                     <label class="block text-xs font-bold text-slate-500 mb-1">생산할 완제품 선택</label>
-                    <select id="prod-finished-item" class="w-full border-2 border-emerald-200 rounded-lg p-3 mb-4 text-sm font-black text-emerald-800 outline-none bg-emerald-50"></select>
+                    <select id="prod-finished-item" class="w-full border-2 border-emerald-200 rounded-lg p-3 mb-4 text-sm font-black text-emerald-800 outline-none bg-emerald-50 custom-scrollbar max-h-40"></select>
                     <label class="block text-xs font-bold text-slate-500 mb-1">생산 수량 (EA)</label>
                     <input type="number" id="prod-qty" value="1" min="1" class="w-full border-2 border-slate-300 rounded-lg p-3 mb-6 text-sm font-black outline-none text-slate-700">
                     <button onclick="calculateProductionBOM()" class="w-full bg-slate-600 hover:bg-slate-700 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm">BOM 소요량 계산</button>
@@ -499,12 +499,12 @@
                 <div id="prod-step-2" class="w-full md:w-2/3 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col min-h-[300px]">
                     <h2 class="text-lg font-black text-slate-700 mb-4 border-b pb-2">2. 자재 확인 및 담기 <span class="text-xs text-rose-500 ml-2">※ 대체 자재 변경 가능</span></h2>
                     <div class="overflow-y-auto flex-1 custom-scrollbar mb-4 max-h-60">
-                        <table class="w-full text-left border-collapse text-xs">
-                            <thead class="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 text-slate-500">
-                                <tr><th class="p-2">자재명</th><th class="p-2 text-right">필요량</th><th class="p-2 text-center">실제사용(스왑)</th><th class="p-2 text-center">현장재고</th></tr>
+                        <table class="w-full text-left border-collapse text-xs md:text-sm">
+                            <thead class="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 text-slate-500 shadow-sm">
+                                <tr><th class="p-2">기본 자재명</th><th class="p-2 text-right">필요량</th><th class="p-2 text-center">실제사용 (스왑)</th><th class="p-2 text-center">현장재고</th></tr>
                             </thead>
                             <tbody id="prod-bom-list" class="divide-y divide-slate-100">
-                                <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">생산할 제품을 먼저 선택해주세요.</td></tr>
+                                <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">좌측에서 생산할 제품을 선택해주세요.</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -520,16 +520,11 @@
                             <tr><th class="p-3">완제품명</th><th class="p-3 text-right">생산수량</th><th class="p-3">사용 자재 내역</th><th class="p-3 text-center">삭제</th></tr>
                         </thead>
                         <tbody id="prod-cart-list" class="divide-y divide-slate-100">
-                            <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">장바구니가 비어있습니다. 위에서 품목을 추가하세요.</td></tr>
+                            <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">장바구니가 비어있습니다.</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <button id="btn-execute-batch-production" onclick="executeBatchProduction()" class="hidden w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-2xl transition-all text-lg animate-bounce">✅ 장바구니 전체 생산 등록 및 현장 재고 차감</button>
-            </div>
-        </div>
-                    
-                    <button id="btn-execute-production" onclick="executeProduction()" class="hidden w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-md transition-colors text-sm md:text-base">✅ 생산 실적 등록 및 자재 자동 차감</button>
-                </div>
             </div>
         </div>
         
