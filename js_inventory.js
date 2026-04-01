@@ -3,7 +3,7 @@
 // ==========================================
 window.floorFilterMap = window.floorFilterMap || { 'FL-1F': true, 'FL-2F': true, 'FL-3F': true };
 window.areaFilterMap = window.areaFilterMap || { 'R': true, 'M': true, 'P': true, 'G': true };
-window.isMapFilterOpen = window.isMapFilterOpen || false; // 토글 상태 저장
+window.isMapFilterOpen = window.isMapFilterOpen || false; 
 
 function toggleMapFilters() { window.isMapFilterOpen = !window.isMapFilterOpen; renderMap(); }
 function toggleFloorFilter(fId) { window.floorFilterMap[fId] = !window.floorFilterMap[fId]; renderMap(); }
@@ -77,13 +77,24 @@ function toggleWaitContainer() { const container = document.getElementById('wait
 // ==========================================
 // [재고/발주] - 공용 헬퍼 및 맵 렌더링
 // ==========================================
+// 💡 핵심 패치: [기존재고] 꼬리표를 무시하고 1P 파레트 수량을 정확하게 다시 계산함
 function getDynamicPalletCount(itemObj) {
     if(!itemObj) return 0;
-    let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
-    let targetSup = String(supplier).trim();
-    let pInfo = finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim()) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim());
-    if (pInfo && pInfo.pallet_ea > 0) return quantity / pInfo.pallet_ea;
-    return itemObj.pallet_count || 1;
+    let itemName = String(itemObj.item_name || "").trim(); 
+    let supplier = String(itemObj.remarks || "기본입고처").trim(); 
+    
+    // [기존재고] 글씨 제거
+    let cleanSupplier = supplier.replace(/\[기존재고\]/g, '').trim();
+    let quantity = parseInt(itemObj.quantity) || 0;
+    
+    let allItems = [...finishedProductMaster, ...productMaster];
+    let pInfo = allItems.find(p => String(p.item_name||"").trim() === itemName && String(p.supplier||"").trim() === cleanSupplier) || 
+                allItems.find(p => String(p.item_name||"").trim() === itemName);
+    
+    if (pInfo && parseInt(pInfo.pallet_ea) > 0) {
+        return quantity / parseInt(pInfo.pallet_ea);
+    }
+    return parseFloat(itemObj.pallet_count) || 1;
 }
 
 function changeFloorCols(areaId, delta) {
@@ -114,6 +125,7 @@ function renderMap() {
         
         const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item); }); 
         
+        // 생산 현장일 때 박스 폭 100% 꽉 채우기
         if(currentZone === '현장') {
             if(mapContainer) { mapContainer.classList.remove('w-fit', 'min-w-max'); mapContainer.classList.add('w-full'); }
             if(vContainer) { vContainer.classList.remove('items-end'); vContainer.classList.add('flex-col', 'items-center', 'w-full'); }
@@ -143,7 +155,7 @@ function renderMap() {
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
             
             vHtml += `
-            <div class="w-full max-w-4xl relative z-40 mb-8 mx-auto">
+            <div class="w-full max-w-5xl relative z-40 mb-8 mx-auto">
                 <button onclick="toggleMapFilters()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-black py-3 md:py-4 px-6 rounded-xl shadow-lg transition-all flex justify-between items-center text-sm md:text-base border-b-4 border-slate-950 relative z-50">
                     <span class="flex items-center space-x-2"><span>⚙️</span> <span>현장 창고 보기 설정 (클릭)</span></span>
                     <span class="text-xl leading-none transition-transform duration-200" style="transform: ${window.isMapFilterOpen ? 'rotate(180deg)' : 'rotate(0deg)'}">▼</span>
@@ -224,6 +236,7 @@ function renderMap() {
                 vHtml += `</div></div>`; 
             }); 
             
+            // 💡 유령 재고(예전 FL-1F-01 같은 것들) 띄워주는 로직
             const newPatterns = ['FL-1F-R-', 'FL-1F-M-', 'FL-1F-P-', 'FL-2F-M-', 'FL-2F-P-', 'FL-3F-G-'];
             let oldGhostItems = globalOccupancy.filter(o => {
                 if (!String(o.location_id).startsWith('FL-')) return false;
@@ -233,7 +246,7 @@ function renderMap() {
             if (oldGhostItems.length > 0) {
                 let oldIds = [...new Set(oldGhostItems.map(o => o.location_id))].sort();
                 vHtml += `<div class="mt-8 bg-rose-50 p-6 rounded-2xl shadow-md border-2 border-rose-300 w-full">
-                    <div class="text-base md:text-lg font-black text-rose-800 mb-4 flex items-center">👻 이전 레이아웃 구형 재고 (선택 후 우측 패널에서 삭제해주세요!)</div>
+                    <div class="text-base md:text-lg font-black text-rose-800 mb-4 flex items-center animate-pulse">👻 이전 레이아웃 구형 재고 (선택 후 우측 패널에서 삭제해주세요!)</div>
                     <div class="flex flex-wrap gap-3">`;
                 oldIds.forEach(searchId => {
                     let pCount = palletMap[searchId] || 0; 
@@ -294,7 +307,6 @@ async function clickCell(displayId, searchId) {
             if (movingItem.fromLoc === searchId) { cancelMove(); return; } 
             let toLoc = searchId;
             
-            // 💡 층 묻는 로직 복원 (대기장, 현장 렉이 아닐 때만)
             if (!toLoc.startsWith('W-') && !toLoc.startsWith('FL-')) {
                 let floor = prompt(`[${movingItem.itemName}]을(를) ${displayId}의 몇 층으로 넣을까요?\n(1 또는 2 입력)`, "1");
                 if(floor !== "1" && floor !== "2") { cancelMove(); return; }
@@ -369,8 +381,6 @@ async function onDrop(event, displayId, dbBaseId) {
     if(!invId) return;
 
     let toLoc = dbBaseId;
-    
-    // 💡 층 묻는 로직 복원 (대기장, 현장 렉이 아닐 때만)
     if (!toLoc.startsWith('W-') && !toLoc.startsWith('FL-')) {
         let floor = prompt(`[${itemName}]을(를) ${displayId}의 몇 층으로 이동할까요?\n(1 또는 2 입력)`, "1");
         if(floor !== "1" && floor !== "2") return;
