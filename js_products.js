@@ -109,7 +109,7 @@ function cancelEdit(targetType) {
     renderProductMaster(targetType);
 }
 
-// 💡 수정됨: 낙관적 UI 업데이트 적용 (클릭 즉시 화면부터 반영)
+// 💡 수정됨: 백엔드 PUT 거부를 대비한 "삭제 후 재생성(POST)" 강제 세이브 로직
 async function submitProduct(targetType) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const prefix = targetType === 'finished' ? 'fp' : 'pm';
@@ -122,58 +122,39 @@ async function submitProduct(targetType) {
     
     if(!cat || !name) return alert("카테고리와 이름은 필수입니다."); 
     const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
-    let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
 
     try { 
         if(editingProductOriginalName) { 
-            // ⚡ 1. 화면 즉시 반영 (낙관적 업데이트)
-            let idx = dataArray.findIndex(p => p.item_name === editingProductOriginalName && p.supplier === editingProductOriginalSupplier);
-            if(idx !== -1) {
-                dataArray[idx] = { category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea };
-            }
-            alert("수정 완료"); 
-            cancelEdit(targetType); // 렌더링 호출 포함됨
-            updateBomDropdowns();
-
-            // ⚡ 2. 백엔드 통신 (비동기)
-            await fetch(`${endpoint}?old_name=${encodeURIComponent(editingProductOriginalName)}&old_supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
+            // ⚡ 백엔드 업데이트 실패 방지: 기존 항목 완벽히 지우고 새 항목으로 덮어쓰기
+            await fetch(`${endpoint}?item_name=${encodeURIComponent(editingProductOriginalName)}&supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'DELETE' });
+            await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
+            alert("품목 마스터 수정이 완벽하게 저장되었습니다."); 
+            cancelEdit(targetType);
         } else { 
-            // ⚡ 1. 화면 즉시 반영 (낙관적 업데이트)
-            dataArray.push({ category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea });
+            await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
             alert("등록 완료"); 
             document.getElementById(`${prefix}-name`).value = ''; 
             document.getElementById(`${prefix}-supplier`).value = ''; 
-            populateProductFilters(targetType);
-            renderProductMaster(targetType);
-            updateBomDropdowns();
-
-            // ⚡ 2. 백엔드 통신 (비동기)
-            await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
         } 
-        // 약간의 딜레이 후 백엔드 데이터와 최종 완벽 동기화
-        setTimeout(() => { load(); }, 300);
+        
+        // ⭐ 강제 데이터 최신화 후 화면 렌더링
+        await load(); 
+        populateProductFilters(targetType);
+        renderProductMaster(targetType);
+        updateBomDropdowns();
     } catch(e) { alert("서버 통신 실패"); } 
 }
 
-// 💡 수정됨: 삭제 시 낙관적 UI 업데이트 적용
 async function deleteProduct(name, supplier, targetType) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm(`[${name} - ${supplier}] 항목을 개별 삭제하시겠습니까?`)) return; 
-    
-    // ⚡ 1. 화면 즉시 반영
-    let dataArray = targetType === 'finished' ? finishedProductMaster : productMaster;
-    let idx = dataArray.findIndex(p => p.item_name === name && p.supplier === supplier);
-    if(idx !== -1) dataArray.splice(idx, 1);
-    
-    populateProductFilters(targetType);
-    renderProductMaster(targetType);
-    updateBomDropdowns();
-
     const endpoint = targetType === 'finished' ? '/api/finished_products' : '/api/products';
     try { 
-        // ⚡ 2. 백엔드 통신
         await fetch(`${endpoint}?item_name=${encodeURIComponent(name)}&supplier=${encodeURIComponent(supplier)}`, { method: 'DELETE' }); 
-        setTimeout(() => { load(); }, 300); 
+        await load();
+        populateProductFilters(targetType);
+        renderProductMaster(targetType);
+        updateBomDropdowns();
     } catch(e) {} 
 }
 
@@ -213,11 +194,10 @@ function importProductsExcel(e, targetType) {
 }
 
 // ==========================================
-// [품목관리] - BOM 레시피 관리 (이름+카테고리 종속 드롭다운 및 기등록 제외)
+// [품목관리] - BOM 레시피 관리
 // ==========================================
 function updateBomDropdowns() {
     try {
-        // 1. 완제품 카테고리 세팅 (이미 BOM 있는 건 제외하기 위한 준비)
         const existingBOMs = new Set(bomMaster.map(b => b.finished_product));
         const availableFinishedProducts = finishedProductMaster.filter(p => !existingBOMs.has(p.item_name));
 
@@ -225,24 +205,16 @@ function updateBomDropdowns() {
         const fCatOptions = `<option value="ALL">전체 카테고리</option>` + fCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
         const fCatSelect = document.getElementById('bom-finished-cat');
-        if(fCatSelect) {
-            fCatSelect.innerHTML = fCatOptions;
-            updateBomFinishedDropdown(); 
-        }
+        if(fCatSelect) { fCatSelect.innerHTML = fCatOptions; updateBomFinishedDropdown(); }
 
-        // 2. 자재 카테고리 세팅 (자재는 제한 없음)
         const mCats = [...new Set(productMaster.map(p => p.category))].filter(Boolean).sort();
         const catOptions = `<option value="ALL">전체 카테고리</option>` + mCats.map(cat => `<option value="${cat}">${cat}</option>`).join('');
         
         const catSelect = document.getElementById('bom-material-cat');
-        if(catSelect) {
-            catSelect.innerHTML = catOptions;
-            updateBomMaterialDropdown(); 
-        }
+        if(catSelect) { catSelect.innerHTML = catOptions; updateBomMaterialDropdown(); }
     } catch(e){ console.error(e); }
 }
 
-// 1번 항목: 완제품 카테고리에 맞춰 제품 드롭다운 필터링 (기등록 제품 제외)
 function updateBomFinishedDropdown() {
     try {
         const cat = document.getElementById('bom-finished-cat').value;
@@ -251,96 +223,51 @@ function updateBomFinishedDropdown() {
         let filtered = finishedProductMaster.filter(p => !existingBOMs.has(p.item_name));
         if (cat !== 'ALL') filtered = filtered.filter(p => p.category === cat);
         
-        let fList = [];
-        let fSet = new Set();
-        filtered.forEach(p => {
-            let key = (p.category || '미분류') + "|" + p.item_name;
-            if(!fSet.has(key) && p.item_name) { fSet.add(key); fList.push(p); }
-        });
+        let fList = []; let fSet = new Set();
+        filtered.forEach(p => { let key = (p.category || '미분류') + "|" + p.item_name; if(!fSet.has(key) && p.item_name) { fSet.add(key); fList.push(p); } });
         fList.sort((a, b) => a.item_name.localeCompare(b.item_name));
 
-        const fOptions = fList.length > 0 
-            ? fList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('') 
-            : `<option value="">선택 가능한(미등록) 제품이 없습니다</option>`;
-        
-        let finSelect = document.getElementById('bom-finished');
-        if(finSelect) finSelect.innerHTML = fOptions; 
+        const fOptions = fList.length > 0 ? fList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('') : `<option value="">선택 가능한(미등록) 제품이 없습니다</option>`;
+        let finSelect = document.getElementById('bom-finished'); if(finSelect) finSelect.innerHTML = fOptions; 
     } catch(e){ console.error(e); }
 }
 
-// 3번 항목: 자재 카테고리에 맞춰 자재 드롭다운 필터링
 function updateBomMaterialDropdown() {
     try {
         const cat = document.getElementById('bom-material-cat').value;
         let filtered = productMaster;
-        
         if (cat !== 'ALL') filtered = productMaster.filter(p => p.category === cat);
         
-        let mList = [];
-        let mSet = new Set();
-        filtered.forEach(p => {
-            let key = (p.category || '미분류') + "|" + p.item_name;
-            if(!mSet.has(key) && p.item_name) { mSet.add(key); mList.push(p); }
-        });
+        let mList = []; let mSet = new Set();
+        filtered.forEach(p => { let key = (p.category || '미분류') + "|" + p.item_name; if(!mSet.has(key) && p.item_name) { mSet.add(key); mList.push(p); } });
         mList.sort((a, b) => a.item_name.localeCompare(b.item_name));
         
         const mOptions = mList.map(p => `<option value="${p.item_name}" data-cat="${p.category || '미분류'}">[${p.category || '미분류'}] ${p.item_name}</option>`).join('');
-        
-        const matSelect = document.getElementById('bom-material');
-        if(matSelect) matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
+        const matSelect = document.getElementById('bom-material'); if(matSelect) matSelect.innerHTML = mOptions || `<option value="">해당 카테고리에 자재가 없습니다</option>`;
     } catch(e){ console.error(e); }
 }
 
 function addMaterialToBomCart() {
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 불가능합니다.");
     const matSelect = document.getElementById('bom-material');
-    
     if(!matSelect || matSelect.selectedIndex === -1 || !matSelect.value) return alert("자재를 선택해주세요.");
     
     const matOpt = matSelect.options[matSelect.selectedIndex];
-    const matName = matOpt.value;
-    const matCat = matOpt.getAttribute('data-cat');
-    
-    if(bomCart.find(b => b.material === matName && b.category === matCat)) {
-        return alert("이미 조립 목록에 추가된 자재입니다.");
-    }
+    const matName = matOpt.value; const matCat = matOpt.getAttribute('data-cat');
+    if(bomCart.find(b => b.material === matName && b.category === matCat)) return alert("이미 조립 목록에 추가된 자재입니다.");
     
     bomCart.push({ category: matCat, material: matName, qty: 1, type: 'per_item' });
     renderBomCart();
 }
 
-function removeMaterialFromBomCart(index) {
-    bomCart.splice(index, 1);
-    renderBomCart();
-}
-
-function updateBomCartQty(index, val) {
-    bomCart[index].qty = parseFloat(val) || 0;
-}
-
-function updateBomCartType(index, val) {
-    bomCart[index].type = val;
-}
+function removeMaterialFromBomCart(index) { bomCart.splice(index, 1); renderBomCart(); }
+function updateBomCartQty(index, val) { bomCart[index].qty = parseFloat(val) || 0; }
+function updateBomCartType(index, val) { bomCart[index].type = val; }
 
 function renderBomCart() {
     const container = document.getElementById('bom-cart-list');
-    if(bomCart.length === 0) {
-        container.innerHTML = `<div class="text-center text-slate-400 text-xs py-4 font-bold">위에서 구성품을 추가해주세요</div>`;
-        return;
-    }
-    container.innerHTML = bomCart.map((item, idx) => `
-        <div class="flex justify-between items-center bg-white p-2 border border-slate-200 rounded shadow-sm transition-all hover:border-emerald-300">
-            <span class="text-[11px] md:text-xs font-black text-slate-700 truncate w-4/12" title="[${item.category}] ${item.material}">[${item.category}] ${item.material}</span>
-            <div class="flex items-center space-x-1 w-8/12 justify-end">
-                <input type="number" step="0.1" value="${item.qty}" onchange="updateBomCartQty(${idx}, this.value)" class="w-14 border-2 border-emerald-200 rounded p-1 text-[11px] md:text-xs text-right font-black outline-none focus:border-emerald-500 text-emerald-700">
-                <select onchange="updateBomCartType(${idx}, this.value)" class="border border-slate-300 rounded p-1 text-[10px] md:text-[11px] font-bold bg-slate-50 outline-none text-slate-600">
-                    <option value="per_item" ${item.type === 'per_item' ? 'selected' : ''}>개 소모 (기본)</option>
-                    <option value="per_box" ${item.type === 'per_box' ? 'selected' : ''}>개 묶음포장 (1개 소모)</option>
-                </select>
-                <button onclick="removeMaterialFromBomCart(${idx})" class="text-rose-500 hover:bg-rose-100 px-1.5 py-0.5 rounded font-black text-xs ml-1">X</button>
-            </div>
-        </div>
-    `).join('');
+    if(bomCart.length === 0) return container.innerHTML = `<div class="text-center text-slate-400 text-xs py-4 font-bold">위에서 구성품을 추가해주세요</div>`;
+    container.innerHTML = bomCart.map((item, idx) => `<div class="flex justify-between items-center bg-white p-2 border border-slate-200 rounded shadow-sm transition-all hover:border-emerald-300"><span class="text-[11px] md:text-xs font-black text-slate-700 truncate w-4/12" title="[${item.category}] ${item.material}">[${item.category}] ${item.material}</span><div class="flex items-center space-x-1 w-8/12 justify-end"><input type="number" step="0.1" value="${item.qty}" onchange="updateBomCartQty(${idx}, this.value)" class="w-14 border-2 border-emerald-200 rounded p-1 text-[11px] md:text-xs text-right font-black outline-none focus:border-emerald-500 text-emerald-700"><select onchange="updateBomCartType(${idx}, this.value)" class="border border-slate-300 rounded p-1 text-[10px] md:text-[11px] font-bold bg-slate-50 outline-none text-slate-600"><option value="per_item" ${item.type === 'per_item' ? 'selected' : ''}>개 소모 (기본)</option><option value="per_box" ${item.type === 'per_box' ? 'selected' : ''}>개 묶음포장 (1개 소모)</option></select><button onclick="removeMaterialFromBomCart(${idx})" class="text-rose-500 hover:bg-rose-100 px-1.5 py-0.5 rounded font-black text-xs ml-1">X</button></div></div>`).join('');
 }
 
 async function submitBomCart() {
@@ -349,34 +276,16 @@ async function submitBomCart() {
     if(!finSelect || finSelect.selectedIndex === -1) return alert("기준 완제품을 선택해주세요.");
 
     const finOpt = finSelect.options[finSelect.selectedIndex];
-    const finName = finOpt.value;
-    const finCat = finOpt.getAttribute('data-cat');
-    
+    const finName = finOpt.value; const finCat = finOpt.getAttribute('data-cat');
     if(!finName) return alert("기준 완제품을 선택해주세요.");
     if(bomCart.length === 0) return alert("레시피 구성품을 하나 이상 추가해주세요.");
 
     for(let i=0; i<bomCart.length; i++) {
         if(bomCart[i].qty <= 0) return alert(`[${bomCart[i].material}]의 수량을 0보다 크게 입력하세요.`);
-        
-        if(finName === bomCart[i].material && finCat === bomCart[i].category) {
-            return alert("완제품과 완벽히 동일한(이름과 카테고리가 같은) 자재를 구성품으로 넣을 수 없습니다!");
-        }
+        if(finName === bomCart[i].material && finCat === bomCart[i].category) return alert("완제품과 완벽히 동일한(이름과 카테고리가 같은) 자재를 구성품으로 넣을 수 없습니다!");
     }
 
     try {
-        // ⚡ 낙관적 업데이트를 위해 UI에 즉시 추가할 임시 데이터
-        let tempId = 'temp-' + Date.now();
-        bomCart.forEach(item => {
-            let finalQty = item.type === 'per_box' ? 1 / item.qty : item.qty;
-            finalQty = Math.round(finalQty * 10000) / 10000;
-            bomMaster.push({ id: tempId, finished_product: finName, material_product: item.material, require_qty: finalQty });
-        });
-        
-        renderBomMaster();
-        updateBomDropdowns();
-        bomCart = []; 
-        renderBomCart();
-
         let promises = bomCart.map(item => {
             let finalQty = item.type === 'per_box' ? 1 / item.qty : item.qty;
             finalQty = Math.round(finalQty * 10000) / 10000;
@@ -385,59 +294,28 @@ async function submitBomCart() {
         
         await Promise.all(promises); 
         alert("레시피 일괄 등록 완료!");
-        setTimeout(() => { load(); }, 300); 
-
+        bomCart = []; 
+        await load(); 
+        renderBomCart();
     } catch(e) { alert("서버 통신 실패"); }
 }
 
-function toggleBomRow(fpName) {
-    expandedBomRows[fpName] = !expandedBomRows[fpName];
-    renderBomMaster();
-}
+function toggleBomRow(fpName) { expandedBomRows[fpName] = !expandedBomRows[fpName]; renderBomMaster(); }
 
 function renderBomMaster() {
     try {
-        const tbody = document.getElementById('bom-list');
-        if(!tbody) return;
-        if(bomMaster.length === 0) { tbody.innerHTML = `<tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`; return; }
+        const tbody = document.getElementById('bom-list'); if(!tbody) return;
+        if(bomMaster.length === 0) return tbody.innerHTML = `<tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">등록된 레시피가 없습니다.</td></tr>`;
 
         bomMaster.sort((a, b) => a.finished_product.localeCompare(b.finished_product));
-
-        let grouped = {};
-        bomMaster.forEach(b => {
-            if(!grouped[b.finished_product]) grouped[b.finished_product] = [];
-            grouped[b.finished_product].push(b);
-        });
+        let grouped = {}; bomMaster.forEach(b => { if(!grouped[b.finished_product]) grouped[b.finished_product] = []; grouped[b.finished_product].push(b); });
 
         let html = '';
         Object.keys(grouped).sort().forEach(fp => {
-            let items = grouped[fp];
-            let isOpen = expandedBomRows[fp];
-
-            html += `
-            <tr class="hover:bg-indigo-50 transition-colors cursor-pointer border-b border-slate-300 bg-slate-100" onclick="toggleBomRow('${fp}')">
-                <td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm">
-                    <div class="flex justify-between items-center">
-                        <span>📦 ${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span>
-                        <span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기 🔼' : '펼치기 🔽'}</span>
-                    </div>
-                </td>
-            </tr>`;
-
-            if(isOpen) {
-                items.forEach(b => {
-                    let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : '';
-                    html += `
-                    <tr class="hover:bg-slate-50 transition-colors bg-white">
-                        <td class="p-3 pl-8 text-slate-400 font-black border-b border-slate-100">↳</td>
-                        <td class="p-3 font-bold text-indigo-800 text-xs md:text-sm border-b border-slate-100">${b.material_product}</td>
-                        <td class="p-3 text-right font-black text-slate-700 text-xs md:text-sm border-b border-slate-100">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td>
-                        <td class="p-3 text-center border-b border-slate-100">${delBtn}</td>
-                    </tr>`;
-                });
-            }
+            let items = grouped[fp]; let isOpen = expandedBomRows[fp];
+            html += `<tr class="hover:bg-indigo-50 transition-colors cursor-pointer border-b border-slate-300 bg-slate-100" onclick="toggleBomRow('${fp}')"><td colspan="4" class="p-3 font-black text-emerald-800 text-sm shadow-sm"><div class="flex justify-between items-center"><span>📦 ${fp} <span class="text-[11px] font-bold text-slate-500 ml-2 bg-white px-2 py-0.5 rounded border border-slate-200">총 ${items.length}개 자재</span></span><span class="text-xs text-slate-500 bg-white px-2 py-1 rounded-full shadow-inner border border-slate-200">${isOpen ? '접기 🔼' : '펼치기 🔽'}</span></div></td></tr>`;
+            if(isOpen) items.forEach(b => { let delBtn = isAdmin ? `<button onclick="deleteBom('${b.id}')" class="text-rose-500 hover:bg-rose-100 px-2 py-1 rounded transition-colors text-[10px] font-black shadow-sm border border-rose-200 bg-white">삭제</button>` : ''; html += `<tr class="hover:bg-slate-50 transition-colors bg-white"><td class="p-3 pl-8 text-slate-400 font-black border-b border-slate-100">↳</td><td class="p-3 font-bold text-indigo-800 text-xs md:text-sm border-b border-slate-100">${b.material_product}</td><td class="p-3 text-right font-black text-slate-700 text-xs md:text-sm border-b border-slate-100">${b.require_qty} <span class="text-[10px] font-normal text-slate-500">EA</span></td><td class="p-3 text-center border-b border-slate-100">${delBtn}</td></tr>`; });
         });
-
         tbody.innerHTML = html;
     } catch(e){ console.error("Render BOM Error:", e); }
 }
@@ -445,20 +323,9 @@ function renderBomMaster() {
 async function deleteBom(id) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 삭제할 수 없습니다.");
     if(!confirm("이 레시피 연결을 삭제하시겠습니까?")) return; 
-    
-    // ⚡ 낙관적 UI
-    let idx = bomMaster.findIndex(b => String(b.id) === String(id));
-    if(idx !== -1) bomMaster.splice(idx, 1);
-    renderBomMaster();
-    updateBomDropdowns();
-
-    try { 
-        await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); 
-        setTimeout(() => { load(); }, 300); 
-    } catch(e) {} 
+    try { await fetch(`/api/bom?id=${id}`, { method: 'DELETE' }); await load(); } catch(e) { alert("삭제 실패"); } 
 }
 
-// 💡 엑셀 업로드 관련
 function exportBomExcel() {
     let wsData = bomMaster.length === 0 ? [{"완제품명": "", "부자재명": "", "소요수량(EA)": ""}] : bomMaster.map(b => ({"완제품명": b.finished_product, "부자재명": b.material_product, "소요수량(EA)": b.require_qty}));
     const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData); ws['!cols'] = [{wch: 25}, {wch: 25}, {wch: 15}]; XLSX.utils.book_append_sheet(wb, ws, "BOM마스터"); XLSX.writeFile(wb, "한스팜_BOM레시피_양식.xlsx");
@@ -470,10 +337,7 @@ function importBomExcel(e) {
     reader.onload = async function(ev) {
         try {
             const data = new Uint8Array(ev.target.result); const workbook = XLSX.read(data, {type: 'array'}); const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-            if(json.length > 0) { 
-                await fetch('/api/bom_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); 
-                alert("BOM 대량 업로드 완료!"); await load(); 
-            }
+            if(json.length > 0) { await fetch('/api/bom_batch', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(json) }); alert("BOM 대량 업로드 완료!"); await load(); }
         } catch(err) { alert("업로드 처리 중 오류 발생"); }
     }; reader.readAsArrayBuffer(file); e.target.value = '';
 }
