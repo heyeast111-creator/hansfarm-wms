@@ -3,7 +3,7 @@
 // ==========================================
 window.floorFilterMap = window.floorFilterMap || { 'FL-1F': true, 'FL-2F': true, 'FL-3F': true };
 window.areaFilterMap = window.areaFilterMap || { 'R': true, 'M': true, 'P': true, 'G': true };
-window.isMapFilterOpen = window.isMapFilterOpen || false; // 토글 상태 저장
+window.isMapFilterOpen = window.isMapFilterOpen || false; 
 
 function toggleMapFilters() { window.isMapFilterOpen = !window.isMapFilterOpen; renderMap(); }
 function toggleFloorFilter(fId) { window.floorFilterMap[fId] = !window.floorFilterMap[fId]; renderMap(); }
@@ -121,19 +121,12 @@ function renderMap() {
         
         const occMap = {}; const palletMap = {}; globalOccupancy.forEach(item => { occMap[item.location_id] = true; palletMap[item.location_id] = (palletMap[item.location_id] || 0) + getDynamicPalletCount(item); }); 
         
-        // 💡 생산 현장일 때 박스 폭 100% 꽉 채우기 (가로스크롤 방지)
         if(currentZone === '현장') {
-            if(mapContainer) { 
-                mapContainer.classList.remove('w-fit', 'min-w-max', 'p-4', 'md:p-10', 'bg-white', 'border', 'shadow-xl'); 
-                mapContainer.classList.add('w-full', 'p-0', 'bg-transparent', 'border-none', 'shadow-none'); 
-            }
+            if(mapContainer) { mapContainer.classList.remove('w-fit', 'min-w-max', 'p-4', 'md:p-10', 'bg-white', 'border', 'shadow-xl'); mapContainer.classList.add('w-full', 'p-0', 'bg-transparent', 'border-none', 'shadow-none'); }
             if(mapScroller) { mapScroller.classList.remove('p-2', 'md:p-10'); mapScroller.classList.add('p-0'); }
             if(vContainer) { vContainer.classList.remove('items-end'); vContainer.classList.add('flex-col', 'items-center', 'w-full'); }
         } else {
-            if(mapContainer) { 
-                mapContainer.classList.remove('w-full', 'p-0', 'bg-transparent', 'border-none', 'shadow-none'); 
-                mapContainer.classList.add('w-fit', 'min-w-max', 'p-4', 'md:p-10', 'bg-white', 'border', 'shadow-xl'); 
-            }
+            if(mapContainer) { mapContainer.classList.remove('w-full', 'p-0', 'bg-transparent', 'border-none', 'shadow-none'); mapContainer.classList.add('w-fit', 'min-w-max', 'p-4', 'md:p-10', 'bg-white', 'border', 'shadow-xl'); }
             if(mapScroller) { mapScroller.classList.remove('p-0'); mapScroller.classList.add('p-2', 'md:p-10'); }
             if(vContainer) { vContainer.classList.remove('flex-col', 'items-center', 'w-full'); vContainer.classList.add('items-end'); }
         }
@@ -155,36 +148,33 @@ function renderMap() {
 
         let vHtml = ''; if(hContainer) hContainer.innerHTML = ''; 
         
-        // 💡 생산 현장 렌더링 (팝업식 버튼 토글 + 꽉 차는 그리드 + 👻유령 재고 패치)
         if(currentZone === '현장') { 
             let aisleText = document.getElementById('aisle-text'); if(aisleText) aisleText.classList.add('hidden'); 
             
-            // 토글 버튼 (z-50)
             vHtml += `
-            <div class="w-full max-w-2xl mx-auto flex flex-col items-center relative z-50 mb-8 pt-4">
-                <button onclick="toggleMapFilters()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-black py-3 px-6 rounded-xl shadow-lg transition-all flex justify-between items-center text-sm md:text-base border-b-4 border-slate-950">
+            <div class="w-full max-w-4xl relative z-40 mb-8 mx-auto">
+                <button onclick="toggleMapFilters()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-black py-3 md:py-4 px-6 rounded-xl shadow-lg transition-all flex justify-between items-center text-sm md:text-base border-b-4 border-slate-950 relative z-50">
                     <span class="flex items-center space-x-2"><span>⚙️</span> <span>현장 창고 보기 설정 (클릭)</span></span>
                     <span class="text-xl leading-none transition-transform duration-200" style="transform: ${window.isMapFilterOpen ? 'rotate(180deg)' : 'rotate(0deg)'}">▼</span>
                 </button>
                 
-                <div class="${window.isMapFilterOpen ? 'flex' : 'hidden'} absolute top-[105%] w-full bg-white p-5 rounded-xl shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3)] border-2 border-slate-800 flex-col md:flex-row gap-4 items-start md:items-center">
-                    <div class="flex items-center space-x-3 md:border-r border-slate-300 pr-4">
-                        <span class="text-xs font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">층별</span>
-                        <label class="cursor-pointer text-xs font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-1F']?'checked':''} onchange="toggleFloorFilter('FL-1F')" class="mr-1 w-4 h-4">1층</label>
-                        <label class="cursor-pointer text-xs font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-2F']?'checked':''} onchange="toggleFloorFilter('FL-2F')" class="mr-1 w-4 h-4">2층</label>
-                        <label class="cursor-pointer text-xs font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-3F']?'checked':''} onchange="toggleFloorFilter('FL-3F')" class="mr-1 w-4 h-4">3층</label>
+                <div class="${window.isMapFilterOpen ? 'flex' : 'hidden'} absolute top-full left-0 right-0 w-full bg-white p-5 rounded-b-2xl shadow-[0_20px_25px_-5px_rgba(0,0,0,0.3)] border-x-2 border-b-2 border-slate-800 flex-col md:flex-row gap-6 items-start md:items-center mt-[-10px] pt-8 z-40 mx-auto">
+                    <div class="flex items-center space-x-4 md:border-r border-slate-300 pr-6">
+                        <span class="text-xs md:text-sm font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">🏢 층별</span>
+                        <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-1F']?'checked':''} onchange="toggleFloorFilter('FL-1F')" class="mr-1.5 w-4 h-4">1층</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-2F']?'checked':''} onchange="toggleFloorFilter('FL-2F')" class="mr-1.5 w-4 h-4">2층</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-bold flex items-center hover:text-indigo-600 transition-colors"><input type="checkbox" ${window.floorFilterMap['FL-3F']?'checked':''} onchange="toggleFloorFilter('FL-3F')" class="mr-1.5 w-4 h-4">3층</label>
                     </div>
-                    <div class="flex flex-wrap items-center gap-3">
-                        <span class="text-xs font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">창고</span>
-                        <label class="cursor-pointer text-xs font-black flex items-center text-orange-600"><input type="checkbox" ${window.areaFilterMap['R']?'checked':''} onchange="toggleAreaFilter('R')" class="mr-1 w-4 h-4 accent-orange-600">원란</label>
-                        <label class="cursor-pointer text-xs font-black flex items-center text-blue-600"><input type="checkbox" ${window.areaFilterMap['M']?'checked':''} onchange="toggleAreaFilter('M')" class="mr-1 w-4 h-4 accent-blue-600">자재</label>
-                        <label class="cursor-pointer text-xs font-black flex items-center text-emerald-600"><input type="checkbox" ${window.areaFilterMap['P']?'checked':''} onchange="toggleAreaFilter('P')" class="mr-1 w-4 h-4 accent-emerald-600">제품</label>
-                        <label class="cursor-pointer text-xs font-black flex items-center text-slate-600"><input type="checkbox" ${window.areaFilterMap['G']?'checked':''} onchange="toggleAreaFilter('G')" class="mr-1 w-4 h-4 accent-slate-600">일반</label>
+                    <div class="flex flex-wrap items-center gap-4">
+                        <span class="text-xs md:text-sm font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">📦 창고</span>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-orange-600 hover:text-orange-700 transition-colors"><input type="checkbox" ${window.areaFilterMap['R']?'checked':''} onchange="toggleAreaFilter('R')" class="mr-1.5 w-4 h-4 accent-orange-600">원란</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-blue-600 hover:text-blue-700 transition-colors"><input type="checkbox" ${window.areaFilterMap['M']?'checked':''} onchange="toggleAreaFilter('M')" class="mr-1.5 w-4 h-4 accent-blue-600">자재</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-emerald-600 hover:text-emerald-700 transition-colors"><input type="checkbox" ${window.areaFilterMap['P']?'checked':''} onchange="toggleAreaFilter('P')" class="mr-1.5 w-4 h-4 accent-emerald-600">제품</label>
+                        <label class="cursor-pointer text-xs md:text-sm font-black flex items-center text-slate-600 hover:text-slate-800 transition-colors"><input type="checkbox" ${window.areaFilterMap['G']?'checked':''} onchange="toggleAreaFilter('G')" class="mr-1.5 w-4 h-4 accent-slate-600">일반(3층)</label>
                     </div>
                 </div>
             </div>`;
 
-            // 👻 유령 재고(이전 레이아웃 데이터) 띄워주는 로직 (가장 눈에 띄게 맨 위에 배치!)
             const newPatterns = ['FL-1F-R-', 'FL-1F-M-', 'FL-1F-P-', 'FL-2F-M-', 'FL-2F-P-', 'FL-3F-G-'];
             let oldGhostItems = globalOccupancy.filter(o => {
                 if (!String(o.location_id).startsWith('FL-')) return false;
@@ -220,8 +210,7 @@ function renderMap() {
                 ]}
             ];
 
-            // w-full max-w-5xl mx-auto 로 정중앙 배치
-            vHtml += `<div class="w-full max-w-5xl flex flex-col space-y-6 mx-auto relative z-10 pb-20">`; 
+            vHtml += `<div class="w-full max-w-5xl flex flex-col space-y-6 mx-auto relative z-0 pb-20">`; 
             prodSiteConfig.forEach(floorInfo => { 
                 if(!window.floorFilterMap[floorInfo.id]) return;
 
@@ -351,7 +340,17 @@ async function clickCell(displayId, searchId) {
             items.forEach(item => { 
                 let dateHtml = item.production_date ? `<div class="text-[10px] text-rose-600 font-bold mt-1">${dateLabel}: ${item.production_date}</div>` : ''; 
                 let dynPallet = getDynamicPalletCount(item);
-                let actionBtns = (loginMode !== 'viewer') ? `<div class="flex space-x-2 mt-3 border-t pt-2"><button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="w-1/2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold">선택 출고</button><button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold">렉 이동</button></div><button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold mt-2 w-full">편집/삭제</button>` : '';
+                
+                let actionBtns = (loginMode !== 'viewer') ? `
+                <div class="flex space-x-2 mt-3 border-t pt-2">
+                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">현장 반출</button>
+                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">렉 이동</button>
+                </div>
+                <div class="flex space-x-2 mt-2">
+                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="w-1/2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">최종 출고</button>
+                    <button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="w-1/2 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold shadow-sm">편집/삭제</button>
+                </div>` : '';
+
                 panelHtml += `<div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mb-3"><div class="flex justify-between items-start"><div><span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span><div class="font-black text-xs text-slate-800 mt-1">${item.item_name}</div><div class="text-[9px] font-bold text-rose-600">입고처: ${item.remarks||'기본'}</div></div><div class="text-right"><div class="text-sm font-bold text-indigo-600">${item.quantity.toLocaleString()} EA</div><div class="text-[9px] text-slate-400 font-black">${dynPallet.toFixed(1)} P</div></div></div>${dateHtml}${actionBtns}</div>`; 
             }); 
         } else { panelHtml += `<div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300">비어있음</div>`; } 
@@ -400,6 +399,60 @@ async function onDrop(event, displayId, dbBaseId) {
     let qtyStr = prompt(`이동 수량(EA) (최대 ${maxQty})`, maxQty); if(!qtyStr) return; let qty = parseInt(qtyStr);
     let movePallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty});
     try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc, item_name: itemName, quantity: qty, pallet_count: movePallet }) }); await load(); } catch(e) {}
+}
+
+// 💡 현장 반출 로직 (1,2,3층 선택 기능 추가)
+async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
+    if(loginMode === 'viewer') return alert("뷰어 모드 불가");
+    
+    // 1. 몇 층으로 보낼지 묻기
+    const floorStr = prompt(`[${itemName}] 현장 반출\n몇 층으로 반출하시겠습니까?\n(1, 2, 3 중 하나를 입력하세요)`, "1");
+    if(!floorStr) return;
+    if(!["1", "2", "3"].includes(floorStr)) return alert("1, 2, 3 중에서 정확히 입력해주세요.");
+
+    // 2. 수량 묻기
+    const qtyStr = prompt(`[${itemName}]\n선택한 ${floorStr}층으로 반출할 수량 (최대 ${maxQty}EA)`, maxQty);
+    if(!qtyStr) return;
+    const qty = parseInt(qtyStr);
+    if(isNaN(qty) || qty <= 0 || qty > maxQty) return alert("수량 오류");
+
+    let pInfo = productMaster.find(p => p.item_name === itemName && p.supplier === supplier) || finishedProductMaster.find(p => p.item_name === itemName);
+    let cat = pInfo ? (pInfo.category || '') : '';
+    let isFinished = finishedProductMaster.find(p => p.item_name === itemName);
+    
+    // 3. 층과 카테고리에 따른 창고 지정 로직
+    let targetPrefix = '';
+    if (floorStr === "1") {
+        if (cat.includes('원란')) targetPrefix = 'FL-1F-R-';
+        else if (isFinished) targetPrefix = 'FL-1F-P-';
+        else targetPrefix = 'FL-1F-M-';
+    } else if (floorStr === "2") {
+        if (isFinished) targetPrefix = 'FL-2F-P-';
+        else targetPrefix = 'FL-2F-M-';
+    } else if (floorStr === "3") {
+        targetPrefix = 'FL-3F-G-';
+    }
+
+    let toLoc = targetPrefix + '01';
+    let areaId = targetPrefix.slice(0, -1); // 예: 'FL-1F-R'
+    let maxCols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
+    
+    // 4. 빈 렉 찾기 (같은 품목이 있는 렉이나 완전 빈 렉)
+    for(let i=1; i<=maxCols; i++) {
+        let checkId = `${targetPrefix}${i.toString().padStart(2, '0')}`;
+        let existing = globalOccupancy.filter(o => o.location_id === checkId);
+        if(existing.length === 0 || (existing[0].item_name === itemName && (existing[0].remarks || '기본입고처') === (supplier || '기본입고처'))) {
+            toLoc = checkId;
+            break;
+        }
+    }
+
+    let movePallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty});
+    try {
+        await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc, item_name: itemName, quantity: qty, pallet_count: movePallet }) });
+        alert(`${floorStr}층 현장 반출 완료!\n(자동 지정 위치: ${toLoc})`);
+        await load();
+    } catch(e) { alert("서버 통신 오류"); }
 }
 
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
@@ -577,6 +630,11 @@ async function createWaitingPallets() {
     if(payloads.length > 0) { try { await Promise.all(payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }))); document.getElementById('wait-qty').value = ''; document.getElementById('wait-pal').value = ''; await load(); } catch(e){} }
 }
 
+function toggleOrderCart() {
+    const el = document.getElementById('order-cart-container');
+    if(el.classList.contains('hidden')) { el.classList.remove('hidden'); el.classList.add('flex'); updateOrderCartDropdowns(); } 
+    else { el.classList.add('hidden'); el.classList.remove('flex'); }
+}
 function updateOrderCartDropdowns() {
     let sups = [...new Set(productMaster.map(p=>p.supplier))].filter(Boolean).sort(); let supSel = document.getElementById('oc-sup');
     if(supSel) { let cur = supSel.value; supSel.innerHTML = '<option value="">1. 발주처 선택</option>' + sups.map(s=>`<option value="${s}">${s}</option>`).join(''); if(sups.includes(cur)) supSel.value = cur; updateOrderCartCategoryDropdown(); }
