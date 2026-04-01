@@ -341,14 +341,16 @@ async function clickCell(displayId, searchId) {
                 let dateHtml = item.production_date ? `<div class="text-[10px] text-rose-600 font-bold mt-1">${dateLabel}: ${item.production_date}</div>` : ''; 
                 let dynPallet = getDynamicPalletCount(item);
                 
+                // 💡 패치: 파레트 분할 버튼(주황색)이 버튼열 하단에 추가됨
                 let actionBtns = (loginMode !== 'viewer') ? `
                 <div class="flex space-x-2 mt-3 border-t pt-2">
-                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">현장 반출</button>
-                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">렉 이동</button>
+                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">현장 반출</button>
+                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">렉 이동</button>
                 </div>
                 <div class="flex space-x-2 mt-2">
-                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="w-1/2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">최종 출고</button>
-                    <button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="w-1/2 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold shadow-sm">편집/삭제</button>
+                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">최종 출고</button>
+                    <button onclick="splitPallet('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks || ''}', '${item.production_date || ''}', '${item.category || ''}')" class="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-1.5 rounded text-[10px] font-bold shadow-sm">파레트 분할</button>
+                    <button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="flex-1 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold shadow-sm">편집/삭제</button>
                 </div>` : '';
 
                 panelHtml += `<div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mb-3"><div class="flex justify-between items-start"><div><span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span><div class="font-black text-xs text-slate-800 mt-1">${item.item_name}</div><div class="text-[9px] font-bold text-rose-600">입고처: ${item.remarks||'기본'}</div></div><div class="text-right"><div class="text-sm font-bold text-indigo-600">${item.quantity.toLocaleString()} EA</div><div class="text-[9px] text-slate-400 font-black">${dynPallet.toFixed(1)} P</div></div></div>${dateHtml}${actionBtns}</div>`; 
@@ -401,16 +403,13 @@ async function onDrop(event, displayId, dbBaseId) {
     try { await fetch('/api/transfer', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, from_location: fromLoc, to_location: toLoc, item_name: itemName, quantity: qty, pallet_count: movePallet }) }); await load(); } catch(e) {}
 }
 
-// 💡 현장 반출 로직 (1,2,3층 선택 기능 추가)
 async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     if(loginMode === 'viewer') return alert("뷰어 모드 불가");
     
-    // 1. 몇 층으로 보낼지 묻기
     const floorStr = prompt(`[${itemName}] 현장 반출\n몇 층으로 반출하시겠습니까?\n(1, 2, 3 중 하나를 입력하세요)`, "1");
     if(!floorStr) return;
     if(!["1", "2", "3"].includes(floorStr)) return alert("1, 2, 3 중에서 정확히 입력해주세요.");
 
-    // 2. 수량 묻기
     const qtyStr = prompt(`[${itemName}]\n선택한 ${floorStr}층으로 반출할 수량 (최대 ${maxQty}EA)`, maxQty);
     if(!qtyStr) return;
     const qty = parseInt(qtyStr);
@@ -420,7 +419,6 @@ async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     let cat = pInfo ? (pInfo.category || '') : '';
     let isFinished = finishedProductMaster.find(p => p.item_name === itemName);
     
-    // 3. 층과 카테고리에 따른 창고 지정 로직
     let targetPrefix = '';
     if (floorStr === "1") {
         if (cat.includes('원란')) targetPrefix = 'FL-1F-R-';
@@ -434,10 +432,9 @@ async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     }
 
     let toLoc = targetPrefix + '01';
-    let areaId = targetPrefix.slice(0, -1); // 예: 'FL-1F-R'
+    let areaId = targetPrefix.slice(0, -1);
     let maxCols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
     
-    // 4. 빈 렉 찾기 (같은 품목이 있는 렉이나 완전 빈 렉)
     for(let i=1; i<=maxCols; i++) {
         let checkId = `${targetPrefix}${i.toString().padStart(2, '0')}`;
         let existing = globalOccupancy.filter(o => o.location_id === checkId);
@@ -460,6 +457,46 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
     const qtyStr = prompt(`[${itemName}] 출고 수량 (최대 ${maxQty}EA)`, maxQty); if(!qtyStr) return; const qty = parseInt(qtyStr);
     const outPallet = getDynamicPalletCount({item_name: itemName, remarks: null, quantity: qty}); 
     try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); alert("출고 완료"); await load(); } catch(e) {} 
+}
+
+// 💡 덩어리진 재고를 여러 박스로 찢는 "파레트 분할" 기능
+async function splitPallet(invId, itemName, currentQty, locId, remarks, prodDate, cat) {
+    if(loginMode === 'viewer') return alert("뷰어 모드 불가");
+    
+    let splitQtyStr = prompt(`[${itemName}]\n현재 총 수량: ${currentQty.toLocaleString()} EA\n\n현재 위치에서 따로 분리해 낼(쪼갤) 수량을 입력하세요:`);
+    if(!splitQtyStr) return;
+    let splitQty = parseInt(splitQtyStr);
+    
+    if(isNaN(splitQty) || splitQty <= 0 || splitQty >= currentQty) {
+        return alert(`분할 수량은 1부터 ${currentQty - 1} 사이의 숫자여야 합니다.`);
+    }
+
+    let remainQty = currentQty - splitQty;
+    
+    let remainPallet = getDynamicPalletCount({item_name: itemName, remarks: remarks, quantity: remainQty});
+    let splitPalletCount = getDynamicPalletCount({item_name: itemName, remarks: remarks, quantity: splitQty});
+
+    if(!confirm(`✅ 분할 확인\n- 기존 파레트 남는 수량: ${remainQty.toLocaleString()} EA\n- 새로 분리되는 수량: ${splitQty.toLocaleString()} EA\n\n같은 위치(${locId})에 두 개의 덩어리로 나뉩니다. 진행할까요?`)) return;
+
+    try {
+        // 1. 기존 파레트 수량 줄이기
+        await fetch('/api/inventory_edit', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_QTY', new_quantity: remainQty, pallet_count: remainPallet }) 
+        });
+
+        // 2. 쪼갠 수량만큼 동일 위치에 새로 생성 (분할)
+        await fetch('/api/inbound', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ location_id: locId, category: cat || '미분류', item_name: itemName, quantity: splitQty, pallet_count: splitPalletCount, production_date: prodDate || new Date().toISOString().split('T')[0], remarks: remarks })
+        });
+
+        alert("파레트가 성공적으로 분할되었습니다!");
+        await load();
+    } catch(e) {
+        alert("서버 통신 중 오류가 발생했습니다.");
+    }
 }
 
 async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
