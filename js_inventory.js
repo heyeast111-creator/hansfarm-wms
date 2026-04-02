@@ -341,16 +341,14 @@ async function clickCell(displayId, searchId) {
                 let dateHtml = item.production_date ? `<div class="text-[10px] text-rose-600 font-bold mt-1">${dateLabel}: ${item.production_date}</div>` : ''; 
                 let dynPallet = getDynamicPalletCount(item);
                 
-                // 💡 패치: 파레트 분할 버튼(주황색)이 버튼열 하단에 추가됨
                 let actionBtns = (loginMode !== 'viewer') ? `
                 <div class="flex space-x-2 mt-3 border-t pt-2">
-                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">현장 반출</button>
-                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">렉 이동</button>
+                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">현장 반출</button>
+                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="w-1/2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">렉 이동</button>
                 </div>
                 <div class="flex space-x-2 mt-2">
-                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">최종 출고</button>
-                    <button onclick="splitPallet('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks || ''}', '${item.production_date || ''}', '${item.category || ''}')" class="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-1.5 rounded text-[10px] font-bold shadow-sm">파레트 분할</button>
-                    <button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="flex-1 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold shadow-sm">편집/삭제</button>
+                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="w-1/2 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">최종 출고</button>
+                    <button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="w-1/2 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold shadow-sm">편집/삭제</button>
                 </div>` : '';
 
                 panelHtml += `<div class="bg-white border border-slate-200 rounded-lg p-3 shadow-sm mb-3"><div class="flex justify-between items-start"><div><span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span><div class="font-black text-xs text-slate-800 mt-1">${item.item_name}</div><div class="text-[9px] font-bold text-rose-600">입고처: ${item.remarks||'기본'}</div></div><div class="text-right"><div class="text-sm font-bold text-indigo-600">${item.quantity.toLocaleString()} EA</div><div class="text-[9px] text-slate-400 font-black">${dynPallet.toFixed(1)} P</div></div></div>${dateHtml}${actionBtns}</div>`; 
@@ -459,46 +457,6 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
     try { await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); alert("출고 완료"); await load(); } catch(e) {} 
 }
 
-// 💡 덩어리진 재고를 여러 박스로 찢는 "파레트 분할" 기능
-async function splitPallet(invId, itemName, currentQty, locId, remarks, prodDate, cat) {
-    if(loginMode === 'viewer') return alert("뷰어 모드 불가");
-    
-    let splitQtyStr = prompt(`[${itemName}]\n현재 총 수량: ${currentQty.toLocaleString()} EA\n\n현재 위치에서 따로 분리해 낼(쪼갤) 수량을 입력하세요:`);
-    if(!splitQtyStr) return;
-    let splitQty = parseInt(splitQtyStr);
-    
-    if(isNaN(splitQty) || splitQty <= 0 || splitQty >= currentQty) {
-        return alert(`분할 수량은 1부터 ${currentQty - 1} 사이의 숫자여야 합니다.`);
-    }
-
-    let remainQty = currentQty - splitQty;
-    
-    let remainPallet = getDynamicPalletCount({item_name: itemName, remarks: remarks, quantity: remainQty});
-    let splitPalletCount = getDynamicPalletCount({item_name: itemName, remarks: remarks, quantity: splitQty});
-
-    if(!confirm(`✅ 분할 확인\n- 기존 파레트 남는 수량: ${remainQty.toLocaleString()} EA\n- 새로 분리되는 수량: ${splitQty.toLocaleString()} EA\n\n같은 위치(${locId})에 두 개의 덩어리로 나뉩니다. 진행할까요?`)) return;
-
-    try {
-        // 1. 기존 파레트 수량 줄이기
-        await fetch('/api/inventory_edit', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, action: 'UPDATE_QTY', new_quantity: remainQty, pallet_count: remainPallet }) 
-        });
-
-        // 2. 쪼갠 수량만큼 동일 위치에 새로 생성 (분할)
-        await fetch('/api/inbound', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ location_id: locId, category: cat || '미분류', item_name: itemName, quantity: splitQty, pallet_count: splitPalletCount, production_date: prodDate || new Date().toISOString().split('T')[0], remarks: remarks })
-        });
-
-        alert("파레트가 성공적으로 분할되었습니다!");
-        await load();
-    } catch(e) {
-        alert("서버 통신 중 오류가 발생했습니다.");
-    }
-}
-
 async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
     if(loginMode === 'viewer') return alert("뷰어 모드 불가");
     let action = prompt(`[${itemName}] 편집\n1: 수량 수정\n2: 날짜 수정\n3: 완전 삭제(취소)`);
@@ -526,6 +484,71 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
 async function closeInventory() {
     if(!isAdmin) return alert("관리자 권한 필요");
     if(confirm("재고마감 처리하시겠습니까?")) { try { await fetch('/api/close_inventory', { method: 'POST' }); alert("마감 완료"); await load(); } catch(e){} }
+}
+
+// 💡 꼬리표 무시 로직 추가 (재고조회 합산 정상화)
+function getSummarySourceItems() {
+    const typeSelect = document.getElementById('summary-type'); if(!typeSelect) return [];
+    const type = typeSelect.value;
+    if (type === 'FINISHED') return finishedProductMaster;
+    if (type === 'MATERIAL') return productMaster.filter(p => p.category && !p.category.includes('원란'));
+    if (type === 'RAW') return productMaster.filter(p => p.category && p.category.includes('원란'));
+    return [...finishedProductMaster, ...productMaster];
+}
+function updateSummarySupplierDropdown() {
+    let items = getSummarySourceItems(); let suppliers = [...new Set(items.map(p => p.supplier))].filter(Boolean).sort();
+    const supSelect = document.getElementById('summary-supplier');
+    if (supSelect) { supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); updateSummaryCategoryDropdown(); }
+}
+function updateSummaryCategoryDropdown() {
+    let items = getSummarySourceItems(); const sup = document.getElementById('summary-supplier')?.value || 'ALL';
+    if (sup !== 'ALL') items = items.filter(p => p.supplier === sup);
+    let categories = [...new Set(items.map(p => p.category))].filter(Boolean).sort();
+    const catSelect = document.getElementById('summary-category');
+    if (catSelect) { catSelect.innerHTML = `<option value="ALL">전체 카테고리</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join(''); updateSummaryItemDropdown(); }
+}
+function updateSummaryItemDropdown() {
+    let items = getSummarySourceItems(); const sup = document.getElementById('summary-supplier')?.value || 'ALL'; const cat = document.getElementById('summary-category')?.value || 'ALL';
+    if (sup !== 'ALL') items = items.filter(p => p.supplier === sup); if (cat !== 'ALL') items = items.filter(p => p.category === cat);
+    const uniqueItems = [...new Set(items.map(p => p.item_name))].filter(Boolean).sort();
+    const itemSelect = document.getElementById('summary-item');
+    if(itemSelect) itemSelect.innerHTML = `<option value="">품목을 선택하세요</option>` + uniqueItems.map(name => `<option value="${name}">${name}</option>`).join('');
+    calculateSummary();
+}
+function calculateSummary() {
+    const itemName = document.getElementById('summary-item')?.value; const supplier = document.getElementById('summary-supplier')?.value;
+    let breakdown = {}; let totalQty = 0; let totalPallet = 0;
+    if(itemName) {
+        globalOccupancy.forEach(item => {
+            let cleanSup = (item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim(); // 💡 꼬리표 무시
+            if(item.item_name === itemName && (supplier === 'ALL' || cleanSup === supplier)) {
+                if(!breakdown[cleanSup]) breakdown[cleanSup] = { qty: 0, pallet: 0 };
+                let dynP = getDynamicPalletCount(item);
+                breakdown[cleanSup].qty += parseInt(item.quantity) || 0; 
+                breakdown[cleanSup].pallet += dynP;
+                totalQty += parseInt(item.quantity) || 0; 
+                totalPallet += dynP;
+            }
+        });
+    }
+    document.getElementById('summary-result').innerHTML = `${totalQty.toLocaleString()} <span class="text-xl text-indigo-400">EA</span>`;
+    document.getElementById('summary-pallet').innerText = `${totalPallet.toFixed(1)} P`;
+    let breakdownHtml = '<div class="space-y-2 mt-4">';
+    Object.keys(breakdown).forEach(sup => { breakdownHtml += `<div class="flex justify-between items-center bg-white p-3 rounded border border-slate-200"><span class="font-bold w-1/3 truncate">${sup}</span><span class="font-black text-indigo-600 w-1/3 text-right">${breakdown[sup].qty.toLocaleString()} EA</span><span class="font-bold text-rose-500 w-1/3 text-right">${breakdown[sup].pallet.toFixed(1)} P</span></div>`; });
+    document.getElementById('summary-breakdown').innerHTML = Object.keys(breakdown).length > 0 ? breakdownHtml + '</div>' : '';
+}
+function findItemLocationFromSummary() {
+    const itemName = document.getElementById('summary-item').value; const supplier = document.getElementById('summary-supplier').value;
+    if(!itemName) return alert("품목을 선택하세요.");
+    let targets = globalOccupancy.filter(item => {
+        let cleanSup = (item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim(); // 💡 꼬리표 무시
+        return item.item_name === itemName && (supplier === 'ALL' || cleanSup === supplier);
+    });
+    if(targets.length === 0) return alert("재고가 없습니다.");
+    globalSearchTargets = targets.map(t => t.location_id);
+    let firstLoc = globalSearchTargets[0];
+    if (firstLoc.startsWith('FL-')) currentZone = '현장'; else if (firstLoc.startsWith('C-')) { currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; } else { currentZone = '실온'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; }
+    showView('order'); switchOrderTab('inventory'); alert(`위치 추적 완료!`); 
 }
 
 function updateMapSearchCategoryDropdown() {
@@ -569,65 +592,6 @@ function highlightFIFO() {
     updateZoneTabs(); renderMap(); alert(`가장 오래된 산란일: ${oldestDate}`); 
 }
 function clearSearchTargets() { globalSearchTargets = []; renderMap(); }
-
-function getSummarySourceItems() {
-    const typeSelect = document.getElementById('summary-type'); if(!typeSelect) return [];
-    const type = typeSelect.value;
-    if (type === 'FINISHED') return finishedProductMaster;
-    if (type === 'MATERIAL') return productMaster.filter(p => p.category && !p.category.includes('원란'));
-    if (type === 'RAW') return productMaster.filter(p => p.category && p.category.includes('원란'));
-    return [...finishedProductMaster, ...productMaster];
-}
-function updateSummarySupplierDropdown() {
-    let items = getSummarySourceItems(); let suppliers = [...new Set(items.map(p => p.supplier))].filter(Boolean).sort();
-    const supSelect = document.getElementById('summary-supplier');
-    if (supSelect) { supSelect.innerHTML = `<option value="ALL">전체 입고처</option>` + suppliers.map(s => `<option value="${s}">${s}</option>`).join(''); updateSummaryCategoryDropdown(); }
-}
-function updateSummaryCategoryDropdown() {
-    let items = getSummarySourceItems(); const sup = document.getElementById('summary-supplier')?.value || 'ALL';
-    if (sup !== 'ALL') items = items.filter(p => p.supplier === sup);
-    let categories = [...new Set(items.map(p => p.category))].filter(Boolean).sort();
-    const catSelect = document.getElementById('summary-category');
-    if (catSelect) { catSelect.innerHTML = `<option value="ALL">전체 카테고리</option>` + categories.map(c => `<option value="${c}">${c}</option>`).join(''); updateSummaryItemDropdown(); }
-}
-function updateSummaryItemDropdown() {
-    let items = getSummarySourceItems(); const sup = document.getElementById('summary-supplier')?.value || 'ALL'; const cat = document.getElementById('summary-category')?.value || 'ALL';
-    if (sup !== 'ALL') items = items.filter(p => p.supplier === sup); if (cat !== 'ALL') items = items.filter(p => p.category === cat);
-    const uniqueItems = [...new Set(items.map(p => p.item_name))].filter(Boolean).sort();
-    const itemSelect = document.getElementById('summary-item');
-    if(itemSelect) itemSelect.innerHTML = `<option value="">품목을 선택하세요</option>` + uniqueItems.map(name => `<option value="${name}">${name}</option>`).join('');
-    calculateSummary();
-}
-function calculateSummary() {
-    const itemName = document.getElementById('summary-item')?.value; const supplier = document.getElementById('summary-supplier')?.value;
-    let breakdown = {}; let totalQty = 0; let totalPallet = 0;
-    if(itemName) {
-        globalOccupancy.forEach(item => {
-            let itemSup = item.remarks || "기본입고처";
-            if(item.item_name === itemName && (supplier === 'ALL' || itemSup === supplier)) {
-                if(!breakdown[itemSup]) breakdown[itemSup] = { qty: 0, pallet: 0 };
-                let dynP = getDynamicPalletCount(item);
-                breakdown[itemSup].qty += item.quantity; breakdown[itemSup].pallet += dynP;
-                totalQty += item.quantity; totalPallet += dynP;
-            }
-        });
-    }
-    document.getElementById('summary-result').innerHTML = `${totalQty.toLocaleString()} <span class="text-xl text-indigo-400">EA</span>`;
-    document.getElementById('summary-pallet').innerText = `${totalPallet.toFixed(1)} P`;
-    let breakdownHtml = '<div class="space-y-2 mt-4">';
-    Object.keys(breakdown).forEach(sup => { breakdownHtml += `<div class="flex justify-between items-center bg-white p-3 rounded border border-slate-200"><span class="font-bold w-1/3 truncate">${sup}</span><span class="font-black text-indigo-600 w-1/3 text-right">${breakdown[sup].qty.toLocaleString()} EA</span><span class="font-bold text-rose-500 w-1/3 text-right">${breakdown[sup].pallet.toFixed(1)} P</span></div>`; });
-    document.getElementById('summary-breakdown').innerHTML = Object.keys(breakdown).length > 0 ? breakdownHtml + '</div>' : '';
-}
-function findItemLocationFromSummary() {
-    const itemName = document.getElementById('summary-item').value; const supplier = document.getElementById('summary-supplier').value;
-    if(!itemName) return alert("품목을 선택하세요.");
-    let targets = globalOccupancy.filter(item => item.item_name === itemName && (supplier === 'ALL' || (item.remarks || "기본입고처") === supplier));
-    if(targets.length === 0) return alert("재고가 없습니다.");
-    globalSearchTargets = targets.map(t => t.location_id);
-    let firstLoc = globalSearchTargets[0];
-    if (firstLoc.startsWith('FL-')) currentZone = '현장'; else if (firstLoc.startsWith('C-')) { currentZone = '냉장'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; } else { currentZone = '실온'; document.getElementById('floor-select').value = firstLoc.endsWith('-2F') ? "2" : "1"; }
-    showView('order'); switchOrderTab('inventory'); alert(`위치 추적 완료!`); 
-}
 
 function getWaitZoneSourceItems() { return currentZone === '실온' ? productMaster.filter(p => p.category && !p.category.includes('원란')) : (currentZone === '냉장' ? productMaster.filter(p => p.category && p.category.includes('원란')) : [...finishedProductMaster, ...productMaster]); }
 function populateWaitDropdowns() {
@@ -720,7 +684,15 @@ function renderSafetyStock() {
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     let aggregatedItems = {};
     materialProducts.forEach(p => { let key = p.item_name; if (!aggregatedItems[key]) aggregatedItems[key] = { category: p.category || '미분류', item_name: p.item_name, suppliers: new Set(), total_qty: 0, total_pallet: 0, daily_usage: p.daily_usage || 0 }; if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier); if(p.daily_usage > aggregatedItems[key].daily_usage) aggregatedItems[key].daily_usage = p.daily_usage; });
-    globalOccupancy.forEach(item => { let key = item.item_name; if(aggregatedItems[key]) { aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0); aggregatedItems[key].total_pallet += getDynamicPalletCount(item); if (item.remarks && item.remarks !== '기본입고처') aggregatedItems[key].suppliers.add(item.remarks); } });
+    globalOccupancy.forEach(item => { 
+        let key = item.item_name; 
+        if(aggregatedItems[key]) { 
+            aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0); 
+            aggregatedItems[key].total_pallet += getDynamicPalletCount(item); 
+            let cleanSup = (item.remarks || '기본입고처').replace(/\[기존재고\]/g, '').trim(); // 💡 꼬리표 무시 적용
+            if (cleanSup !== '기본입고처') aggregatedItems[key].suppliers.add(cleanSup); 
+        } 
+    });
     let monitoredList = Object.values(aggregatedItems); let html = '';
     
     let supSelect = document.getElementById('safe-filter-sup'); let catSelect = document.getElementById('safe-filter-cat');
