@@ -21,7 +21,6 @@ let bomCart = [];
 let expandedBomRows = {}; 
 let isRightPanelVisible = false; 
 
-// 💡 조(Jo)님의 원본 레이아웃 100% 복구 완료
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
 
@@ -47,7 +46,6 @@ function siteLogin() {
     showView('dashboard');
 }
 
-// 💡 조(Jo)님의 원본 API 호출 주소(/api/inventory) 100% 복구 완료
 async function load() {
     try {
         const ts = new Date().getTime(); 
@@ -89,6 +87,7 @@ function renderAll() {
     try { populateWaitDropdowns(); } catch(e){}
 }
 
+// 💡 패치됨: 기본 prompt() 대신 커스텀 모달 띄우기
 function adminLogin() {
     let fp = document.getElementById('admin-finance-panel');
     if(isAdmin) { 
@@ -99,12 +98,44 @@ function adminLogin() {
         if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
         return; 
     }
-    const pw = prompt("관리자 비밀번호를 입력하세요:"); 
+    
+    // 모달창 띄우기
+    let modal = document.getElementById('admin-pw-modal');
+    let input = document.getElementById('admin-pw-input');
+    if(modal && input) {
+        input.value = '';
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        setTimeout(() => input.focus(), 100); 
+    }
+}
+
+function closeAdminModal() {
+    let modal = document.getElementById('admin-pw-modal');
+    if(modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+}
+
+function submitAdminPassword() {
+    let input = document.getElementById('admin-pw-input');
+    if(!input) return;
+    let pw = input.value;
+    let fp = document.getElementById('admin-finance-panel');
+    
     if(pw === "123456789*") { 
-        isAdmin = true; alert("관리자 권한이 활성화되었습니다."); 
+        isAdmin = true; 
+        alert("관리자 권한이 활성화되었습니다."); 
         document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
         if(fp) fp.classList.remove('hidden');
-    } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
+        closeAdminModal();
+        load();
+    } else { 
+        alert("비밀번호가 틀렸습니다."); 
+        input.value = '';
+        input.focus();
+    }
 }
 
 // ==========================================
@@ -238,7 +269,7 @@ function exportAllHistoryExcel() {
 window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
 
 // ==========================================
-// 💡 대시보드 로직 (원본 코드에 안전하게 추가됨)
+// 대시보드 로직 
 // ==========================================
 function updateDashboard() {
     try {
