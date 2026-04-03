@@ -36,15 +36,17 @@ const layoutCold = [
 ];
 
 // ==========================================
-// [로그인 및 화면 네비게이션]
+// [로그인 및 화면 네비게이션] (💡 00700 복구됨)
 // ==========================================
 function siteLogin() {
     let pw = document.getElementById('site-pw').value;
-    if(pw === "0000") { // 뷰어 모드
+    if(pw === "00700") { // 뷰어 모드
         loginMode = 'viewer'; isAdmin = false;
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('main-app').classList.remove('hidden');
+        document.querySelector('.target-accounting').classList.add('hidden'); // 정산/회계 탭 감춤
+        showView('order'); // 💡 로그인 직후 재고/발주 화면 띄우기
         load();
     } else if(pw === "123456789*") { // 관리자 모드
         loginMode = 'admin'; isAdmin = true;
@@ -52,6 +54,7 @@ function siteLogin() {
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('main-app').classList.remove('hidden');
         document.querySelector('.target-accounting').classList.remove('hidden'); // 정산/회계 탭 노출
+        showView('order'); // 💡 로그인 직후 재고/발주 화면 띄우기
         load();
     } else {
         alert("비밀번호가 틀렸습니다.");
@@ -123,24 +126,29 @@ function closeHistoryModal() {
 }
 
 // ==========================================
-// [데이터 로드 (DB 통신)]
+// [데이터 로드 (DB 통신)] (💡 렉맵 비어있음 해결)
 // ==========================================
 async function load() {
     try {
+        // 혹시 모를 에러를 방지하기 위해 로딩 시점 초기화
+        globalOccupancy = []; globalHistory = []; productMaster = []; finishedProductMaster = []; bomMaster = [];
+        
+        // 서버 통신 중 하나라도 끊기면 앱이 뻗지 않도록 예외 처리(.catch) 추가
         const [occRes, histRes, pmRes, fpRes, bomRes] = await Promise.all([
-            fetch('/api/occupancy'), 
-            fetch('/api/history'), 
-            fetch('/api/products'), 
-            fetch('/api/finished_products'), 
-            fetch('/api/bom')
+            fetch('/api/occupancy').catch(()=>({json: ()=>[]})), 
+            fetch('/api/history').catch(()=>({json: ()=>[]})), 
+            fetch('/api/products').catch(()=>({json: ()=>[]})), 
+            fetch('/api/finished_products').catch(()=>({json: ()=>[]})), 
+            fetch('/api/bom').catch(()=>({json: ()=>[]}))
         ]);
         
-        globalOccupancy = await occRes.json();
-        globalHistory = await histRes.json();
-        productMaster = await pmRes.json();
-        finishedProductMaster = await fpRes.json();
-        bomMaster = await bomRes.json();
+        globalOccupancy = await occRes.json() || [];
+        globalHistory = await histRes.json() || [];
+        productMaster = await pmRes.json() || [];
+        finishedProductMaster = await fpRes.json() || [];
+        bomMaster = await bomRes.json() || [];
 
+        // 데이터 갱신 후 각 화면 기능들 안전하게 재렌더링
         if (typeof renderMap === 'function') renderMap();
         if (typeof populateWaitDropdowns === 'function') populateWaitDropdowns();
         if (typeof updateDashboard === 'function') updateDashboard();
@@ -148,6 +156,10 @@ async function load() {
         if (typeof updateSummarySupplierDropdown === 'function') updateSummarySupplierDropdown();
         if (typeof renderOrderList === 'function') renderOrderList();
         if (typeof renderAccounting === 'function') renderAccounting();
+        if (typeof renderProductMaster === 'function') {
+            renderProductMaster('finished');
+            renderProductMaster('materials');
+        }
         
     } catch(e) {
         console.error("데이터 로드 실패:", e);
@@ -201,7 +213,7 @@ function importExcel(e) {
 }
 
 // ==========================================
-// 💡 [패치] 대시보드 업데이트 로직 (에러 방어 및 현장 레이아웃 호환)
+// 💡 [대시보드 패치] 에러 방어 및 완벽 호환 모드
 // ==========================================
 window.updateDashboard = function() {
     try {
