@@ -196,3 +196,26 @@ async def close_inventory():
                 await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{item['id']}", json={"remarks": f"{remarks} [기존재고]".strip()}, headers=HEADERS)
         await asyncio.gather(*(patch_item(item) for item in inv_list))
         return {"status": "success"}
+
+# =======================================================
+# 💡 [새로 추가된 API] 발주 내역의 예정도착일(production_date) 업데이트
+# =======================================================
+@app.post("/api/history_update_date")
+async def update_history_date(data: dict):
+    log_id = data.get('id')
+    expected_date = data.get('expected_date')
+    
+    if not log_id or not expected_date:
+        return {"status": "error", "message": "ID or date is missing"}
+        
+    async with httpx.AsyncClient() as client:
+        # history_log 테이블의 production_date 컬럼을 업데이트합니다.
+        response = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/history_log?id=eq.{log_id}", 
+            json={"production_date": expected_date}, 
+            headers=HEADERS
+        )
+        if response.status_code in [200, 204]:
+            return {"status": "success"}
+        else:
+            return {"status": "error", "message": f"Supabase error: {response.text}"}
