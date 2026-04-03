@@ -40,6 +40,7 @@ function siteLogin() {
         return;
     }
     document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('sidebar').classList.remove('hidden'); // 사이드바 노출
     document.getElementById('main-app').classList.remove('hidden');
     document.getElementById('main-app').classList.add('flex');
     load(); 
@@ -49,20 +50,42 @@ function siteLogin() {
 async function load() {
     try {
         const ts = new Date().getTime(); 
-        const [occRes, prodRes, fpRes, histRes, bomRes] = await Promise.all([ 
-            fetch('/api/inventory?t=' + ts), fetch('/api/products?t=' + ts), fetch('/api/finished_products?t=' + ts), fetch('/api/history?t=' + ts), fetch('/api/bom?t=' + ts) 
+        
+        // 💡 서버 응답 실패 시 빈 배열 반환하여 시스템 뻗음 방지
+        const fetchSafe = async (url) => {
+            try {
+                let res = await fetch(url);
+                if (res.ok) return await res.json();
+                return [];
+            } catch (e) { return []; }
+        };
+
+        const [occData, prodData, fpData, histData, bData] = await Promise.all([ 
+            fetchSafe('/api/occupancy?t=' + ts), // api 경로 수정
+            fetchSafe('/api/products?t=' + ts), 
+            fetchSafe('/api/finished_products?t=' + ts), 
+            fetchSafe('/api/history?t=' + ts), 
+            fetchSafe('/api/bom?t=' + ts) 
         ]);
-        let occData = await occRes.json(); globalOccupancy = Array.isArray(occData) ? occData : [];
-        let prodData = await prodRes.json(); productMaster = Array.isArray(prodData) ? prodData : [];
-        let fpData = await fpRes.json(); finishedProductMaster = Array.isArray(fpData) ? fpData : [];
-        let histData = await histRes.json(); globalHistory = Array.isArray(histData) ? histData : [];
-        let bData = await bomRes.json(); bomMaster = Array.isArray(bData) ? bData : [];
+        
+        globalOccupancy = Array.isArray(occData) ? occData : [];
+        productMaster = Array.isArray(prodData) ? prodData : [];
+        finishedProductMaster = Array.isArray(fpData) ? fpData : [];
+        globalHistory = Array.isArray(histData) ? histData : [];
+        bomMaster = Array.isArray(bData) ? bData : [];
         
         let t = new Date(); let yyyy = t.getFullYear(); let mm = String(t.getMonth() + 1).padStart(2, '0'); let dd = String(t.getDate()).padStart(2, '0');
-        if(!document.getElementById('acc-date').value) document.getElementById('acc-date').value = `${yyyy}-${mm}-${dd}`;
-        if(!document.getElementById('acc-period-start').value) document.getElementById('acc-period-start').value = `${yyyy}-${mm}-01`; 
-        if(!document.getElementById('acc-period-end').value) document.getElementById('acc-period-end').value = `${yyyy}-${mm}-${dd}`; 
-        if(!document.getElementById('acc-month').value) document.getElementById('acc-month').value = `${yyyy}-${mm}`;
+        
+        // 요소 존재 여부 확인 후 값 할당 (안전 장치)
+        let accDate = document.getElementById('acc-date');
+        let accStart = document.getElementById('acc-period-start');
+        let accEnd = document.getElementById('acc-period-end');
+        let accMonth = document.getElementById('acc-month');
+
+        if(accDate && !accDate.value) accDate.value = `${yyyy}-${mm}-${dd}`;
+        if(accStart && !accStart.value) accStart.value = `${yyyy}-${mm}-01`; 
+        if(accEnd && !accEnd.value) accEnd.value = `${yyyy}-${mm}-${dd}`; 
+        if(accMonth && !accMonth.value) accMonth.value = `${yyyy}-${mm}`;
 
         if(!isAdmin) {
             document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden'));
@@ -74,17 +97,17 @@ async function load() {
 }
 
 function renderAll() {
-    try { renderMap(); if(selectedCellId) clickCell(selectedCellId); } catch(e){}
-    try { updateDashboard(); } catch(e){}
-    try { updateMapSearchCategoryDropdown(); } catch(e){}
-    try { updateSummarySupplierDropdown(); } catch(e){}
-    try { renderSafetyStock(); } catch(e){}
-    try { updateAccFilters('type'); } catch(e){}
-    try { populateProductFilters('finished'); renderProductMaster('finished'); } catch(e){}
-    try { populateProductFilters('materials'); renderProductMaster('materials'); } catch(e){}
-    try { updateBomDropdowns(); renderBomMaster(); } catch(e){}
-    try { updateOrderCartDropdowns(); renderOrderList(); renderOrderCart(); } catch(e){}
-    try { populateWaitDropdowns(); } catch(e){}
+    try { if (typeof renderMap === 'function') renderMap(); if(selectedCellId) clickCell(selectedCellId); } catch(e){}
+    try { if (typeof updateDashboard === 'function') updateDashboard(); } catch(e){}
+    try { if (typeof updateMapSearchCategoryDropdown === 'function') updateMapSearchCategoryDropdown(); } catch(e){}
+    try { if (typeof updateSummarySupplierDropdown === 'function') updateSummarySupplierDropdown(); } catch(e){}
+    try { if (typeof renderSafetyStock === 'function') renderSafetyStock(); } catch(e){}
+    try { if (typeof updateAccFilters === 'function') updateAccFilters('type'); } catch(e){}
+    try { if (typeof populateProductFilters === 'function') populateProductFilters('finished'); if (typeof renderProductMaster === 'function') renderProductMaster('finished'); } catch(e){}
+    try { if (typeof populateProductFilters === 'function') populateProductFilters('materials'); if (typeof renderProductMaster === 'function') renderProductMaster('materials'); } catch(e){}
+    try { if (typeof updateBomDropdowns === 'function') updateBomDropdowns(); if (typeof renderBomMaster === 'function') renderBomMaster(); } catch(e){}
+    try { if (typeof updateOrderCartDropdowns === 'function') updateOrderCartDropdowns(); if (typeof renderOrderList === 'function') renderOrderList(); if (typeof renderOrderCart === 'function') renderOrderCart(); } catch(e){}
+    try { if (typeof populateWaitDropdowns === 'function') populateWaitDropdowns(); } catch(e){}
 }
 
 function adminLogin() {
@@ -110,7 +133,8 @@ function adminLogin() {
 // ==========================================
 function showView(viewName) {
     movingItem = null;
-    ['view-dashboard', 'view-order', 'view-products', 'view-accounting', 'view-production', 'view-outbound'].forEach(id => { 
+    ['dashboard', 'order', 'products', 'accounting', 'production', 'outbound'].forEach(v => { 
+        let id = 'view-' + v;
         let el = document.getElementById(id);
         if(el) { el.classList.add('hidden'); el.classList.remove('flex'); }
     });
@@ -127,8 +151,11 @@ function showView(viewName) {
 
     document.querySelectorAll('.nav-btn-pc').forEach(btn => {
         btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'bg-rose-50', 'border-rose-200', 'text-rose-600', 'bg-yellow-50', 'border-yellow-300', 'text-yellow-700', 'shadow-inner');
+        btn.classList.add('text-slate-600', 'bg-white'); // 기본 상태 복구
     });
+    
     document.querySelectorAll('.nav-btn-pc.target-' + viewName).forEach(btn => {
+        btn.classList.remove('text-slate-600', 'bg-white');
         if(viewName === 'accounting') btn.classList.add('bg-yellow-50', 'border-yellow-300', 'text-yellow-700', 'shadow-inner');
         else btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
     });
@@ -136,21 +163,22 @@ function showView(viewName) {
     document.querySelectorAll('.nav-btn-mo').forEach(btn => {
         if(btn.id !== 'admin-btn-mo') {
             btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
-            btn.classList.add('bg-white');
+            btn.classList.add('bg-white', 'text-slate-600');
         }
     });
     document.querySelectorAll('.nav-btn-mo.target-' + viewName).forEach(btn => {
-        btn.classList.remove('bg-white');
+        btn.classList.remove('bg-white', 'text-slate-600');
         btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner');
     });
     
     if(viewName === 'products') { 
-        populateProductFilters('finished'); populateProductFilters('materials');
-        renderProductMaster('finished'); switchProductTab('fp'); 
+        if (typeof populateProductFilters === 'function') { populateProductFilters('finished'); populateProductFilters('materials'); }
+        if (typeof renderProductMaster === 'function') renderProductMaster('finished'); 
+        if (typeof switchProductTab === 'function') switchProductTab('fp'); 
     } 
-    else if(viewName === 'order') { switchOrderTab(currentOrderTab); } 
-    else if(viewName === 'dashboard') updateDashboard(); 
-    else if(viewName === 'accounting') updateAccFilters('type'); 
+    else if(viewName === 'order') { if (typeof switchOrderTab === 'function') switchOrderTab(currentOrderTab); } 
+    else if(viewName === 'dashboard') { if (typeof updateDashboard === 'function') updateDashboard(); } 
+    else if(viewName === 'accounting') { if (typeof updateAccFilters === 'function') updateAccFilters('type'); } 
 }
 
 function toggleRightPanel() {
@@ -172,33 +200,48 @@ function clearInfo() {
 function closeInfoPanel() { 
     let rs = document.getElementById('right-sidebar');
     if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; }
-    selectedCellId = null; movingItem = null; renderMap(); 
+    selectedCellId = null; movingItem = null; 
+    if (typeof renderMap === 'function') renderMap(); 
 }
 
 function getDynamicPalletCount(itemObj) {
     if(!itemObj) return 0;
-    let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
-    let targetSup = String(supplier).trim();
-    let pInfo = finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim()) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim());
-    if (pInfo && pInfo.pallet_ea > 0) return quantity / pInfo.pallet_ea;
-    return itemObj.pallet_count || 1;
+    let itemName = String(itemObj.item_name || "").trim(); 
+    let supplier = String(itemObj.remarks || "기본입고처").trim(); 
+    let cleanSupplier = supplier.replace(/\[기존재고\]/g, '').trim();
+    let quantity = parseInt(itemObj.quantity) || 0;
+    
+    let allItems = [...finishedProductMaster, ...productMaster];
+    let pInfo = allItems.find(p => String(p.item_name||"").trim() === itemName && String(p.supplier||"").trim() === cleanSupplier) || 
+                allItems.find(p => String(p.item_name||"").trim() === itemName);
+    
+    if (pInfo && parseInt(pInfo.pallet_ea) > 0) return quantity / parseInt(pInfo.pallet_ea);
+    return parseFloat(itemObj.pallet_count) || 1;
 }
 
 function showHistoryModal(locId) {
     let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-    document.getElementById('history-modal-title').innerText = `${locId} 전체 기록`;
+    
+    let titleEl = document.getElementById('history-modal-title');
+    if(titleEl) titleEl.innerText = `${locId} 전체 기록`;
+    
     let html = '';
     locHistory.forEach(h => {
         let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
         let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
-        html += `<div class="bg-slate-50 p-3 border border-slate-200 rounded text-[11px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`;
+        html += `<div class="bg-slate-50 p-3 border border-slate-200 rounded text-[11px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? parseFloat(h.pallet_count).toFixed(1) : 1}P)</span></span></div>`;
     });
-    document.getElementById('history-modal-content').innerHTML = html;
-    document.getElementById('history-modal').classList.remove('hidden'); document.getElementById('history-modal').classList.add('flex');
+    
+    let contentEl = document.getElementById('history-modal-content');
+    if(contentEl) contentEl.innerHTML = html;
+    
+    let modalEl = document.getElementById('history-modal');
+    if(modalEl) { modalEl.classList.remove('hidden'); modalEl.classList.add('flex'); }
 }
 
 function closeHistoryModal() {
-    document.getElementById('history-modal').classList.add('hidden'); document.getElementById('history-modal').classList.remove('flex');
+    let modalEl = document.getElementById('history-modal');
+    if(modalEl) { modalEl.classList.add('hidden'); modalEl.classList.remove('flex'); }
 }
 
 function exportPhysicalCountExcel() {
@@ -206,7 +249,7 @@ function exportPhysicalCountExcel() {
         let wsData = [];
         if (globalOccupancy.length === 0) { wsData = [{"위치": "", "카테고리": "", "품목명": "", "입고처": "", "전산수량(EA)": "", "실사수량(EA)": "", "차이": "", "비고": ""}]; } 
         else {
-            let sortedData = [...globalOccupancy].sort((a, b) => a.location_id.localeCompare(b.location_id));
+            let sortedData = [...globalOccupancy].sort((a, b) => String(a.location_id).localeCompare(String(b.location_id)));
             wsData = sortedData.map(item => ({ "위치": item.location_id, "카테고리": item.category || "", "품목명": item.item_name || "", "입고처": item.remarks || "기본입고처", "전산수량(EA)": item.quantity, "실사수량(EA)": "", "차이": "", "비고": "" }));
         }
         const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData);
@@ -233,4 +276,116 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
-window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
+// ==========================================
+// 💡 [대시보드 패치] 에러 방어 및 완벽 호환 모드
+// ==========================================
+window.updateDashboard = function() {
+    try {
+        if (!document.getElementById('dash-room-percent')) return;
+
+        let roomOcc = 0, coldOcc = 0, floorOcc = 0;
+        
+        (globalOccupancy || []).forEach(item => {
+            if (!item || !item.location_id) return;
+            if (item.location_id.startsWith('R-')) roomOcc++;
+            else if (item.location_id.startsWith('C-')) coldOcc++;
+            else if (item.location_id.startsWith('FL-')) floorOcc++;
+        });
+
+        let roomTotal = 0;
+        if(typeof layoutRoom !== 'undefined') {
+            layoutRoom.forEach(c => { if(!c.gap && !c.aisle) roomTotal += c.cols * 2; }); 
+            roomTotal += 20; 
+        } else { roomTotal = 150; }
+
+        let coldTotal = 0;
+        if(typeof layoutCold !== 'undefined') {
+            layoutCold.forEach(c => { if(!c.gap && !c.aisle) coldTotal += c.cols * 2; });
+            coldTotal += 16; 
+        } else { coldTotal = 100; }
+
+        let floorTotal = 0;
+        ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => {
+            floorTotal += parseInt(localStorage.getItem(area + '_cols')) || 10;
+        });
+
+        let roomPct = roomTotal > 0 ? Math.min(100, Math.round((roomOcc / roomTotal) * 100)) : 0;
+        let coldPct = coldTotal > 0 ? Math.min(100, Math.round((coldOcc / coldTotal) * 100)) : 0;
+        let floorPct = floorTotal > 0 ? Math.min(100, Math.round((floorOcc / floorTotal) * 100)) : 0;
+
+        document.getElementById('dash-room-percent').innerText = roomPct + '%';
+        document.getElementById('dash-room-total').innerText = roomTotal.toLocaleString() + ' 렉';
+        document.getElementById('dash-room-occ').innerText = roomOcc.toLocaleString() + ' 렉';
+        document.getElementById('dash-room-empty').innerText = Math.max(0, roomTotal - roomOcc).toLocaleString() + ' 렉';
+        document.getElementById('dash-room-donut').style.background = `conic-gradient(#f97316 ${roomPct}%, #e2e8f0 0%)`;
+
+        document.getElementById('dash-cold-percent').innerText = coldPct + '%';
+        document.getElementById('dash-cold-total').innerText = coldTotal.toLocaleString() + ' 렉';
+        document.getElementById('dash-cold-occ').innerText = coldOcc.toLocaleString() + ' 렉';
+        document.getElementById('dash-cold-empty').innerText = Math.max(0, coldTotal - coldOcc).toLocaleString() + ' 렉';
+        document.getElementById('dash-cold-donut').style.background = `conic-gradient(#6366f1 ${coldPct}%, #e2e8f0 0%)`;
+
+        document.getElementById('dash-floor-percent').innerText = floorPct + '%';
+        document.getElementById('dash-floor-total').innerText = floorTotal.toLocaleString() + ' 렉';
+        document.getElementById('dash-floor-occ').innerText = floorOcc.toLocaleString() + ' 렉';
+        document.getElementById('dash-floor-empty').innerText = Math.max(0, floorTotal - floorOcc).toLocaleString() + ' 렉';
+        document.getElementById('dash-floor-donut').style.background = `conic-gradient(#10b981 ${floorPct}%, #e2e8f0 0%)`;
+
+        if(isAdmin) {
+            let pnl = document.getElementById('admin-finance-panel');
+            if(pnl) pnl.classList.remove('hidden');
+            let roomVal = 0, coldVal = 0, floorVal = 0;
+            
+            (globalOccupancy || []).forEach(item => {
+                let price = 0;
+                let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name) || productMaster.find(p => p.item_name === item.item_name);
+                price = pInfo ? (pInfo.unit_price || 0) : 0;
+                let val = item.quantity * price;
+
+                if (item.location_id.startsWith('R-')) roomVal += val;
+                else if (item.location_id.startsWith('C-')) coldVal += val;
+                else if (item.location_id.startsWith('FL-')) floorVal += val;
+            });
+
+            let dr = document.getElementById('dash-val-room'); if(dr) dr.innerText = roomVal.toLocaleString() + ' 원';
+            let dc = document.getElementById('dash-val-cold'); if(dc) dc.innerText = coldVal.toLocaleString() + ' 원';
+            let df = document.getElementById('dash-val-floor'); if(df) df.innerText = floorVal.toLocaleString() + ' 원';
+            let dt = document.getElementById('dash-val-total'); if(dt) dt.innerText = (roomVal + coldVal + floorVal).toLocaleString() + ' 원';
+
+            let periodSelect = document.getElementById('dash-period');
+            let period = periodSelect ? periodSelect.value : 'daily';
+            let outCost = 0;
+            let now = new Date();
+            
+            (globalHistory || []).forEach(h => {
+                if(h.action_type === '출고') {
+                    let hDate = new Date(h.created_at);
+                    let diffDays = (now - hDate) / (1000 * 60 * 60 * 24);
+                    let include = false;
+
+                    if(period === 'daily' && diffDays <= 1) include = true;
+                    else if(period === 'weekly' && diffDays <= 7) include = true;
+                    else if(period === 'monthly' && diffDays <= 30) include = true;
+
+                    if(include) {
+                        let price = 0;
+                        let pInfo = finishedProductMaster.find(p => p.item_name === h.item_name) || productMaster.find(p => p.item_name === h.item_name);
+                        price = pInfo ? (pInfo.unit_price || 0) : 0;
+                        outCost += h.quantity * price;
+                    }
+                }
+            });
+
+            let dco = document.getElementById('dash-cost-out'); if(dco) dco.innerText = outCost.toLocaleString() + ' 원';
+            let lbl = period === 'daily' ? '일간 기준' : (period === 'weekly' ? '주간 기준' : '월간 기준');
+            let dcl = document.getElementById('dash-cost-label'); if(dcl) dcl.innerText = lbl;
+        }
+    } catch (error) {
+        console.error("대시보드 렌더링 에러 방어:", error);
+    }
+};
+
+window.onload = function() { 
+    let loginScreen = document.getElementById('login-screen');
+    if(loginScreen) loginScreen.style.display = 'flex'; 
+};
