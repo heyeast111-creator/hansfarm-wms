@@ -45,7 +45,8 @@ function siteLogin() {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('main-app').classList.remove('hidden');
-        document.querySelector('.target-accounting').classList.add('hidden'); // 정산/회계 탭 감춤
+        let accTab = document.querySelector('.target-accounting');
+        if(accTab) accTab.classList.add('hidden'); // 뷰어는 정산/회계 숨김
         showView('order'); // 💡 로그인 직후 재고/발주 화면 띄우기
         load();
     } else if(pw === "123456789*") { // 관리자 모드
@@ -53,7 +54,8 @@ function siteLogin() {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('main-app').classList.remove('hidden');
-        document.querySelector('.target-accounting').classList.remove('hidden'); // 정산/회계 탭 노출
+        let accTab = document.querySelector('.target-accounting');
+        if(accTab) accTab.classList.remove('hidden'); // 관리자는 노출
         showView('order'); // 💡 로그인 직후 재고/발주 화면 띄우기
         load();
     } else {
@@ -66,7 +68,8 @@ function adminLogin() {
     let pw = prompt("관리자 비밀번호를 입력하세요:");
     if(pw === "123456789*") {
         loginMode = 'admin'; isAdmin = true;
-        document.querySelector('.target-accounting').classList.remove('hidden');
+        let accTab = document.querySelector('.target-accounting');
+        if(accTab) accTab.classList.remove('hidden');
         alert("관리자 모드로 전환되었습니다.");
         load();
     } else if(pw !== null) {
@@ -92,7 +95,7 @@ function showView(viewId) {
         btn.classList.remove('text-slate-600', 'bg-white');
     });
     
-    if(viewId === 'dashboard') updateDashboard();
+    if(viewId === 'dashboard') { if(typeof updateDashboard === 'function') updateDashboard(); }
     if(viewId === 'order') { 
         if(typeof switchOrderTab === 'function') switchOrderTab(currentOrderTab); 
         if(typeof switchZone === 'function') switchZone(currentZone); 
@@ -121,34 +124,37 @@ function closeInfoPanel() {
 }
 
 function closeHistoryModal() {
-    document.getElementById('history-modal').classList.add('hidden');
-    document.getElementById('history-modal').classList.remove('flex');
+    let m = document.getElementById('history-modal');
+    if(m) { m.classList.add('hidden'); m.classList.remove('flex'); }
 }
 
 // ==========================================
-// [데이터 로드 (DB 통신)] (💡 렉맵 비어있음 해결)
+// [데이터 로드 (DB 통신)] (💡 무적의 데이터 로딩 코드)
 // ==========================================
 async function load() {
     try {
-        // 혹시 모를 에러를 방지하기 위해 로딩 시점 초기화
-        globalOccupancy = []; globalHistory = []; productMaster = []; finishedProductMaster = []; bomMaster = [];
-        
-        // 서버 통신 중 하나라도 끊기면 앱이 뻗지 않도록 예외 처리(.catch) 추가
-        const [occRes, histRes, pmRes, fpRes, bomRes] = await Promise.all([
-            fetch('/api/occupancy').catch(()=>({json: ()=>[]})), 
-            fetch('/api/history').catch(()=>({json: ()=>[]})), 
-            fetch('/api/products').catch(()=>({json: ()=>[]})), 
-            fetch('/api/finished_products').catch(()=>({json: ()=>[]})), 
-            fetch('/api/bom').catch(()=>({json: ()=>[]}))
-        ]);
-        
-        globalOccupancy = await occRes.json() || [];
-        globalHistory = await histRes.json() || [];
-        productMaster = await pmRes.json() || [];
-        finishedProductMaster = await fpRes.json() || [];
-        bomMaster = await bomRes.json() || [];
+        const fetchJSON = async (url) => {
+            try {
+                let res = await fetch(url);
+                if(res.ok) return await res.json();
+                return []; // 실패해도 앱이 뻗지 않도록 빈 배열 반환
+            } catch(e) { return []; }
+        };
 
-        // 데이터 갱신 후 각 화면 기능들 안전하게 재렌더링
+        // 데이터 개별 호출로 안정성 극대화
+        let occ = await fetchJSON('/api/occupancy');
+        let hist = await fetchJSON('/api/history');
+        let prod = await fetchJSON('/api/products');
+        let fin = await fetchJSON('/api/finished_products');
+        let bom = await fetchJSON('/api/bom');
+
+        if(occ.length > 0) globalOccupancy = occ;
+        if(hist.length > 0) globalHistory = hist;
+        if(prod.length > 0) productMaster = prod;
+        if(fin.length > 0) finishedProductMaster = fin;
+        if(bom.length > 0) bomMaster = bom;
+
+        // UI 렌더링 동기화
         if (typeof renderMap === 'function') renderMap();
         if (typeof populateWaitDropdowns === 'function') populateWaitDropdowns();
         if (typeof updateDashboard === 'function') updateDashboard();
