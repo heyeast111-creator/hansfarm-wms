@@ -186,7 +186,15 @@
                     <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-y-auto overflow-x-auto flex-1 custom-scrollbar min-h-[300px]">
                         <table class="w-full text-left border-collapse min-w-[700px]">
                             <thead class="sticky top-0 bg-slate-50 border-b-2 border-slate-200 text-slate-500 text-xs md:text-sm z-10 shadow-sm">
-                                <tr><th class="p-3 font-black">발주일자</th><th class="p-3 font-black">발주처</th><th class="p-3 font-black">품목명</th><th class="p-3 font-black text-right">주문 수량</th><th class="p-3 font-black text-center">상태</th><th class="p-3 font-black text-center">도착/취소</th></tr>
+                                <tr>
+                                    <th class="p-3 font-black">발주일자</th>
+                                    <th class="p-3 font-black">발주처</th>
+                                    <th class="p-3 font-black">품목명</th>
+                                    <th class="p-3 font-black text-right">주문 수량</th>
+                                    <th class="p-3 font-black text-center">상태</th>
+                                    <th class="p-3 font-black text-center text-indigo-700">예정도착일 🗓️</th>
+                                    <th class="p-3 font-black text-center">도착/취소</th>
+                                </tr>
                             </thead>
                             <tbody id="order-list-tbody" class="divide-y divide-slate-100 text-xs md:text-sm"></tbody>
                         </table>
