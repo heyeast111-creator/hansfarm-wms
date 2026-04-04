@@ -64,22 +64,11 @@ function updateZoneTabs() {
     } catch(e) {}
 }
 
-// 💡 패치됨: 탭을 바꿔도 이동(movingItem) 상태가 풀리지 않도록 유지
 function switchZone(zone) { 
-    globalSearchTargets = []; 
-    currentZone = zone; 
-    selectedCellId = null; 
-    // movingItem = null; // <- 이 줄을 삭제하여 교차 구역 이동을 허용함
-
+    globalSearchTargets = []; currentZone = zone; selectedCellId = null; movingItem = null;
     let rs = document.getElementById('right-sidebar');
-    // 이동 중일 때는 모바일에서 탭을 바꿔도 우측 안내 패널을 숨기지 않음
-    if(window.innerWidth < 768 && rs && !movingItem) { 
-        rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; 
-    }
-    
-    updateZoneTabs(); 
-    renderMap(); 
-    populateWaitDropdowns();
+    if(window.innerWidth < 768 && rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; }
+    updateZoneTabs(); renderMap(); populateWaitDropdowns();
 }
 
 function toggleMapSearch() { const container = document.getElementById('map-search-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
@@ -693,12 +682,45 @@ function renderOrderList() {
     if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-slate-400">진행 중 발주 없음</td></tr>`;
     tbody.innerHTML = orders.map(o => `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.pallet_count}P</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded">발주중</span></td><td class="p-3 text-center">${loginMode!=='viewer'?`<button onclick="receiveOrder('${o.id}', '${o.item_name}', ${o.quantity}, ${o.pallet_count}, '${o.remarks}', '${o.category||''}')" class="bg-emerald-500 text-white px-2 py-1 rounded mr-1">입고</button><button onclick="cancelOrder('${o.id}')" class="bg-slate-200 text-slate-600 px-2 py-1 rounded">취소</button>`:''}</td></tr>`).join('');
 }
+
+// 💡 여기서 입고일 입력 팝업창 띄우기 복구 완료
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
-    if(loginMode === 'viewer') return; let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) || productMaster.find(p => p.item_name === itemName && p.supplier === supplier); let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1; let remaining = qty; let payloads = []; let waitIndex = 1;
-    while(remaining > 0) { let chunk = remaining > pEa ? pEa : remaining; let emptyW = ""; for(let i=waitIndex; i<=30; i++) { let wId = `W-${i.toString().padStart(2, '0')}`; if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) { emptyW = wId; waitIndex = i + 1; break; } } if(!emptyW) { if(payloads.length === 0) return alert(`대기장이 꽉 찼습니다!`); else { alert(`일부만 입고`); break; } } payloads.push({ location_id: emptyW, category: cat || '미분류', item_name: itemName, quantity: chunk, pallet_count: chunk / pEa, production_date: new Date().toISOString().split('T')[0], remarks: supplier }); remaining -= chunk; }
-    if(payloads.length === 0) return; if(!confirm("입고 처리하시겠습니까?")) return;
-    try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await Promise.all(payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }))); alert("분할 입고 완료"); await load(); } catch(e) {}
+    if(loginMode === 'viewer') return; 
+    
+    let today = new Date().toISOString().split('T')[0];
+    let receiveDate = prompt(`[${itemName}] 입고 처리\n입고일(또는 산란일)을 입력하세요 (YYYY-MM-DD):`, today);
+    if (receiveDate === null) return;
+    if (receiveDate.trim() === '') receiveDate = today;
+
+    let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) || productMaster.find(p => p.item_name === itemName && p.supplier === supplier); 
+    let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1; 
+    let remaining = qty; 
+    let payloads = []; 
+    let waitIndex = 1;
+    while(remaining > 0) { 
+        let chunk = remaining > pEa ? pEa : remaining; 
+        let emptyW = ""; 
+        for(let i=waitIndex; i<=30; i++) { 
+            let wId = `W-${i.toString().padStart(2, '0')}`; 
+            if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) { emptyW = wId; waitIndex = i + 1; break; } 
+        } 
+        if(!emptyW) { 
+            if(payloads.length === 0) return alert(`대기장이 꽉 찼습니다!`); 
+            else { alert(`대기장이 부족하여 일부만 입고 처리됩니다.`); break; } 
+        } 
+        payloads.push({ location_id: emptyW, category: cat || '미분류', item_name: itemName, quantity: chunk, pallet_count: chunk / pEa, production_date: receiveDate, remarks: supplier }); 
+        remaining -= chunk; 
+    }
+    if(payloads.length === 0) return; 
+    if(!confirm(`총 ${payloads.length} 파레트로 분할되어 대기장으로 입고됩니다.\n적용일자: ${receiveDate}\n진행하시겠습니까?`)) return;
+    try { 
+        await fetch(`/api/history/${logId}`, { method: 'DELETE' }); 
+        await Promise.all(payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }))); 
+        alert("대기장 입고 완료!"); 
+        await load(); 
+    } catch(e) {}
 }
+
 async function cancelOrder(logId) { if(loginMode === 'viewer') return; if(!confirm("발주 취소?")) return; try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) {} }
 
 function renderSafetyStock() { 
