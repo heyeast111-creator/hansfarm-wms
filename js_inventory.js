@@ -645,7 +645,15 @@ async function createWaitingPallets() {
 
 function toggleOrderCart() {
     const el = document.getElementById('order-cart-container');
-    if(el.classList.contains('hidden')) { el.classList.remove('hidden'); el.classList.add('flex'); updateOrderCartDropdowns(); } 
+    if(el.classList.contains('hidden')) { 
+        el.classList.remove('hidden'); el.classList.add('flex'); 
+        updateOrderCartDropdowns(); 
+        let ocDate = document.getElementById('oc-date');
+        if(ocDate && !ocDate.value) {
+            let tmr = new Date(); tmr.setDate(tmr.getDate() + 1); // 기본값: 내일 날짜
+            ocDate.value = tmr.toISOString().split('T')[0];
+        }
+    } 
     else { el.classList.add('hidden'); el.classList.remove('flex'); }
 }
 function updateOrderCartDropdowns() {
@@ -661,42 +669,140 @@ function updateOrderCartItemDropdown() {
     if(itemSel) itemSel.innerHTML = '<option value="">3. 품목 선택</option>' + items.map(c=>`<option value="${c}">${c}</option>`).join('');
 }
 function addOrderCartItem() {
-    if(loginMode === 'viewer') return; let cat = document.getElementById('oc-cat').value; let item = document.getElementById('oc-item').value; let sup = document.getElementById('oc-sup').value; let pal = parseFloat(document.getElementById('oc-pal').value);
+    if(loginMode === 'viewer') return; 
+    let cat = document.getElementById('oc-cat').value; 
+    let item = document.getElementById('oc-item').value; 
+    let sup = document.getElementById('oc-sup').value; 
+    let pal = parseFloat(document.getElementById('oc-pal').value);
+    let expDate = document.getElementById('oc-date') ? document.getElementById('oc-date').value : '';
+    
     if(!item || !sup || isNaN(pal) || pal <= 0) return alert("입력 확인");
-    let pInfo = productMaster.find(p=>p.item_name===item && p.supplier===sup); let totalQty = Math.round(pal * (pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1));
-    orderCart.push({ category: cat, item_name: item, supplier: sup, pallet_count: pal, quantity: totalQty }); document.getElementById('oc-pal').value = ''; renderOrderCart();
+    if(!expDate) {
+        let tmr = new Date(); tmr.setDate(tmr.getDate() + 1);
+        expDate = tmr.toISOString().split('T')[0];
+    }
+
+    let pInfo = productMaster.find(p=>p.item_name===item && p.supplier===sup); 
+    let totalQty = Math.round(pal * (pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1));
+    
+    orderCart.push({ category: cat, item_name: item, supplier: sup, pallet_count: pal, quantity: totalQty, expected_date: expDate }); 
+    document.getElementById('oc-pal').value = ''; 
+    renderOrderCart();
 }
 function removeOrderCartItem(index) { orderCart.splice(index, 1); renderOrderCart(); }
+
 function renderOrderCart() {
     let tbody = document.getElementById('order-cart-tbody'); if(!tbody) return;
-    if(orderCart.length === 0) return tbody.innerHTML = `<tr><td colspan="4" class="text-center p-4 text-slate-400">비어있음</td></tr>`;
-    tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
-}
-async function submitOrderCart() {
-    if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
-    let text = "[한스팜]발주요청서\n"; orderCart.forEach((item, i) => { text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; });
-    try { await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(orderCart) }); navigator.clipboard.writeText(text).then(async () => { alert("발주 등록 및 복사 완료!"); orderCart = []; toggleOrderCart(); await load(); }); } catch(e) {}
-}
-function renderOrderList() {
-    let orders = globalHistory.filter(h => h.action_type === '발주중').sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
-    if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="6" class="p-10 text-center text-slate-400">진행 중 발주 없음</td></tr>`;
-    tbody.innerHTML = orders.map(o => `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.pallet_count}P</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded">발주중</span></td><td class="p-3 text-center">${loginMode!=='viewer'?`<button onclick="receiveOrder('${o.id}', '${o.item_name}', ${o.quantity}, ${o.pallet_count}, '${o.remarks}', '${o.category||''}')" class="bg-emerald-500 text-white px-2 py-1 rounded mr-1">입고</button><button onclick="cancelOrder('${o.id}')" class="bg-slate-200 text-slate-600 px-2 py-1 rounded">취소</button>`:''}</td></tr>`).join('');
+    if(orderCart.length === 0) return tbody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-slate-400">비어있음</td></tr>`;
+    tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
-// 💡 여기서 입고일 입력 팝업창 띄우기 복구 완료
+// 💡 수정됨: 카톡 복사 시 예정일 제거
+async function submitOrderCart() {
+    if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
+    let text = "[한스팜]발주요청서\n"; 
+    orderCart.forEach((item, i) => { 
+        item.production_date = item.expected_date; 
+        text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; // 카톡 복사 텍스트에서 예정일 제외
+    });
+    try { 
+        await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(orderCart) }); 
+        navigator.clipboard.writeText(text).then(async () => { alert("발주 등록 및 복사 완료!"); orderCart = []; toggleOrderCart(); await load(); }); 
+    } catch(e) {}
+}
+
+// 💡 3버튼 (도착/수정/취소) 로직 적용
+function renderOrderList() {
+    let orders = globalHistory.filter(h => h.action_type === '발주중').sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
+    let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
+    if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400">진행 중 발주 없음</td></tr>`;
+    tbody.innerHTML = orders.map(o => {
+        let expDate = o.production_date || '미정';
+        let actionBtns = loginMode !== 'viewer' ?
+            `<div class="flex justify-center space-x-1">
+                <button onclick="receiveOrder('${o.id}', '${o.item_name}', ${o.quantity}, ${o.pallet_count}, '${o.remarks}', '${o.category||''}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors">도착</button>
+                <button onclick="editOrder('${o.id}')" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors">수정</button>
+                <button onclick="cancelOrder('${o.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-1 rounded text-xs font-bold transition-colors">취소</button>
+            </div>` : '';
+        return `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.quantity}EA (${o.pallet_count}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle">${actionBtns}</td></tr>`;
+    }).join('');
+}
+
+// 💡 발주 내역 수정 기능 (제품명, 수량, 예정일)
+async function editOrder(logId) {
+    if(loginMode === 'viewer') return;
+    let order = globalHistory.find(h => h.id === logId);
+    if(!order) return;
+
+    let newItem = prompt(`[현재 품목명: ${order.item_name}]\n수정할 품목명을 입력하세요:`, order.item_name);
+    if(newItem === null) return;
+    newItem = newItem.trim() || order.item_name;
+
+    let newQtyStr = prompt(`[현재 수량: ${order.quantity}]\n수정할 총 수량(EA)을 입력하세요:`, order.quantity);
+    if(newQtyStr === null) return;
+    let newQty = parseInt(newQtyStr) || order.quantity;
+
+    let newDate = prompt(`[현재 예정일: ${order.production_date || '미정'}]\n수정할 도착예정일(YYYY-MM-DD)을 입력하세요:`, order.production_date || new Date().toISOString().split('T')[0]);
+    if(newDate === null) return;
+
+    // 변경된 수량에 맞춰 파레트 수 다시 계산
+    let pInfo = finishedProductMaster.find(p => p.item_name === newItem && p.supplier === order.remarks) || productMaster.find(p => p.item_name === newItem && p.supplier === order.remarks);
+    let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
+    let newPallet = newQty / pEa;
+
+    if(!confirm(`✅ [발주 내역 수정 확인]\n\n- 품목명: ${newItem}\n- 수량: ${newQty.toLocaleString()} EA (${newPallet.toFixed(1)} P)\n- 예정일: ${newDate}\n\n위 내용으로 수정하시겠습니까?`)) return;
+
+    try {
+        await fetch(`/api/history/${logId}`, { method: 'DELETE' }); // 기존 내역 지우고
+        
+        let updateData = [{
+            category: order.category,
+            item_name: newItem,
+            supplier: order.remarks,
+            pallet_count: newPallet,
+            quantity: newQty,
+            production_date: newDate
+        }];
+        
+        await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(updateData) }); // 새 내역으로 덮어쓰기
+        alert("발주 내역이 성공적으로 수정되었습니다.");
+        await load();
+    } catch(e) {
+        alert("수정 중 오류가 발생했습니다.");
+    }
+}
+
+// 💡 수정됨: 예정일 무시하고 무조건 오늘날짜로 묻기 + 파레트 찢기(개별 수량 분할) 선택 기능
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
     if(loginMode === 'viewer') return; 
     
+    // 1. 입고일 묻기 (오늘 날짜가 기본값, 예정일 아님)
     let today = new Date().toISOString().split('T')[0];
-    let receiveDate = prompt(`[${itemName}] 입고 처리\n입고일(또는 산란일)을 입력하세요 (YYYY-MM-DD):`, today);
+    let receiveDate = prompt(`[${itemName}] 입고 처리\n실제 입고일(또는 산란일)을 입력하세요 (YYYY-MM-DD):`, today);
     if (receiveDate === null) return;
     if (receiveDate.trim() === '') receiveDate = today;
 
+    // 2. 파레트 기준 계산
     let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) || productMaster.find(p => p.item_name === itemName && p.supplier === supplier); 
-    let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1; 
+    let defaultPEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1; 
+    let defaultPallets = qty / defaultPEa;
+
+    // 3. 낱개 분할 설정 (예/아니오)
+    let useDefault = confirm(`📦 입고 파레트(박스) 분할 설정\n\n현재 품목관리 마스터 기준:\n- 총 입고 수량: ${qty.toLocaleString()} EA\n- 1P(박스)당 기준: ${defaultPEa.toLocaleString()} EA\n- 예상 박스 개수: ${defaultPallets.toFixed(1)} P\n\n이 기준대로 대기장에 박스화 할까요?\n\n[확인]: 예 (마스터 기준대로 입고)\n[취소]: 아니오 (1박스당 수량을 직접 설정)`);
+
+    let pEa = defaultPEa;
+
+    if (!useDefault) {
+        let manualEa = prompt(`1파레트(박스)당 포장될 낱개 수량(EA)을 직접 입력하세요:\n(총 ${qty.toLocaleString()}EA를 몇 개씩 쪼갤지 입력)`, defaultPEa);
+        if(manualEa === null) return; // 취소 누르면 입고 전체 취소
+        pEa = parseInt(manualEa);
+        if(isNaN(pEa) || pEa <= 0) return alert("올바른 수량을 입력해주세요. 입고가 취소됩니다.");
+    }
+
     let remaining = qty; 
     let payloads = []; 
     let waitIndex = 1;
+    
     while(remaining > 0) { 
         let chunk = remaining > pEa ? pEa : remaining; 
         let emptyW = ""; 
@@ -705,23 +811,28 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
             if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) { emptyW = wId; waitIndex = i + 1; break; } 
         } 
         if(!emptyW) { 
-            if(payloads.length === 0) return alert(`대기장이 꽉 찼습니다!`); 
-            else { alert(`대기장이 부족하여 일부만 입고 처리됩니다.`); break; } 
+            if(payloads.length === 0) return alert(`❌ 대기장(W-01~W-30)이 꽉 찼습니다! 빈 공간을 확보해주세요.`); 
+            else { alert(`대기장이 부족하여 전체 중 일부(${payloads.length}박스)만 먼저 입고 처리됩니다.`); break; } 
         } 
         payloads.push({ location_id: emptyW, category: cat || '미분류', item_name: itemName, quantity: chunk, pallet_count: chunk / pEa, production_date: receiveDate, remarks: supplier }); 
         remaining -= chunk; 
     }
+    
     if(payloads.length === 0) return; 
-    if(!confirm(`총 ${payloads.length} 파레트로 분할되어 대기장으로 입고됩니다.\n적용일자: ${receiveDate}\n진행하시겠습니까?`)) return;
+    
+    if(!confirm(`총 ${payloads.length} 파레트(박스)로 분할되어 대기장으로 입고됩니다.\n적용일자: ${receiveDate}\n진행하시겠습니까?`)) return;
+    
     try { 
         await fetch(`/api/history/${logId}`, { method: 'DELETE' }); 
         await Promise.all(payloads.map(p => fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(p) }))); 
         alert("대기장 입고 완료!"); 
         await load(); 
-    } catch(e) {}
+    } catch(e) {
+        alert("입고 처리 중 통신 오류가 발생했습니다.");
+    }
 }
 
-async function cancelOrder(logId) { if(loginMode === 'viewer') return; if(!confirm("발주 취소?")) return; try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) {} }
+async function cancelOrder(logId) { if(loginMode === 'viewer') return; if(!confirm("발주 내역을 완전히 취소하시겠습니까?")) return; try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) {} }
 
 function renderSafetyStock() { 
     const mode = document.getElementById('safe-mode') ? document.getElementById('safe-mode').value : 'pallet';
