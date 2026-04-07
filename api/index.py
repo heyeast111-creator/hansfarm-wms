@@ -237,3 +237,21 @@ async def history_update(request: Request):
         }).eq('id', item['id']).execute()
         
     return {"status": "success"}
+
+@app.post("/api/history_update")
+async def history_update(request: Request):
+    data = await request.json()
+    
+    # 전달받은 수정/확정 데이터를 Supabase에 영구 업데이트
+    for item in data:
+        supabase.table('history').update({
+            'acc_status': item.get('acc_status'),
+            'acc_qty': item.get('acc_qty'),
+            'acc_price': item.get('acc_price'),
+            'acc_adj': item.get('acc_adj'),
+            'category': item.get('category'),
+            'item_name': item.get('item_name'),
+            'production_date': item.get('production_date')
+        }).eq('id', item['id']).execute()
+        
+    return {"status": "success"}
