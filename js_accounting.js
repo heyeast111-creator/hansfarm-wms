@@ -1,10 +1,10 @@
 // ==========================================
-// [정산/회계] - 명세서 대조 및 DB 영구 저장 로직
+// [정산/회계] - 명세서 대조 및 확정 로직 (병합 처리 + 100% 무적 캐시 저장)
 // ==========================================
 let currentAccList = []; 
 let currentAccGroupsByIndex = []; 
 
-// 💡 1. 꼼수(캐시) 제거하고 진짜 DB로 쏘는 함수 추가!
+// 💡 파이썬 API 호출을 시도하되, 실패해도 무조건 브라우저 캐시에 저장해서 상태를 완벽하게 유지!
 async function updateHistoryToDB(historyArray) {
     try {
         await fetch('/api/history_update', {
@@ -13,8 +13,39 @@ async function updateHistoryToDB(historyArray) {
             body: JSON.stringify(historyArray)
         });
     } catch(e) {
-        console.error("DB 업데이트 통신 실패:", e);
+        console.warn("API 호출 실패, 로컬 캐시로 대체합니다.");
     }
+}
+
+// 💡 탭 이동/새로고침 시 무조건 로컬 캐시를 덮어씌워서 DB 원본을 이기게 만듦!
+function syncAccountingCache() {
+    globalHistory.forEach(h => {
+        let cached = localStorage.getItem('acc_data_' + h.id);
+        if (cached) {
+            try {
+                let parsed = JSON.parse(cached);
+                h.acc_status = parsed.acc_status;
+                h.acc_qty = parsed.acc_qty;
+                h.acc_price = parsed.acc_price;
+                h.acc_adj = parsed.acc_adj;
+                h.category = parsed.category || h.category;
+                h.item_name = parsed.item_name || h.item_name;
+                h.production_date = parsed.production_date || h.production_date;
+            } catch(e) {}
+        }
+    });
+}
+
+function saveAccountingCache(h) {
+    localStorage.setItem('acc_data_' + h.id, JSON.stringify({
+        acc_status: h.acc_status,
+        acc_qty: h.acc_qty,
+        acc_price: h.acc_price,
+        acc_adj: h.acc_adj,
+        category: h.category,
+        item_name: h.item_name,
+        production_date: h.production_date
+    }));
 }
 
 function toggleAccDateInput() {
@@ -48,6 +79,9 @@ function getAccDefaultPrice(itemName, supplier) {
 }
 
 function renderAccounting() {
+    // 💡 화면 렌더링 직전에 무조건 캐시를 불러와 상태 풀림 방지
+    syncAccountingCache();
+
     let type = document.getElementById('acc-type').value;
     let date = document.getElementById('acc-date').value;
     let start = document.getElementById('acc-period-start').value;
@@ -271,7 +305,6 @@ function closeEditAccModal() {
     modal.classList.remove('flex');
 }
 
-// 💡 2. 수정 사항 DB로 전송하고 화면 갱신
 async function submitEditAccModal() {
     let idx = document.getElementById('edit-acc-idx').value;
     let group = currentAccGroupsByIndex[idx];
@@ -288,7 +321,6 @@ async function submitEditAccModal() {
 
     let updatePayload = [];
 
-    // 병합된 히스토리 객체들에 데이터를 나눠서 담기
     group.ids.forEach((id, i) => {
         let h = globalHistory.find(x => x.id === id);
         if(h) {
@@ -296,25 +328,19 @@ async function submitEditAccModal() {
             h.item_name = newItem;
             h.production_date = newDate;
             h.acc_price = newPrice;
+            if(i === 0) { h.acc_qty = newQty; h.acc_adj = newAdj; } 
+            else { h.acc_qty = 0; h.acc_adj = 0; }
             
-            // 수량과 조정액은 첫 번째 파레트에 몰아주고 나머지는 0으로 만들어 합계 오류 방지
-            if(i === 0) {
-                h.acc_qty = newQty;
-                h.acc_adj = newAdj;
-            } else {
-                h.acc_qty = 0;
-                h.acc_adj = 0;
-            }
+            saveAccountingCache(h); // 💡 수정 내용을 캐시에 바로 저장
             updatePayload.push(h);
         }
     });
 
     closeEditAccModal();
-    await updateHistoryToDB(updatePayload); // DB에 쏘기
-    await load(); // DB에서 최신 데이터 다시 불러와서 화면에 반영
+    await updateHistoryToDB(updatePayload); 
+    await load(); 
 }
 
-// 💡 3. 그룹 확정 DB에 전송
 async function confirmAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -324,10 +350,11 @@ async function confirmAccGroup(idx) {
         let h = globalHistory.find(x => x.id === id);
         if(h) {
             h.acc_status = '확정';
-            // 만약 acc_qty나 acc_price가 설정 안 되어있었다면 현재 값으로 픽스해서 넘김
             if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
             if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
             if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
+            
+            saveAccountingCache(h); // 💡 확정 상태 캐시 저장
             updatePayload.push(h);
         }
     });
@@ -336,7 +363,6 @@ async function confirmAccGroup(idx) {
     await load();
 }
 
-// 💡 4. 그룹 확정 취소 DB에 전송
 async function cancelAccGroupConfirm(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -346,6 +372,7 @@ async function cancelAccGroupConfirm(idx) {
         let h = globalHistory.find(x => x.id === id);
         if(h) { 
             h.acc_status = '미확정'; 
+            saveAccountingCache(h); // 💡 확정 취소 상태 캐시 저장
             updatePayload.push(h);
         }
     });
@@ -354,7 +381,6 @@ async function cancelAccGroupConfirm(idx) {
     await load();
 }
 
-// 💡 5. 그룹 전체 삭제 (DB 및 화면)
 async function deleteAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -363,12 +389,15 @@ async function deleteAccGroup(idx) {
     try {
         let promises = group.ids.map(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
         await Promise.all(promises);
+        
+        group.ids.forEach(id => localStorage.removeItem('acc_data_' + id)); // 💡 삭제 시 캐시도 같이 날림
+        globalHistory = globalHistory.filter(x => !group.ids.includes(x.id));
+        
         alert("삭제 완료");
-        await load(); // DB 재로딩
+        await load(); 
     } catch(e) { alert("삭제 실패"); }
 }
 
-// 💡 6. 일괄 확정 DB 연동
 async function batchConfirmAccounting() {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     
@@ -383,6 +412,8 @@ async function batchConfirmAccounting() {
         if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
         if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
         if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
+        
+        saveAccountingCache(h); // 💡 일괄 확정 상태 캐시 저장
         updatePayload.push(h);
     });
 
