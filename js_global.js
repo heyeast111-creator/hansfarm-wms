@@ -32,7 +32,7 @@ function siteLogin() {
     if (pw === '0000') {
         loginMode = 'viewer';
         alert("뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
-    } else if (pw === '11111') {
+    } else if (pw === '00700') {
         loginMode = 'editor';
         alert("일반 사용자 모드로 접속되었습니다.");
     } else {
@@ -79,7 +79,7 @@ function renderAll() {
     try { updateMapSearchCategoryDropdown(); } catch(e){}
     try { updateSummarySupplierDropdown(); } catch(e){}
     try { renderSafetyStock(); } catch(e){}
-    try { updateAccFilters('type'); } catch(e){}
+    try { if(typeof renderAccounting === 'function') renderAccounting(); } catch(e){} // 💡 날짜 튕김 버그(updateAccFilters) 삭제!
     try { populateProductFilters('finished'); renderProductMaster('finished'); } catch(e){}
     try { populateProductFilters('materials'); renderProductMaster('materials'); } catch(e){}
     try { updateBomDropdowns(); renderBomMaster(); } catch(e){}
@@ -87,7 +87,6 @@ function renderAll() {
     try { populateWaitDropdowns(); } catch(e){}
 }
 
-// 💡 패치됨: 기본 prompt() 대신 커스텀 모달 띄우기
 function adminLogin() {
     let fp = document.getElementById('admin-finance-panel');
     if(isAdmin) { 
@@ -98,8 +97,6 @@ function adminLogin() {
         if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
         return; 
     }
-    
-    // 모달창 띄우기
     let modal = document.getElementById('admin-pw-modal');
     let input = document.getElementById('admin-pw-input');
     if(modal && input) {
@@ -107,15 +104,19 @@ function adminLogin() {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
         setTimeout(() => input.focus(), 100); 
+    } else {
+        const pw = prompt("관리자 비밀번호를 입력하세요:"); 
+        if(pw === "123456789*") { 
+            isAdmin = true; alert("관리자 권한이 활성화되었습니다."); 
+            document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
+            if(fp) fp.classList.remove('hidden');
+        } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
     }
 }
 
 function closeAdminModal() {
     let modal = document.getElementById('admin-pw-modal');
-    if(modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-    }
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
 }
 
 function submitAdminPassword() {
@@ -183,7 +184,7 @@ function showView(viewName) {
     } 
     else if(viewName === 'order') { switchOrderTab(currentOrderTab); } 
     else if(viewName === 'dashboard') updateDashboard(); 
-    else if(viewName === 'accounting') updateAccFilters('type'); 
+    else if(viewName === 'accounting') { if(typeof renderAccounting === 'function') renderAccounting(); } // 💡 날짜 초기화 방지
 }
 
 function toggleRightPanel() {
@@ -219,19 +220,23 @@ function getDynamicPalletCount(itemObj) {
 
 function showHistoryModal(locId) {
     let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-    document.getElementById('history-modal-title').innerText = `${locId} 전체 기록`;
+    let titleEl = document.getElementById('history-modal-title');
+    if(titleEl) titleEl.innerText = `${locId} 전체 기록`;
     let html = '';
     locHistory.forEach(h => {
         let actionColor = h.action_type === '입고' ? 'text-emerald-600' : (h.action_type === '출고' ? 'text-rose-600' : (h.action_type.includes('삭제') ? 'text-slate-400 line-through' : 'text-blue-600')); 
         let dateStr = h.production_date ? h.production_date : new Date(h.created_at).toLocaleString('ko-KR', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'}); 
         html += `<div class="bg-slate-50 p-3 border border-slate-200 rounded text-[11px] md:text-xs shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${dateStr}</span><br><span class="font-bold text-slate-700 mt-1 block">${h.item_name} <span class="text-slate-400">(${h.quantity}EA / ${h.pallet_count ? h.pallet_count.toFixed(1) : 1}P)</span></span></div>`;
     });
-    document.getElementById('history-modal-content').innerHTML = html;
-    document.getElementById('history-modal').classList.remove('hidden'); document.getElementById('history-modal').classList.add('flex');
+    let contentEl = document.getElementById('history-modal-content');
+    if(contentEl) contentEl.innerHTML = html;
+    let modalEl = document.getElementById('history-modal');
+    if(modalEl) { modalEl.classList.remove('hidden'); modalEl.classList.add('flex'); }
 }
 
 function closeHistoryModal() {
-    document.getElementById('history-modal').classList.add('hidden'); document.getElementById('history-modal').classList.remove('flex');
+    let modalEl = document.getElementById('history-modal');
+    if(modalEl) { modalEl.classList.add('hidden'); modalEl.classList.remove('flex'); }
 }
 
 function exportPhysicalCountExcel() {
@@ -266,7 +271,10 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
-window.onload = function() { document.getElementById('login-screen').style.display = 'flex'; };
+window.onload = function() { 
+    let loginScreen = document.getElementById('login-screen');
+    if(loginScreen) loginScreen.style.display = 'flex'; 
+};
 
 // ==========================================
 // 대시보드 로직 
