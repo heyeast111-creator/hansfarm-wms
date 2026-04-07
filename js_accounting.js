@@ -1,41 +1,10 @@
 // ==========================================
-// [정산/회계] - 명세서 대조 및 확정 로직 (하이브리드 이중 저장 방식)
+// [정산/회계] - 명세서 대조 및 확정 로직 (Supabase 100% 영구 저장 연동)
 // ==========================================
 let currentAccList = []; 
 let currentAccGroupsByIndex = []; 
 
-// 💡 1. 로컬 캐시 동기화 (서버 응답이 느려도 무조건 확정 상태 유지)
-function syncAccountingCache() {
-    globalHistory.forEach(h => {
-        let cached = localStorage.getItem('acc_data_' + h.id);
-        if (cached) {
-            try {
-                let parsed = JSON.parse(cached);
-                h.acc_status = parsed.acc_status;
-                h.acc_qty = parsed.acc_qty;
-                h.acc_price = parsed.acc_price;
-                h.acc_adj = parsed.acc_adj;
-                h.category = parsed.category || h.category;
-                h.item_name = parsed.item_name || h.item_name;
-                h.production_date = parsed.production_date || h.production_date;
-            } catch(e) {}
-        }
-    });
-}
-
-function saveAccountingCache(h) {
-    localStorage.setItem('acc_data_' + h.id, JSON.stringify({
-        acc_status: h.acc_status,
-        acc_qty: h.acc_qty,
-        acc_price: h.acc_price,
-        acc_adj: h.acc_adj,
-        category: h.category,
-        item_name: h.item_name,
-        production_date: h.production_date
-    }));
-}
-
-// 💡 2. 파이썬 서버(DB)로 업데이트 요청 보내기 (실패해도 앱은 안 뻗음)
+// 💡 눈속임용 로컬 캐시 전부 제거! 오직 파이썬 서버를 통해 DB로만 전송합니다.
 async function updateHistoryToDB(historyArray) {
     try {
         let res = await fetch('/api/history_update', {
@@ -43,9 +12,15 @@ async function updateHistoryToDB(historyArray) {
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(historyArray)
         });
-        if(!res.ok) console.warn("서버 DB 저장 지연 중 (로컬 데이터로 유지됨)");
+        
+        if(!res.ok) {
+            throw new Error("서버 응답 오류 (상태코드: " + res.status + ")");
+        }
+        return true; // 성공 시 true 반환
     } catch(e) {
-        console.warn("서버 통신 오류 (로컬 데이터로 유지됨)");
+        console.error("DB 업데이트 통신 실패:", e);
+        alert("❌ 서버 저장에 실패했습니다!\n(파이썬 코드가 Vercel에 정상적으로 배포(업데이트)되었는지 확인해주세요.)");
+        return false; // 실패 시 false 반환
     }
 }
 
@@ -80,8 +55,6 @@ function getAccDefaultPrice(itemName, supplier) {
 }
 
 function renderAccounting() {
-    syncAccountingCache(); // 화면 그리기 전 무조건 캐시 장착
-
     let type = document.getElementById('acc-type').value;
     let date = document.getElementById('acc-date').value;
     let start = document.getElementById('acc-period-start').value;
@@ -321,10 +294,11 @@ async function submitEditAccModal() {
 
     let updatePayload = [];
 
-    // 💡 즉시 로컬 데이터 변경 및 캐시 저장
     group.ids.forEach((id, i) => {
-        let h = globalHistory.find(x => x.id === id);
-        if(h) {
+        // 깊은 복사를 통해 로컬 데이터 오염 방지
+        let originalH = globalHistory.find(x => x.id === id);
+        if(originalH) {
+            let h = JSON.parse(JSON.stringify(originalH)); 
             h.category = newCat;
             h.item_name = newItem;
             h.production_date = newDate;
@@ -337,16 +311,17 @@ async function submitEditAccModal() {
                 h.acc_qty = 0;
                 h.acc_adj = 0;
             }
-            saveAccountingCache(h); 
             updatePayload.push(h);
         }
     });
 
     closeEditAccModal();
-    renderAccounting(); // 💡 DB 갔다 오기 전에 화면부터 0.1초 컷으로 즉시 갱신!
     
-    // 백그라운드에서 DB로 쏘기
-    await updateHistoryToDB(updatePayload); 
+    // DB 업데이트 시도
+    let success = await updateHistoryToDB(updatePayload);
+    if(success) {
+        await load(); // DB 저장이 완료된 경우에만 서버 데이터 다시 불러오기
+    }
 }
 
 async function confirmAccGroup(idx) {
@@ -354,24 +329,20 @@ async function confirmAccGroup(idx) {
     let group = currentAccGroupsByIndex[idx];
     let updatePayload = [];
     
-    // 💡 즉시 로컬 데이터 변경 및 캐시 저장
     group.ids.forEach(id => {
-        let h = globalHistory.find(x => x.id === id);
-        if(h) {
+        let originalH = globalHistory.find(x => x.id === id);
+        if(originalH) {
+            let h = JSON.parse(JSON.stringify(originalH)); 
             h.acc_status = '확정';
             if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
             if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
             if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
-            
-            saveAccountingCache(h);
             updatePayload.push(h);
         }
     });
 
-    renderAccounting(); // 💡 무조건 화면 먼저 '확정'으로 갈아끼움
-
-    // 백그라운드 DB 쏘기
-    await updateHistoryToDB(updatePayload);
+    let success = await updateHistoryToDB(updatePayload);
+    if(success) await load();
 }
 
 async function cancelAccGroupConfirm(idx) {
@@ -380,16 +351,16 @@ async function cancelAccGroupConfirm(idx) {
     let updatePayload = [];
     
     group.ids.forEach(id => {
-        let h = globalHistory.find(x => x.id === id);
-        if(h) { 
+        let originalH = globalHistory.find(x => x.id === id);
+        if(originalH) { 
+            let h = JSON.parse(JSON.stringify(originalH)); 
             h.acc_status = '미확정'; 
-            saveAccountingCache(h);
             updatePayload.push(h);
         }
     });
     
-    renderAccounting(); // 화면 즉시 반영
-    await updateHistoryToDB(updatePayload);
+    let success = await updateHistoryToDB(updatePayload);
+    if(success) await load();
 }
 
 async function deleteAccGroup(idx) {
@@ -398,17 +369,11 @@ async function deleteAccGroup(idx) {
     if(!confirm(`해당 내역(총 ${group.ids.length}건 병합됨)을 완전히 삭제하시겠습니까?\n(연결된 렉의 실제 재고도 함께 차감됩니다)`)) return;
     
     try {
-        // 즉시 화면 및 캐시 날리기
-        group.ids.forEach(id => localStorage.removeItem('acc_data_' + id));
-        globalHistory = globalHistory.filter(x => !group.ids.includes(x.id));
-        renderAccounting(); 
-
-        // DB 쏘기
         let promises = group.ids.map(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
         await Promise.all(promises);
-        
         alert("삭제 완료");
-    } catch(e) { alert("삭제 통신 실패 (하지만 화면에선 지워졌습니다)"); }
+        await load(); 
+    } catch(e) { alert("삭제 실패"); }
 }
 
 async function batchConfirmAccounting() {
@@ -420,21 +385,21 @@ async function batchConfirmAccounting() {
     if(!confirm(`현재 조회된 목록 중 미확정 건(${unconfirmedItems.length}건)을 모두 '확정' 처리하시겠습니까?\n(확정 시 금액 수정이 잠깁니다)`)) return;
 
     let updatePayload = [];
-    unconfirmedItems.forEach(h => {
+    unconfirmedItems.forEach(originalH => {
+        let h = JSON.parse(JSON.stringify(originalH)); 
         h.acc_status = '확정';
         if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
         if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
         if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
         
-        saveAccountingCache(h);
         updatePayload.push(h);
     });
 
-    renderAccounting(); // 화면 즉시 반영
-    alert(`성공적으로 일괄 확정되었습니다!`);
-    
-    // DB 쏘기
-    await updateHistoryToDB(updatePayload);
+    let success = await updateHistoryToDB(updatePayload);
+    if(success) {
+        alert(`성공적으로 일괄 확정되었습니다!`);
+        await load();
+    }
 }
 
 function exportAccountingExcel() {
