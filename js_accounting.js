@@ -1,8 +1,21 @@
 // ==========================================
-// [정산/회계] - 명세서 대조 및 확정 로직 (병합 처리 적용 + 수정 모달)
+// [정산/회계] - 명세서 대조 및 DB 영구 저장 로직
 // ==========================================
-let currentAccList = []; // 현재 필터링된 전체 내역
-let currentAccGroupsByIndex = []; // 💡 동일 일자/업체/품목으로 병합된 리스트
+let currentAccList = []; 
+let currentAccGroupsByIndex = []; 
+
+// 💡 1. 꼼수(캐시) 제거하고 진짜 DB로 쏘는 함수 추가!
+async function updateHistoryToDB(historyArray) {
+    try {
+        await fetch('/api/history_update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(historyArray)
+        });
+    } catch(e) {
+        console.error("DB 업데이트 통신 실패:", e);
+    }
+}
 
 function toggleAccDateInput() {
     let type = document.getElementById('acc-type').value;
@@ -71,7 +84,6 @@ function renderAccounting() {
         return;
     }
 
-    // 💡 모드 1: 개별 명세서 대조 (동일 일자/업체/제품은 1줄로 병합)
     if (group === 'individual') {
         thead.innerHTML = `
             <tr class="text-slate-600 text-xs">
@@ -101,7 +113,7 @@ function renderAccounting() {
                     cat: h.category || '',
                     item_name: h.item_name,
                     total_acc_qty: 0,
-                    acc_price: h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, sup),
+                    acc_price: h.acc_price !== null && h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, sup),
                     total_adj: 0,
                     isConfirmed: true 
                 };
@@ -109,7 +121,7 @@ function renderAccounting() {
             
             let g = groupedData[key];
             g.ids.push(h.id);
-            g.total_acc_qty += (h.acc_qty !== undefined ? h.acc_qty : h.quantity);
+            g.total_acc_qty += (h.acc_qty !== null && h.acc_qty !== undefined ? h.acc_qty : h.quantity);
             g.total_adj += (h.acc_adj || 0);
             if (h.acc_status !== '확정') g.isConfirmed = false;
         });
@@ -123,7 +135,6 @@ function renderAccounting() {
                 ? `<span class="bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-1 rounded font-black text-[10px] shadow-sm">✅ 확정됨</span>` 
                 : `<span class="bg-orange-100 text-orange-600 border border-orange-300 px-2 py-1 rounded font-black text-[10px] shadow-sm animate-pulse">⚠️ 미확정</span>`;
             
-            // 💡 인라인 input 제거하고 텍스트로 깔끔하게 변경 & 3버튼 로직 적용
             let actionBtns = g.isConfirmed 
                 ? `<button onclick="cancelAccGroupConfirm(${idx})" class="w-full text-slate-400 hover:text-slate-600 font-bold text-[10px] underline">확정 취소 풀기</button>` 
                 : `<div class="flex space-x-1 justify-center">
@@ -145,7 +156,6 @@ function renderAccounting() {
             </tr>`;
         }).join('');
     } 
-    // 💡 모드 2: 읽기 전용 그룹 요약 모드
     else {
         thead.innerHTML = `
             <tr class="text-slate-600 text-xs bg-slate-100">
@@ -166,8 +176,8 @@ function renderAccounting() {
 
             if(!grouped[key]) grouped[key] = { qty: 0, confirmedTotal: 0, unconfirmedTotal: 0 };
             
-            let qty = h.acc_qty !== undefined ? h.acc_qty : h.quantity;
-            let price = h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, sup);
+            let qty = h.acc_qty !== null && h.acc_qty !== undefined ? h.acc_qty : h.quantity;
+            let price = h.acc_price !== null && h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, sup);
             let adj = h.acc_adj || 0;
             let total = (qty * price) + adj;
 
@@ -193,8 +203,8 @@ function updateAccSummaryCards(list) {
     let unconfirmedTotal = 0;
 
     list.forEach(h => {
-        let qty = h.acc_qty !== undefined ? h.acc_qty : h.quantity;
-        let price = h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, h.remarks);
+        let qty = h.acc_qty !== null && h.acc_qty !== undefined ? h.acc_qty : h.quantity;
+        let price = h.acc_price !== null && h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, h.remarks);
         let adj = h.acc_adj || 0;
         let total = (qty * price) + adj;
 
@@ -214,7 +224,6 @@ function updateAccSummaryCards(list) {
     document.getElementById('acc-unconfirmed').innerText = unconfirmedTotal.toLocaleString() + ' 원';
 }
 
-// 💡 3. 수정 팝업 관련 로직 (드롭다운 연동)
 function openEditAccModal(idx) {
     if(loginMode === 'viewer') return;
     
@@ -224,7 +233,6 @@ function openEditAccModal(idx) {
     document.getElementById('edit-acc-idx').value = idx;
     document.getElementById('edit-acc-supplier').innerText = group.sup;
 
-    // 카테고리 필터링 셋팅
     let cats = [...new Set(productMaster.filter(p=>p.supplier === group.sup).map(p=>p.category))].filter(Boolean).sort();
     let catSel = document.getElementById('edit-acc-cat');
     catSel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
@@ -263,7 +271,8 @@ function closeEditAccModal() {
     modal.classList.remove('flex');
 }
 
-function submitEditAccModal() {
+// 💡 2. 수정 사항 DB로 전송하고 화면 갱신
+async function submitEditAccModal() {
     let idx = document.getElementById('edit-acc-idx').value;
     let group = currentAccGroupsByIndex[idx];
     if(!group) return;
@@ -276,6 +285,8 @@ function submitEditAccModal() {
     let newAdj = parseFloat(document.getElementById('edit-acc-adj').value) || 0;
 
     if(!newItem || newQty < 0 || !newDate) return alert("입력값을 확인해주세요.");
+
+    let updatePayload = [];
 
     // 병합된 히스토리 객체들에 데이터를 나눠서 담기
     group.ids.forEach((id, i) => {
@@ -294,33 +305,56 @@ function submitEditAccModal() {
                 h.acc_qty = 0;
                 h.acc_adj = 0;
             }
+            updatePayload.push(h);
         }
     });
 
     closeEditAccModal();
-    renderAccounting();
+    await updateHistoryToDB(updatePayload); // DB에 쏘기
+    await load(); // DB에서 최신 데이터 다시 불러와서 화면에 반영
 }
 
-function confirmAccGroup(idx) {
+// 💡 3. 그룹 확정 DB에 전송
+async function confirmAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
+    let updatePayload = [];
+    
     group.ids.forEach(id => {
         let h = globalHistory.find(x => x.id === id);
-        if(h) h.acc_status = '확정';
+        if(h) {
+            h.acc_status = '확정';
+            // 만약 acc_qty나 acc_price가 설정 안 되어있었다면 현재 값으로 픽스해서 넘김
+            if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
+            if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
+            if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
+            updatePayload.push(h);
+        }
     });
-    renderAccounting();
+
+    await updateHistoryToDB(updatePayload);
+    await load();
 }
 
-function cancelAccGroupConfirm(idx) {
+// 💡 4. 그룹 확정 취소 DB에 전송
+async function cancelAccGroupConfirm(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
+    let updatePayload = [];
+    
     group.ids.forEach(id => {
         let h = globalHistory.find(x => x.id === id);
-        if(h) h.acc_status = '미확정';
+        if(h) { 
+            h.acc_status = '미확정'; 
+            updatePayload.push(h);
+        }
     });
-    renderAccounting();
+    
+    await updateHistoryToDB(updatePayload);
+    await load();
 }
 
+// 💡 5. 그룹 전체 삭제 (DB 및 화면)
 async function deleteAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -329,28 +363,32 @@ async function deleteAccGroup(idx) {
     try {
         let promises = group.ids.map(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
         await Promise.all(promises);
-        
-        // 화면 즉시 반영
-        globalHistory = globalHistory.filter(x => !group.ids.includes(x.id));
-        renderAccounting();
         alert("삭제 완료");
+        await load(); // DB 재로딩
     } catch(e) { alert("삭제 실패"); }
 }
 
-function batchConfirmAccounting() {
+// 💡 6. 일괄 확정 DB 연동
+async function batchConfirmAccounting() {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     
-    let unconfirmedCount = currentAccList.filter(h => h.acc_status !== '확정').length;
-    if(unconfirmedCount === 0) return alert("현재 조회된 내역 중 미확정 건이 없습니다.");
+    let unconfirmedItems = currentAccList.filter(h => h.acc_status !== '확정');
+    if(unconfirmedItems.length === 0) return alert("현재 조회된 내역 중 미확정 건이 없습니다.");
 
-    if(!confirm(`현재 조회된 목록 중 미확정 건(${unconfirmedCount}건)을 모두 '확정' 처리하시겠습니까?\n(확정 시 금액 수정이 잠깁니다)`)) return;
+    if(!confirm(`현재 조회된 목록 중 미확정 건(${unconfirmedItems.length}건)을 모두 '확정' 처리하시겠습니까?\n(확정 시 금액 수정이 잠깁니다)`)) return;
 
-    currentAccList.forEach(h => {
-        if(h.acc_status !== '확정') h.acc_status = '확정';
+    let updatePayload = [];
+    unconfirmedItems.forEach(h => {
+        h.acc_status = '확정';
+        if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
+        if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
+        if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
+        updatePayload.push(h);
     });
 
-    renderAccounting();
+    await updateHistoryToDB(updatePayload);
     alert(`성공적으로 일괄 확정되었습니다!`);
+    await load();
 }
 
 function exportAccountingExcel() {
