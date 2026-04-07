@@ -1,10 +1,10 @@
 // ==========================================
-// [정산/회계] - 명세서 대조 및 확정 로직 (병합 처리 + 100% 무적 캐시 저장)
+// [정산/회계] - 명세서 대조 및 확정 로직 (Supabase 100% 영구 저장 연동)
 // ==========================================
 let currentAccList = []; 
 let currentAccGroupsByIndex = []; 
 
-// 💡 파이썬 API 호출을 시도하되, 실패해도 무조건 브라우저 캐시에 저장해서 상태를 완벽하게 유지!
+// 💡 꼼수(캐시) 버리고 진짜 파이썬 서버 통과해서 DB에 꽂아넣는 함수
 async function updateHistoryToDB(historyArray) {
     try {
         await fetch('/api/history_update', {
@@ -13,39 +13,9 @@ async function updateHistoryToDB(historyArray) {
             body: JSON.stringify(historyArray)
         });
     } catch(e) {
-        console.warn("API 호출 실패, 로컬 캐시로 대체합니다.");
+        console.error("DB 업데이트 통신 실패:", e);
+        alert("서버 저장 중 오류가 발생했습니다.");
     }
-}
-
-// 💡 탭 이동/새로고침 시 무조건 로컬 캐시를 덮어씌워서 DB 원본을 이기게 만듦!
-function syncAccountingCache() {
-    globalHistory.forEach(h => {
-        let cached = localStorage.getItem('acc_data_' + h.id);
-        if (cached) {
-            try {
-                let parsed = JSON.parse(cached);
-                h.acc_status = parsed.acc_status;
-                h.acc_qty = parsed.acc_qty;
-                h.acc_price = parsed.acc_price;
-                h.acc_adj = parsed.acc_adj;
-                h.category = parsed.category || h.category;
-                h.item_name = parsed.item_name || h.item_name;
-                h.production_date = parsed.production_date || h.production_date;
-            } catch(e) {}
-        }
-    });
-}
-
-function saveAccountingCache(h) {
-    localStorage.setItem('acc_data_' + h.id, JSON.stringify({
-        acc_status: h.acc_status,
-        acc_qty: h.acc_qty,
-        acc_price: h.acc_price,
-        acc_adj: h.acc_adj,
-        category: h.category,
-        item_name: h.item_name,
-        production_date: h.production_date
-    }));
 }
 
 function toggleAccDateInput() {
@@ -79,9 +49,6 @@ function getAccDefaultPrice(itemName, supplier) {
 }
 
 function renderAccounting() {
-    // 💡 화면 렌더링 직전에 무조건 캐시를 불러와 상태 풀림 방지
-    syncAccountingCache();
-
     let type = document.getElementById('acc-type').value;
     let date = document.getElementById('acc-date').value;
     let start = document.getElementById('acc-period-start').value;
@@ -321,6 +288,7 @@ async function submitEditAccModal() {
 
     let updatePayload = [];
 
+    // 병합된 모든 기록에 변경사항 적용
     group.ids.forEach((id, i) => {
         let h = globalHistory.find(x => x.id === id);
         if(h) {
@@ -328,17 +296,21 @@ async function submitEditAccModal() {
             h.item_name = newItem;
             h.production_date = newDate;
             h.acc_price = newPrice;
-            if(i === 0) { h.acc_qty = newQty; h.acc_adj = newAdj; } 
-            else { h.acc_qty = 0; h.acc_adj = 0; }
             
-            saveAccountingCache(h); // 💡 수정 내용을 캐시에 바로 저장
+            if(i === 0) {
+                h.acc_qty = newQty;
+                h.acc_adj = newAdj;
+            } else {
+                h.acc_qty = 0;
+                h.acc_adj = 0;
+            }
             updatePayload.push(h);
         }
     });
 
     closeEditAccModal();
-    await updateHistoryToDB(updatePayload); 
-    await load(); 
+    await updateHistoryToDB(updatePayload); // 💡 DB 쏘기
+    await load(); // 💡 DB에서 갓 구운 데이터 다시 불러오기
 }
 
 async function confirmAccGroup(idx) {
@@ -354,13 +326,12 @@ async function confirmAccGroup(idx) {
             if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
             if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
             
-            saveAccountingCache(h); // 💡 확정 상태 캐시 저장
             updatePayload.push(h);
         }
     });
 
-    await updateHistoryToDB(updatePayload);
-    await load();
+    await updateHistoryToDB(updatePayload); // 💡 DB 쏘기
+    await load(); // 💡 화면 갱신
 }
 
 async function cancelAccGroupConfirm(idx) {
@@ -372,13 +343,12 @@ async function cancelAccGroupConfirm(idx) {
         let h = globalHistory.find(x => x.id === id);
         if(h) { 
             h.acc_status = '미확정'; 
-            saveAccountingCache(h); // 💡 확정 취소 상태 캐시 저장
             updatePayload.push(h);
         }
     });
     
-    await updateHistoryToDB(updatePayload);
-    await load();
+    await updateHistoryToDB(updatePayload); // 💡 DB 쏘기
+    await load(); // 💡 화면 갱신
 }
 
 async function deleteAccGroup(idx) {
@@ -389,12 +359,8 @@ async function deleteAccGroup(idx) {
     try {
         let promises = group.ids.map(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
         await Promise.all(promises);
-        
-        group.ids.forEach(id => localStorage.removeItem('acc_data_' + id)); // 💡 삭제 시 캐시도 같이 날림
-        globalHistory = globalHistory.filter(x => !group.ids.includes(x.id));
-        
         alert("삭제 완료");
-        await load(); 
+        await load(); // 💡 DB 재로딩
     } catch(e) { alert("삭제 실패"); }
 }
 
@@ -413,13 +379,12 @@ async function batchConfirmAccounting() {
         if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
         if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
         
-        saveAccountingCache(h); // 💡 일괄 확정 상태 캐시 저장
         updatePayload.push(h);
     });
 
-    await updateHistoryToDB(updatePayload);
+    await updateHistoryToDB(updatePayload); // 💡 DB 쏘기
     alert(`성공적으로 일괄 확정되었습니다!`);
-    await load();
+    await load(); // 💡 DB 재로딩
 }
 
 function exportAccountingExcel() {
