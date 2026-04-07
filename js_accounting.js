@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] - 명세서 대조 및 확정 로직 (병합 처리 적용)
+// [정산/회계] - 명세서 대조 및 확정 로직 (병합 처리 적용 + 수정 모달)
 // ==========================================
 let currentAccList = []; // 현재 필터링된 전체 내역
 let currentAccGroupsByIndex = []; // 💡 동일 일자/업체/품목으로 병합된 리스트
@@ -34,7 +34,6 @@ function getAccDefaultPrice(itemName, supplier) {
     return pInfo ? (pInfo.unit_price || 0) : 0;
 }
 
-// 💡 1. 화면 렌더링 (병합 로직 핵심)
 function renderAccounting() {
     let type = document.getElementById('acc-type').value;
     let date = document.getElementById('acc-date').value;
@@ -80,14 +79,13 @@ function renderAccounting() {
                 <th class="p-3 font-black">일자</th>
                 <th class="p-3 font-black">매입처</th>
                 <th class="p-3 font-black">품목명</th>
-                <th class="p-3 font-black text-right text-indigo-700">총수량(EA) ✎</th>
-                <th class="p-3 font-black text-right text-indigo-700">단가(원) ✎</th>
-                <th class="p-3 font-black text-right text-indigo-700">조정액(원) ✎</th>
+                <th class="p-3 font-black text-right text-indigo-700">총수량(EA)</th>
+                <th class="p-3 font-black text-right text-emerald-700">단가(원)</th>
+                <th class="p-3 font-black text-right text-rose-700">조정액(원)</th>
                 <th class="p-3 font-black text-right text-blue-700">최종합계</th>
-                <th class="p-3 font-black text-center text-rose-600 w-32">관리</th>
+                <th class="p-3 font-black text-center text-slate-500 w-[160px]">관리</th>
             </tr>`;
 
-        // 💡 파레트별 데이터를 한 덩어리로 묶기 (Grouping)
         let groupedData = {};
         filtered.forEach(h => {
             let hDate = h.production_date || h.created_at.substring(0, 10);
@@ -97,14 +95,15 @@ function renderAccounting() {
             if(!groupedData[key]) {
                 groupedData[key] = {
                     key: key,
-                    ids: [], // 이 그룹에 속한 실제 DB 기록 ID들
+                    ids: [], 
                     hDate: hDate,
                     sup: sup,
+                    cat: h.category || '',
                     item_name: h.item_name,
                     total_acc_qty: 0,
                     acc_price: h.acc_price !== undefined ? h.acc_price : getAccDefaultPrice(h.item_name, sup),
                     total_adj: 0,
-                    isConfirmed: true // 하나라도 미확정이면 false로 바뀜
+                    isConfirmed: true 
                 };
             }
             
@@ -124,14 +123,12 @@ function renderAccounting() {
                 ? `<span class="bg-emerald-100 text-emerald-700 border border-emerald-300 px-2 py-1 rounded font-black text-[10px] shadow-sm">✅ 확정됨</span>` 
                 : `<span class="bg-orange-100 text-orange-600 border border-orange-300 px-2 py-1 rounded font-black text-[10px] shadow-sm animate-pulse">⚠️ 미확정</span>`;
             
-            let disabled = g.isConfirmed 
-                ? 'disabled class="w-full bg-slate-100 text-slate-400 rounded p-1.5 text-right font-bold border border-transparent cursor-not-allowed text-xs"' 
-                : 'class="w-full border-2 border-indigo-200 rounded p-1.5 text-right font-black text-indigo-700 outline-none focus:border-indigo-500 bg-indigo-50/50 hover:bg-white transition-colors text-xs"';
-            
+            // 💡 인라인 input 제거하고 텍스트로 깔끔하게 변경 & 3버튼 로직 적용
             let actionBtns = g.isConfirmed 
                 ? `<button onclick="cancelAccGroupConfirm(${idx})" class="w-full text-slate-400 hover:text-slate-600 font-bold text-[10px] underline">확정 취소 풀기</button>` 
                 : `<div class="flex space-x-1 justify-center">
-                    <button onclick="confirmAccGroup(${idx})" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1.5 rounded text-[10px] font-bold shadow-sm transition-colors">확정</button>
+                    <button onclick="confirmAccGroup(${idx})" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white py-1.5 rounded text-[10px] font-bold shadow-sm transition-colors">확정</button>
+                    <button onclick="openEditAccModal(${idx})" class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-1.5 rounded text-[10px] font-bold shadow-sm transition-colors">수정</button>
                     <button onclick="deleteAccGroup(${idx})" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-500 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm transition-colors">삭제</button>
                    </div>`;
 
@@ -140,9 +137,9 @@ function renderAccounting() {
                 <td class="p-3 text-xs font-bold text-slate-600">${g.hDate}</td>
                 <td class="p-3 text-xs font-black text-rose-600">${g.sup}</td>
                 <td class="p-3 text-xs font-black text-slate-800">${g.item_name} <span class="text-[9px] text-slate-400 ml-1">(${g.ids.length}건 병합)</span></td>
-                <td class="p-3 w-24"><input type="number" value="${g.total_acc_qty}" onchange="updateAccGroupField(${idx}, 'acc_qty', this.value)" ${disabled}></td>
-                <td class="p-3 w-28"><input type="number" value="${g.acc_price}" onchange="updateAccGroupField(${idx}, 'acc_price', this.value)" ${disabled}></td>
-                <td class="p-3 w-28"><input type="number" value="${g.total_adj}" placeholder="0" onchange="updateAccGroupField(${idx}, 'acc_adj', this.value)" ${disabled}></td>
+                <td class="p-3 text-right font-black text-indigo-700 text-sm">${g.total_acc_qty.toLocaleString()}</td>
+                <td class="p-3 text-right font-black text-emerald-700 text-sm">${g.acc_price.toLocaleString()}</td>
+                <td class="p-3 text-right font-black text-rose-700 text-sm">${g.total_adj.toLocaleString()}</td>
                 <td class="p-3 text-right font-black text-blue-700 text-sm" id="acc-total-${idx}">${total.toLocaleString()}</td>
                 <td class="p-3 text-center align-middle">${actionBtns}</td>
             </tr>`;
@@ -191,7 +188,6 @@ function renderAccounting() {
     }
 }
 
-// 💡 2. 상단 요약 카드 업데이트 (확정 vs 미확정 분리)
 function updateAccSummaryCards(list) {
     let confirmedSupply = 0;
     let unconfirmedTotal = 0;
@@ -218,37 +214,93 @@ function updateAccSummaryCards(list) {
     document.getElementById('acc-unconfirmed').innerText = unconfirmedTotal.toLocaleString() + ' 원';
 }
 
-// 💡 3. 병합된 필드 수정 시 하위 파레트들에 값 자동 분배 저장
-function updateAccGroupField(idx, field, value) {
+// 💡 3. 수정 팝업 관련 로직 (드롭다운 연동)
+function openEditAccModal(idx) {
     if(loginMode === 'viewer') return;
+    
     let group = currentAccGroupsByIndex[idx];
     if(!group) return;
+
+    document.getElementById('edit-acc-idx').value = idx;
+    document.getElementById('edit-acc-supplier').innerText = group.sup;
+
+    // 카테고리 필터링 셋팅
+    let cats = [...new Set(productMaster.filter(p=>p.supplier === group.sup).map(p=>p.category))].filter(Boolean).sort();
+    let catSel = document.getElementById('edit-acc-cat');
+    catSel.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join('');
     
-    let val = parseFloat(value) || 0;
+    if(cats.includes(group.cat)) catSel.value = group.cat;
+    else if(cats.length > 0) catSel.value = cats[0];
+
+    updateEditAccCategoryDropdown(group.item_name);
+
+    document.getElementById('edit-acc-qty').value = group.total_acc_qty;
+    document.getElementById('edit-acc-date').value = group.hDate;
+    document.getElementById('edit-acc-price').value = group.acc_price;
+    document.getElementById('edit-acc-adj').value = group.total_adj;
+
+    let modal = document.getElementById('edit-acc-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function updateEditAccCategoryDropdown(selectedItem = null) {
+    let sup = document.getElementById('edit-acc-supplier').innerText;
+    let cat = document.getElementById('edit-acc-cat').value;
     
-    // 수량이나 조정액은 묶여있는 여러 파레트 중 '첫 번째 데이터'에 몰아서 저장하고 나머지는 0으로 만듦 (합산오류 방지)
-    if (field === 'acc_qty') {
-        group.ids.forEach((id, i) => {
-            let h = globalHistory.find(x => x.id === id);
-            if(h) h.acc_qty = (i === 0) ? val : 0;
-        });
-    } else if (field === 'acc_adj') {
-        group.ids.forEach((id, i) => {
-            let h = globalHistory.find(x => x.id === id);
-            if(h) h.acc_adj = (i === 0) ? val : 0;
-        });
-    } else if (field === 'acc_price') {
-        // 단가는 묶여있는 모든 파레트에 공통으로 똑같이 적용
-        group.ids.forEach(id => {
-            let h = globalHistory.find(x => x.id === id);
-            if(h) h.acc_price = val;
-        });
+    let items = [...new Set(productMaster.filter(p=>p.supplier===sup && p.category===cat).map(p=>p.item_name))].filter(Boolean).sort();
+    let itemSel = document.getElementById('edit-acc-item');
+    itemSel.innerHTML = items.map(i => `<option value="${i}">${i}</option>`).join('');
+    
+    if(selectedItem && items.includes(selectedItem)) {
+        itemSel.value = selectedItem;
     }
-    
+}
+
+function closeEditAccModal() {
+    let modal = document.getElementById('edit-acc-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function submitEditAccModal() {
+    let idx = document.getElementById('edit-acc-idx').value;
+    let group = currentAccGroupsByIndex[idx];
+    if(!group) return;
+
+    let newCat = document.getElementById('edit-acc-cat').value;
+    let newItem = document.getElementById('edit-acc-item').value;
+    let newQty = parseInt(document.getElementById('edit-acc-qty').value) || 0;
+    let newDate = document.getElementById('edit-acc-date').value;
+    let newPrice = parseFloat(document.getElementById('edit-acc-price').value) || 0;
+    let newAdj = parseFloat(document.getElementById('edit-acc-adj').value) || 0;
+
+    if(!newItem || newQty < 0 || !newDate) return alert("입력값을 확인해주세요.");
+
+    // 병합된 히스토리 객체들에 데이터를 나눠서 담기
+    group.ids.forEach((id, i) => {
+        let h = globalHistory.find(x => x.id === id);
+        if(h) {
+            h.category = newCat;
+            h.item_name = newItem;
+            h.production_date = newDate;
+            h.acc_price = newPrice;
+            
+            // 수량과 조정액은 첫 번째 파레트에 몰아주고 나머지는 0으로 만들어 합계 오류 방지
+            if(i === 0) {
+                h.acc_qty = newQty;
+                h.acc_adj = newAdj;
+            } else {
+                h.acc_qty = 0;
+                h.acc_adj = 0;
+            }
+        }
+    });
+
+    closeEditAccModal();
     renderAccounting();
 }
 
-// 💡 4. 병합된 행 확정 처리 (하위 파레트 모두 확정)
 function confirmAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -259,7 +311,6 @@ function confirmAccGroup(idx) {
     renderAccounting();
 }
 
-// 💡 5. 병합된 행 확정 취소
 function cancelAccGroupConfirm(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -270,7 +321,6 @@ function cancelAccGroupConfirm(idx) {
     renderAccounting();
 }
 
-// 💡 6. 병합된 그룹 전체 삭제 (잘못 입고된 건)
 async function deleteAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
@@ -287,7 +337,6 @@ async function deleteAccGroup(idx) {
     } catch(e) { alert("삭제 실패"); }
 }
 
-// 💡 7. 전체 일괄 확정 기능 (화면에 보이는 미확정 건 모두)
 function batchConfirmAccounting() {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     
@@ -304,7 +353,6 @@ function batchConfirmAccounting() {
     alert(`성공적으로 일괄 확정되었습니다!`);
 }
 
-// 💡 8. 엑셀 다운로드 (병합된 화면 그대로 다운로드)
 function exportAccountingExcel() {
     if (currentAccGroupsByIndex.length === 0) return alert("다운로드할 데이터가 없습니다.");
     
