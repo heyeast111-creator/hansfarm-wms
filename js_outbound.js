@@ -1,11 +1,11 @@
 // ==========================================
-// [출고관리] - 서류 출력 전용 시스템 (재고 차감 X)
+// [출고관리] - 서류 출력 전용 시스템
 // ==========================================
 
 let parsedOutboundData = []; 
 let currentClientKey = '';
 
-// 💡 1. 업체별 엑셀 양식 매핑 룰
+// 1. 업체별 엑셀 양식 매핑 룰
 const outboundMappings = {
     'LOTTE': {
         name: '롯데 (롯데마트/슈퍼)',
@@ -64,7 +64,6 @@ const outboundMappings = {
     }
 };
 
-// 💡 2. 데이터 정제 함수들
 function cleanText(txt) {
     if(!txt) return '';
     return String(txt).replace(/\s+/g, '').trim(); 
@@ -87,21 +86,13 @@ function parseQuantity(val, rule) {
 function parseExcelDate(val, rule) {
     if(!val) return '';
     let str = String(val).trim();
-    
     if(rule === 'EXCEL_SERIAL') {
         let num = parseFloat(str);
-        if(!isNaN(num)) {
-            let date = new Date(Math.round((num - 25569) * 86400 * 1000));
-            return date.toISOString().split('T')[0];
-        }
-    } 
-    else if (rule === 'YYYYMMDD_14') {
+        if(!isNaN(num)) return new Date(Math.round((num - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+    } else if (rule === 'YYYYMMDD_14') {
         if(str.length >= 8) return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`;
     }
-    
-    if(str.length === 8 && !str.includes('-')) {
-        return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`; 
-    }
+    if(str.length === 8 && !str.includes('-')) return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`; 
     return str; 
 }
 
@@ -111,7 +102,6 @@ function extractEaPerBox(itemName) {
     return 1; 
 }
 
-// 💡 3. 화면 UI 렌더링
 function renderOutboundUI() {
     const container = document.getElementById('view-outbound');
     if(!container) return;
@@ -149,7 +139,7 @@ function renderOutboundUI() {
                 <div class="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
                     <div class="font-black text-slate-700">📋 정제된 발주 데이터 <span id="outbound-count" class="text-indigo-600 ml-2">0건</span></div>
                     <button onclick="printDeliveryNotes()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-black shadow-md transition-colors hidden animate-pulse" id="outbound-confirm-btn">
-                        🖨️ 맞춤형 거래명세서 일괄 인쇄
+                        🖨️ 고객사별 맞춤 거래명세서 일괄 인쇄
                     </button>
                 </div>
                 <div class="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
@@ -157,15 +147,15 @@ function renderOutboundUI() {
                         <thead id="outbound-thead" class="sticky top-0 bg-slate-100 border-b border-slate-200 shadow-sm z-10">
                             <tr class="text-slate-600 text-xs">
                                 <th class="p-3 font-black text-center">No.</th>
+                                <th class="p-3 font-black text-center">센터명</th>
                                 <th class="p-3 font-black">납품일자</th>
-                                <th class="p-3 font-black">배송처 (합산기준)</th>
+                                <th class="p-3 font-black">배송처(점포)</th>
                                 <th class="p-3 font-black text-blue-700">품목명 (원문)</th>
                                 <th class="p-3 font-black text-right text-rose-600">수량(EA)</th>
-                                <th class="p-3 font-black text-right">단가(원)</th>
                             </tr>
                         </thead>
                         <tbody id="outbound-tbody" class="divide-y divide-slate-100">
-                            <tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">엑셀을 업로드하면 고객사 규칙에 따라 데이터가 묶입니다.</td></tr>
+                            <tr><td colspan="6" class="p-10 text-center text-slate-400 font-bold">엑셀을 업로드하면 자동으로 정제됩니다.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -192,22 +182,32 @@ async function processOutboundExcel() {
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
             
+            // 💡 [핵심] 롯데의 경우 '점포(센터)' 글자를 찾아 실제 센터명(오산, 용인 등)을 추출
+            let centerName = '기본물류센터';
+            if (currentClientKey === 'LOTTE') {
+                for(let r=0; r<10; r++) {
+                    if(!rawData[r]) continue;
+                    let cIdx = rawData[r].findIndex(cell => String(cell).replace(/\s/g,'') === '점포(센터)');
+                    if(cIdx !== -1 && rawData[r+1]) {
+                        centerName = String(rawData[r+1][cIdx]).trim();
+                        break;
+                    }
+                }
+            }
+
             let actualHeaderRow = -1;
             let idxItem = -1, idxQty = -1, idxPrice = -1, idxDest = -1, idxDate = -1;
 
             const targetItemName = cleanText(mapping.colItemName);
             const targetQtyName = cleanText(mapping.colQty);
 
-            // 헤더 자동 탐색 (최대 20번째 줄)
             for(let r = 0; r < Math.min(rawData.length, 20); r++) {
                 const row = rawData[r].map(h => cleanText(h));
                 let tempIdxItem = row.findIndex(h => h.includes(targetItemName));
                 let tempIdxQty = row.findIndex(h => h.includes(targetQtyName));
 
                 if(tempIdxItem !== -1 && tempIdxQty !== -1) {
-                    // CJ-CU의 경우 헤더가 2줄이라 첫 줄에 걸리면 스킵하고 다음 줄을 진짜 헤더로 잡음
                     if (currentClientKey === 'CJ-CU' && r === 0) continue; 
-                    
                     actualHeaderRow = r;
                     idxItem = tempIdxItem;
                     idxQty = tempIdxQty;
@@ -230,10 +230,7 @@ async function processOutboundExcel() {
 
                 let dest = idxDest !== -1 ? preserveText(row[idxDest]) : '기본 배송처';
                 
-                // 💡 [핵심 규칙] SSG를 제외한 나머지는 모두 본사로 합산!
-                if(currentClientKey === 'LOTTE') {
-                    dest = '롯데쇼핑(주)';
-                } else if(currentClientKey === 'CJ-CU' || currentClientKey === 'CJ-GS' || currentClientKey === 'GS') {
+                if(currentClientKey === 'CJ-CU' || currentClientKey === 'CJ-GS' || currentClientKey === 'GS') {
                     dest = '씨제이제일제당 주식회사';
                 }
 
@@ -241,6 +238,7 @@ async function processOutboundExcel() {
                     client_name: mapping.name,
                     expected_date: parseExcelDate(idxDate !== -1 ? row[idxDate] : '', mapping.parseDate),
                     destination: dest,
+                    center_name: centerName, // 센터명 저장
                     original_item_name: preserveText(row[idxItem]),
                     quantity: finalQty,
                     unit_price: parseQuantity(idxPrice !== -1 ? row[idxPrice] : 0, mapping.parsePrice)
@@ -254,7 +252,6 @@ async function processOutboundExcel() {
     reader.readAsArrayBuffer(file);
 }
 
-// 💡 5. 추출된 데이터 중복 합산 및 화면 렌더링
 function renderOutboundPreview() {
     const tbody = document.getElementById('outbound-tbody');
     const countSpan = document.getElementById('outbound-count');
@@ -267,375 +264,164 @@ function renderOutboundPreview() {
         return;
     }
 
-    let merged = {};
-    parsedOutboundData.forEach(item => {
-        let key = item.destination + '|' + item.expected_date + '|' + item.original_item_name;
-        if(!merged[key]) {
-            merged[key] = { ...item };
-        } else {
-            merged[key].quantity += item.quantity;
-        }
-    });
-
-    let displayData = Object.values(merged);
-
-    countSpan.innerText = `${displayData.length}건 (합산됨)`;
+    countSpan.innerText = `${parsedOutboundData.length}건`;
     confirmBtn.classList.remove('hidden');
 
-    tbody.innerHTML = displayData.map((item, idx) => `
+    tbody.innerHTML = parsedOutboundData.map((item, idx) => `
         <tr class="hover:bg-indigo-50/50 border-b border-slate-100">
             <td class="p-3 text-center text-xs text-slate-400 font-bold">${idx + 1}</td>
+            <td class="p-3 text-center text-xs font-bold text-emerald-600">${item.center_name || '-'}</td>
             <td class="p-3 text-xs font-bold text-slate-600">${item.expected_date || '-'}</td>
-            <td class="p-3 text-xs font-black text-rose-600">${item.destination}</td>
+            <td class="p-3 text-xs font-black text-slate-700">${item.destination}</td>
             <td class="p-3 text-xs font-black text-blue-700">${item.original_item_name}</td>
             <td class="p-3 text-right font-black text-rose-600">${item.quantity.toLocaleString()}</td>
-            <td class="p-3 text-right font-bold text-slate-500">${item.unit_price.toLocaleString()}</td>
         </tr>
     `).join('');
 }
 
-// 💡 6. [핵심] 고객사별 사진과 100% 동일한 맞춤 템플릿 생성 로직
+// 💡 6. [핵심] 고객사별 맞춤 템플릿 인쇄 엔진 (LOTTE 전용 크로스탭 완벽 구현)
 function printDeliveryNotes() {
     if(parsedOutboundData.length === 0) return alert("출력할 데이터가 없습니다.");
 
-    // 데이터 합산 (목적지 + 날짜 기준)
-    let printGroups = {};
-    parsedOutboundData.forEach(item => {
-        let dest = item.destination;
-        let dateKey = item.expected_date || new Date().toISOString().split('T')[0];
-        let groupKey = dest + "_" + dateKey;
-        
-        if(!printGroups[groupKey]) {
-            printGroups[groupKey] = { dest: dest, date: dateKey, items: {}, totalAmount: 0 };
-        }
-        
-        if(!printGroups[groupKey].items[item.original_item_name]) {
-            printGroups[groupKey].items[item.original_item_name] = { ...item, quantity: 0 };
-        }
-        printGroups[groupKey].items[item.original_item_name].quantity += item.quantity;
-    });
-
     let htmlContent = '';
-    
-    for(let key in printGroups) {
-        let data = printGroups[key];
-        let itemsArr = Object.values(data.items);
-        
-        let sumAmount = 0;
-        let sumTax = 0;
-        let sumQty = 0;
-        itemsArr.forEach(i => {
-            let amt = i.quantity * i.unit_price;
-            let tx = Math.round(amt * 0.1);
-            sumAmount += amt;
-            sumTax += tx;
-            sumQty += i.quantity;
+
+    // ==========================================
+    // 📝 롯데 (LOTTE) 전용: 크로스탭 (Pivot) 양식
+    // ==========================================
+    if (currentClientKey === 'LOTTE') {
+        let centerGroups = {};
+        // 센터 및 날짜별로 그룹화
+        parsedOutboundData.forEach(item => {
+            let center = item.center_name || '물류센터';
+            let dateKey = item.expected_date || new Date().toISOString().split('T')[0];
+            let groupKey = center + "_" + dateKey;
+            
+            if(!centerGroups[groupKey]) {
+                centerGroups[groupKey] = { center: center, date: dateKey, items: [] };
+            }
+            centerGroups[groupKey].items.push(item);
         });
 
-        // ==========================================
-        // 📝 템플릿 1: 롯데 (LOTTE)
-        // ==========================================
-        if (currentClientKey === 'LOTTE') {
+        for(let key in centerGroups) {
+            let data = centerGroups[key];
+            // 고유 품목명 목록 추출 (열 생성용)
+            let productNames = [...new Set(data.items.map(i => i.original_item_name))].sort();
+            
+            // 점포별로 묶기 (행 생성용)
+            let stores = {};
+            data.items.forEach(i => {
+                if(!stores[i.destination]) {
+                    let match = i.destination.match(/\((\d+)\)/);
+                    let code = match ? match[1] : '';
+                    let name = i.destination.replace(/\(\d+\)/, '').trim();
+                    stores[i.destination] = { code: code, name: name, products: {}, total: 0 };
+                    productNames.forEach(p => stores[i.destination].products[p] = 0);
+                }
+                stores[i.destination].products[i.original_item_name] += i.quantity;
+                stores[i.destination].total += i.quantity;
+            });
+            
+            // 점포명/코드 기준 정렬
+            let storeKeys = Object.keys(stores).sort((a,b) => stores[a].code.localeCompare(stores[b].code));
+            
+            // 각 품목별 총합 계산
+            let productTotals = {};
+            productNames.forEach(p => productTotals[p] = 0);
+            let grandTotal = 0;
+            data.items.forEach(i => {
+                productTotals[i.original_item_name] += i.quantity;
+                grandTotal += i.quantity;
+            });
+
+            // 날짜 포맷 (2026 년 04 월 09 일)
+            let year = data.date.substring(0,4);
+            let month = data.date.substring(5,7);
+            let day = data.date.substring(8,10);
+            let printDateStr = `${year} 년 ${month} 월 ${day} 일`;
+
             htmlContent += `
             <div class="page-break" style="width: 100%; box-sizing: border-box; background: #fff; color: #000; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;">
-                <h1 style="text-align: center; font-size: 26px; font-weight: bold; letter-spacing: 10px; text-decoration: underline; margin-bottom: 20px;">
-                    거 래 명 세 서 <span style="font-size:12px; letter-spacing:normal; text-decoration:none;">(공급받는자용)</span>
-                </h1>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 12px;">
-                    <div style="width: 48%;">
-                        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 100px;">
-                            <tr>
-                                <td rowspan="4" style="width: 25px; text-align: center; border-right: 1px solid #000; font-weight: bold;">공<br>급<br>받<br>는<br>자</td>
-                                <td style="width: 60px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
-                                <td colspan="3" style="border: 1px solid #000; padding: 0 10px; font-size: 14px; font-weight: bold; text-align:center;">214 - 81 - 07777</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">롯데쇼핑(주)</td>
-                                <td style="width: 40px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
-                                <td style="border: 1px solid #000; padding: 0 10px;">정준호</td>
-                            </tr>
-                            <tr><td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td><td colspan="3" style="border: 1px solid #000; padding: 0 5px;"></td></tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td><td style="border: 1px solid #000; padding: 0 10px; width: 30%;"></td>
-                                <td style="width: 50px; text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td><td style="border: 1px solid #000; padding: 0 10px;"></td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div style="width: 48%;">
-                        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 100px;">
-                            <tr>
-                                <td rowspan="4" style="width: 25px; text-align: center; border-right: 1px solid #000; font-weight: bold;">공<br>급<br>자</td>
-                                <td style="width: 60px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
-                                <td colspan="3" style="border: 1px solid #000; padding: 0 10px; text-align: center; font-size: 14px; font-weight: bold;">126 - 81 - 70776</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">농업회사법인(주)한스팜</td>
-                                <td style="width: 40px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; text-align: center;">한 스 팜</td>
-                            </tr>
-                            <tr><td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td><td colspan="3" style="border: 1px solid #000; padding: 0 5px; font-size:11px;">경기도 여주시 백사면 현방리</td></tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td><td style="border: 1px solid #000; padding: 0 10px;">제조,도소매</td>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td><td style="border: 1px solid #000; padding: 0 5px; font-size:11px;">농산물(계란)</td>
-                            </tr>
-                        </table>
+                <div style="margin-bottom: 20px; position:relative;">
+                    <div style="position:absolute; top:0; left:0; font-size:12px; font-weight:bold;">${printDateStr}</div>
+                    <div style="position:absolute; top:0; right:0; font-size:12px; font-weight:bold;">등록: 428-81-00702</div>
+                    <h1 style="text-align:center; font-size:24px; font-weight:bold; margin-top:10px;">거 래 명 세 서</h1>
+                    
+                    <div style="display:flex; justify-content:space-between; margin-top:15px; font-size:12px;">
+                        <div style="width:40%; padding-top:25px;">
+                            <div style="font-size:18px; font-weight:bold;">롯데마트 ${data.center} 귀하</div>
+                        </div>
+                        <div style="width:50%;">
+                            <table style="width:100%; border-collapse:collapse; border:2px solid #000;">
+                                <tr>
+                                    <td rowspan="3" style="width:20px; text-align:center; border:1px solid #000; font-weight:bold;">공<br>급<br>자</td>
+                                    <td style="width:40px; text-align:center; border:1px solid #000;">상호</td>
+                                    <td style="border:1px solid #000; padding-left:5px; font-weight:bold;">농업회사법인(주)한스팜</td>
+                                    <td style="width:40px; text-align:center; border:1px solid #000;">대표</td>
+                                    <td style="border:1px solid #000; padding-left:5px;">한만응</td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:center; border:1px solid #000;">주소</td>
+                                    <td colspan="3" style="border:1px solid #000; padding-left:5px;">경기도 여주시 삼교3길 16-1</td>
+                                </tr>
+                                <tr>
+                                    <td style="text-align:center; border:1px solid #000;">업태</td>
+                                    <td style="border:1px solid #000; padding-left:5px;"></td>
+                                    <td style="text-align:center; border:1px solid #000;">종목</td>
+                                    <td style="border:1px solid #000; padding-left:5px;"></td>
+                                </tr>
+                            </table>
+                        </div>
                     </div>
                 </div>
-
-                <div style="margin-bottom: 5px; font-size: 12px; font-weight: bold;">작성일자 : ${data.date.replace(/-/g, ' / ')}</div>
 
                 <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 11px; text-align: center;">
                     <thead>
                         <tr style="background-color: #f1f5f9;">
-                            <th style="border: 1px solid #000; padding: 6px 0;">번호</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">상품코드</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 25%;">상 품 명</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">규 격</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">단위</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">면/과</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">입수</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">수 량</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">단 가</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">공급가액</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">부 가 세</th>
-                            <th style="border: 1px solid #000; padding: 6px 0;">합계금액</th>
+                            <th style="border: 1px solid #000; padding: 6px 2px; width: 40px;">NO</th>
+                            <th style="border: 1px solid #000; padding: 6px 4px;">점포명</th>
+                            ${productNames.map(p => `<th style="border: 1px solid #000; padding: 6px 2px; word-break: keep-all; line-height:1.2;">${p}</th>`).join('')}
+                            <th style="border: 1px solid #000; padding: 6px 2px; width: 50px;">합계</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${itemsArr.map((item, i) => {
-                            let amt = item.quantity * item.unit_price;
-                            let tx = Math.round(amt * 0.1);
+                        ${storeKeys.map(k => {
+                            let s = stores[k];
                             return `
                             <tr>
-                                <td style="border: 1px solid #000; padding: 6px 0;">${i+1}</td>
-                                <td style="border: 1px solid #000; padding: 6px 0;"></td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: left; font-weight: bold;">${item.original_item_name}</td>
-                                <td style="border: 1px solid #000; padding: 6px 0;"></td><td style="border: 1px solid #000;">EA</td><td style="border: 1px solid #000;">면세</td><td style="border: 1px solid #000;">1</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${item.quantity.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${item.unit_price.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${amt.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${tx.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${(amt+tx).toLocaleString()}</td>
-                            </tr>`;
+                                <td style="border: 1px solid #000; padding: 6px 2px;">${s.code}</td>
+                                <td style="border: 1px solid #000; padding: 6px 4px; text-align:left;">${s.name}</td>
+                                ${productNames.map(p => {
+                                    let q = s.products[p];
+                                    return `<td style="border: 1px solid #000; padding: 6px 2px; text-align:right;">${q > 0 ? q.toLocaleString() : ''}</td>`;
+                                }).join('')}
+                                <td style="border: 1px solid #000; padding: 6px 2px; text-align:right; font-weight:bold;">${s.total > 0 ? s.total.toLocaleString() : ''}</td>
+                            </tr>
+                            `;
                         }).join('')}
-                        ${Array(Math.max(0, 10 - itemsArr.length)).fill(`<tr><td style="border: 1px solid #000; padding: 6px 0; color:transparent;">-</td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td></tr>`).join('')}
-                        <tr style="font-weight: bold; background-color: #f1f5f9;">
-                            <td colspan="7" style="border: 1px solid #000; padding: 8px 0;">합 계</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${sumQty.toLocaleString()}</td>
-                            <td style="border: 1px solid #000;"></td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${sumAmount.toLocaleString()}</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${sumTax.toLocaleString()}</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${(sumAmount+sumTax).toLocaleString()}</td>
-                        </tr>
                     </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f1f5f9; font-weight:bold;">
+                            <td colspan="2" style="border: 1px solid #000; padding: 6px 4px;">합 계</td>
+                            ${productNames.map(p => `<td style="border: 1px solid #000; padding: 6px 2px; text-align:right;">${productTotals[p] > 0 ? productTotals[p].toLocaleString() : ''}</td>`).join('')}
+                            <td style="border: 1px solid #000; padding: 6px 2px; text-align:right; color:#b91c1c;">${grandTotal > 0 ? grandTotal.toLocaleString() : ''}</td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
             `;
         }
-        // ==========================================
-        // 📝 템플릿 2: CJ-CU (박스/낱개 형식)
-        // ==========================================
-        else if (currentClientKey === 'CJ-CU') {
-            htmlContent += `
-            <div class="page-break" style="width: 100%; box-sizing: border-box; background: #fff; color: #000; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                    <div style="width: 60%;"><h1 style="font-size: 26px; font-weight: bold; letter-spacing: 15px; margin: 0;">거 래 명 세 서 <span style="font-size:12px; letter-spacing:normal;">(공급받는자 보관용)</span></h1></div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 12px;">
-                    <div style="width: 48%;">
-                        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 100px;">
-                            <tr>
-                                <td rowspan="4" style="width: 25px; text-align: center; border-right: 1px solid #000; font-weight: bold;">공<br>급<br>받<br>는<br>자</td>
-                                <td style="width: 60px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
-                                <td colspan="3" style="border: 1px solid #000; padding: 0 10px; font-size: 14px; font-weight: bold; text-align:center;">104 - 86 - 09535</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">씨제이제일제당 주식회사</td>
-                                <td style="width: 40px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
-                                <td style="border: 1px solid #000; padding: 0 10px;">강신호</td>
-                            </tr>
-                            <tr><td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td><td colspan="3" style="border: 1px solid #000; padding: 0 5px; font-size:10px;">서울특별시 중구 동호로 330 CJ제일제당센터</td></tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td><td style="border: 1px solid #000; padding: 0 10px; width: 30%;">도소매</td>
-                                <td style="width: 50px; text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td><td style="border: 1px solid #000; padding: 0 10px;">식품첨가물</td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div style="width: 48%;">
-                        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 100px;">
-                            <tr>
-                                <td rowspan="4" style="width: 25px; text-align: center; border-right: 1px solid #000; font-weight: bold;">공<br>급<br>자</td>
-                                <td style="width: 60px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
-                                <td colspan="3" style="border: 1px solid #000; padding: 0 10px; text-align: center; font-size: 14px; font-weight: bold;">126 - 81 - 70776</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">농업회사법인(주)한스팜</td>
-                                <td style="width: 40px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; text-align: center;">한 스 팜</td>
-                            </tr>
-                            <tr><td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td><td colspan="3" style="border: 1px solid #000; padding: 0 5px; font-size:11px;">경기도 여주시 백사면 현방리</td></tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td><td style="border: 1px solid #000; padding: 0 10px;">제조,도소매</td>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td><td style="border: 1px solid #000; padding: 0 5px; font-size:11px;">농산물(계란)</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 5px; font-size: 13px; font-weight: bold;">거래일자 : ${data.date.replace(/-/g, ' / ')}</div>
-
-                <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 12px; text-align: center;">
-                    <thead>
-                        <tr style="background-color: #f1f5f9;">
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 8%;">월/일</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 34%;">품 목 명</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 8%;">BOX</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 10%;">낱 개</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 10%;">단 가</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 15%;">공급가액</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 15%;">부 가 세</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsArr.map(item => {
-                            let amt = item.quantity * item.unit_price;
-                            let tx = Math.round(amt * 0.1);
-                            let md = item.expected_date ? item.expected_date.substring(5).replace('-', '/') : '';
-                            let eaPerBox = extractEaPerBox(item.original_item_name);
-                            let boxQty = (item.quantity / eaPerBox).toFixed(1).replace('.0', '');
-                            if(boxQty === "0") boxQty = "";
-
-                            return `
-                            <tr>
-                                <td style="border: 1px solid #000; padding: 6px 0;">${md}</td>
-                                <td style="border: 1px solid #000; padding: 6px 10px; text-align: left; font-weight: bold;">${item.original_item_name}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${boxQty}</td>
-                                <td style="border: 1px solid #000; padding: 6px 10px; text-align: right;">${item.quantity.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 10px; text-align: right;">${item.unit_price.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 10px; text-align: right;">${amt.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 10px; text-align: right;">${tx.toLocaleString()}</td>
-                            </tr>`;
-                        }).join('')}
-                        ${Array(Math.max(0, 10 - itemsArr.length)).fill(`<tr><td style="border: 1px solid #000; padding: 6px 0; color:transparent;">-</td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td></tr>`).join('')}
-                        <tr style="font-weight: bold; background-color: #f1f5f9;">
-                            <td colspan="2" style="border: 1px solid #000; padding: 8px 0;">합 계</td>
-                            <td style="border: 1px solid #000;"></td>
-                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${sumQty.toLocaleString()}</td>
-                            <td style="border: 1px solid #000;"></td>
-                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${sumAmount.toLocaleString()}</td>
-                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${sumTax.toLocaleString()}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            `;
-        }
-        // ==========================================
-        // 📝 템플릿 3: CJ-GS & GS & SSG (상품코드, 세액 포함 형식)
-        // ==========================================
-        else {
-            htmlContent += `
-            <div class="page-break" style="width: 100%; box-sizing: border-box; background: #fff; color: #000; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
-                    <div style="width: 60%;"><h1 style="font-size: 26px; font-weight: bold; letter-spacing: 15px; margin: 0;">거 래 명 세 ${currentClientKey.includes('GS') ? '표' : '서'}</h1></div>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 12px;">
-                    <div style="width: 48%;">
-                        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 100px;">
-                            <tr>
-                                <td rowspan="4" style="width: 25px; text-align: center; border-right: 1px solid #000; font-weight: bold;">공<br>급<br>받<br>는<br>자</td>
-                                <td style="width: 60px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
-                                <td colspan="3" style="border: 1px solid #000; padding: 0 10px; font-size: 14px; font-weight: bold; text-align:center;">${currentClientKey.includes('GS') ? '104 - 86 - 09535' : ''}</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">${data.dest}</td>
-                                <td style="width: 40px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
-                                <td style="border: 1px solid #000; padding: 0 10px;">${currentClientKey.includes('GS') ? '강신호' : ''}</td>
-                            </tr>
-                            <tr><td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td><td colspan="3" style="border: 1px solid #000; padding: 0 5px; font-size:10px;">${currentClientKey.includes('GS') ? '서울특별시 중구 동호로 330 CJ제일제당센터' : ''}</td></tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td><td style="border: 1px solid #000; padding: 0 10px; width: 30%;"></td>
-                                <td style="width: 50px; text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td><td style="border: 1px solid #000; padding: 0 10px;"></td>
-                            </tr>
-                        </table>
-                    </div>
-                    <div style="width: 48%;">
-                        <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 100px;">
-                            <tr>
-                                <td rowspan="4" style="width: 25px; text-align: center; border-right: 1px solid #000; font-weight: bold;">공<br>급<br>자</td>
-                                <td style="width: 60px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
-                                <td colspan="3" style="border: 1px solid #000; padding: 0 10px; text-align: center; font-size: 14px; font-weight: bold;">126 - 81 - 70776</td>
-                            </tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">농업회사법인(주)한스팜</td>
-                                <td style="width: 40px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
-                                <td style="border: 1px solid #000; padding: 0 10px; text-align: center;">한 스 팜</td>
-                            </tr>
-                            <tr><td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td><td colspan="3" style="border: 1px solid #000; padding: 0 5px; font-size:11px;">경기도 여주시 백사면 현방리</td></tr>
-                            <tr>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td><td style="border: 1px solid #000; padding: 0 10px;">제조,도소매</td>
-                                <td style="text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td><td style="border: 1px solid #000; padding: 0 5px; font-size:11px;">농산물(계란)</td>
-                            </tr>
-                        </table>
-                    </div>
-                </div>
-
-                <div style="margin-bottom: 5px; font-size: 13px; font-weight: bold;">거래일자 : ${data.date.replace(/-/g, ' / ')}</div>
-
-                <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 12px; text-align: center;">
-                    <thead>
-                        <tr style="background-color: #f1f5f9;">
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 15%;">상품코드</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 30%;">상 품 명</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 10%;">규 격</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 10%;">단 가</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 8%;">수 량</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 12%;">공급가액</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 10%;">세 액</th>
-                            <th style="border: 1px solid #000; padding: 6px 0; width: 15%;">합 계</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsArr.map((item, i) => {
-                            let amt = item.quantity * item.unit_price;
-                            let tx = Math.round(amt * 0.1);
-                            return `
-                            <tr>
-                                <td style="border: 1px solid #000; padding: 6px 0;"></td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: left; font-weight: bold;">${item.original_item_name}</td>
-                                <td style="border: 1px solid #000; padding: 6px 0;"></td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${item.unit_price.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${item.quantity.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${amt.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${tx.toLocaleString()}</td>
-                                <td style="border: 1px solid #000; padding: 6px 5px; text-align: right;">${(amt+tx).toLocaleString()}</td>
-                            </tr>`;
-                        }).join('')}
-                        ${Array(Math.max(0, 10 - itemsArr.length)).fill(`<tr><td style="border: 1px solid #000; padding: 6px 0; color:transparent;">-</td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td><td style="border: 1px solid #000;"></td></tr>`).join('')}
-                        <tr style="font-weight: bold; background-color: #f1f5f9;">
-                            <td colspan="4" style="border: 1px solid #000; padding: 8px 0;">합 계</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${sumQty.toLocaleString()}</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${sumAmount.toLocaleString()}</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${sumTax.toLocaleString()}</td>
-                            <td style="border: 1px solid #000; padding: 8px 5px; text-align: right;">${(sumAmount+sumTax).toLocaleString()}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            `;
-        }
+    } 
+    // ==========================================
+    // 📝 기타 업체들 (이후 구현 예정)
+    // ==========================================
+    else {
+        htmlContent = `<div style="padding: 20px; font-family: sans-serif; text-align: center; font-size: 20px; font-weight: bold;">
+            현재 모드는 [롯데] 전용 인쇄가 적용되었습니다.<br>
+            다른 업체의 인쇄 로직은 다음 단계에서 추가됩니다.
+        </div>`;
     }
 
-    // 💡 7. 투명 Iframe 인쇄 (수백장 인쇄 & 잘림 방지 100% 보장)
+    // 💡 7. 투명 Iframe 인쇄 (다중 페이지 잘림 방지 완벽 보장)
     let iframe = document.createElement('iframe');
     iframe.style.visibility = 'hidden';
     iframe.style.position = 'absolute';
@@ -645,12 +431,13 @@ function printDeliveryNotes() {
 
     let doc = iframe.contentWindow.document;
     doc.open();
+    // 롯데용 A4 세로(Portrait) 최적화 스타일
     doc.write(`
         <html>
         <head>
             <style>
                 @media print {
-                    @page { size: A4 portrait; margin: 15mm 10mm; }
+                    @page { size: A4 portrait; margin: 10mm 10mm; }
                     body { margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
                     .page-break { page-break-after: always; margin-bottom: 20px; }
                     .page-break:last-child { page-break-after: auto; margin-bottom: 0; }
