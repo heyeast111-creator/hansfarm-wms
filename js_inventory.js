@@ -357,7 +357,7 @@ async function clickCell(displayId, searchId) {
         } else { panelHtml += `<div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300">비어있음</div>`; } 
         
         if (!searchId.startsWith('W-')) {
-            let locHistory = globalHistory.filter(h => h.location_id === searchId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
+            let locHistory = globalHistory.filter(h => h.action_type === '입고' && h.location_id === searchId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 10);
             panelHtml += `<div class="mt-6 pt-4 border-t border-slate-200"><h3 class="text-xs font-black text-slate-700 mb-3">최근 내역</h3><div class="space-y-2">`;
             if(locHistory.length > 0) { locHistory.forEach(h => { let actionColor = h.action_type === '입고' ? 'text-emerald-600' : 'text-rose-600'; panelHtml += `<div class="bg-white p-2 border border-slate-200 rounded text-[10px] shadow-sm"><span class="font-bold ${actionColor}">[${h.action_type}]</span> <span class="text-slate-500">${h.production_date || '일시미상'}</span><br><span class="font-bold text-slate-700">${h.item_name} (${h.quantity}EA)</span></div>`; }); } else { panelHtml += `<div class="text-[10px] text-slate-400 text-center py-4">기록 없음</div>`; }
             panelHtml += `</div></div>`;
@@ -697,21 +697,53 @@ function renderOrderCart() {
     tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
-// 💡 3. 카톡 복사 시 예정일 제거
+// 💡 발주 등록 에러(무반응) 차단 및 즉각 반영 패치
 async function submitOrderCart() {
     if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
+    
     let text = "[한스팜]발주요청서\n"; 
     orderCart.forEach((item, i) => { 
         item.production_date = item.expected_date; 
         text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; 
     });
+
+    // 💡 1. 뻗기 전에 화면부터 먼저 '가짜 데이터'로 채워 넣어서 무반응 방지!
+    let tempOrders = orderCart.map(item => ({
+        id: 'temp_' + Date.now() + Math.random(),
+        action_type: '발주중',
+        created_at: new Date().toISOString(),
+        production_date: item.expected_date,
+        remarks: item.supplier,
+        item_name: item.item_name,
+        quantity: item.quantity,
+        pallet_count: item.pallet_count,
+        category: item.category
+    }));
+    
+    globalHistory = [...tempOrders, ...globalHistory];
+    renderOrderList(); // 리스트에 0.1초 만에 띄움
+
     try { 
+        // 뒤에서 서버에 진짜 데이터 전송
         await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(orderCart) }); 
-        navigator.clipboard.writeText(text).then(async () => { alert("발주 등록 및 복사 완료!"); orderCart = []; toggleOrderCart(); await load(); }); 
-    } catch(e) {}
+        
+        // 💡 2. 클립보드 에러가 나도 앱이 멈추지 않게 방어막(try-catch) 설치!
+        try {
+            await navigator.clipboard.writeText(text);
+            alert("발주 등록 및 카톡 복사 완료!"); 
+        } catch(err) {
+            alert("발주 등록은 성공했습니다!\n(※ 브라우저 보안 정책으로 텍스트 자동 복사는 차단되었습니다. 직접 입력해주세요.)");
+        }
+
+        orderCart = []; 
+        toggleOrderCart(); 
+        await load(); // DB와 싱크 맞추기 위해 최종 새로고침
+        
+    } catch(e) {
+        alert("통신 오류가 발생하여 서버에 저장하지 못했습니다.");
+    }
 }
 
-// 💡 1. 3버튼 로직 적용 (도착/수정/취소)
 function renderOrderList() {
     let orders = globalHistory.filter(h => h.action_type === '발주중').sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
     let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
@@ -728,7 +760,6 @@ function renderOrderList() {
     }).join('');
 }
 
-// 💡 2. 수정 팝업 관련 로직 (드롭다운 연동)
 function openEditOrderModal(logId) {
     if(loginMode === 'viewer') return;
     let order = globalHistory.find(h => h.id === logId);
@@ -815,29 +846,25 @@ async function submitEditOrder() {
     }
 }
 
-// 💡 4. 입고(도착) 시 파레트 분할 선택 기능 
 async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
     if(loginMode === 'viewer') return; 
     
-    // 입고일 묻기 (오늘 날짜가 기본값, 예정일 아님)
     let today = new Date().toISOString().split('T')[0];
     let receiveDate = prompt(`[${itemName}] 입고 처리\n실제 도착(입고)일을 입력하세요 (YYYY-MM-DD):`, today);
     if (receiveDate === null) return;
     if (receiveDate.trim() === '') receiveDate = today;
 
-    // 파레트 기준 확인
     let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === supplier) || productMaster.find(p => p.item_name === itemName && p.supplier === supplier); 
     let defaultPEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1; 
     let defaultPallets = qty / defaultPEa;
 
-    // 분할 방식 묻기 (예/아니오 창)
     let useDefault = confirm(`📦 입고 대기장 박스화 설정\n\n현재 품목관리 마스터 기준:\n- 총 입고 수량: ${qty.toLocaleString()} EA\n- 1P(박스)당 기준: ${defaultPEa.toLocaleString()} EA\n- 예상 박스 개수: ${defaultPallets.toFixed(1)} P\n\n이 기준대로 대기장에 자동 분할할까요?\n\n[확인]: 예 (마스터 기준 적용)\n[취소]: 아니오 (1박스당 수량 직접 입력)`);
 
     let pEa = defaultPEa;
 
     if (!useDefault) {
         let manualEa = prompt(`1박스당 포장될 낱개 수량(EA)을 직접 입력하세요:\n(총 ${qty.toLocaleString()}EA를 몇 개씩 쪼갤지 입력)`, defaultPEa);
-        if(manualEa === null) return; // 프롬프트 취소 시 중단
+        if(manualEa === null) return;
         pEa = parseInt(manualEa);
         if(isNaN(pEa) || pEa <= 0) return alert("올바른 수량을 입력해주세요. 입고가 취소됩니다.");
     }
@@ -875,7 +902,7 @@ async function receiveOrder(logId, itemName, qty, pallet, supplier, cat) {
     }
 }
 
-async function cancelOrder(logId) { if(loginMode === 'viewer') return; if(!confirm("발주 취소?")) return; try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) {} }
+async function cancelOrder(logId) { if(loginMode === 'viewer') return; if(!confirm("발주 내역을 완전히 취소하시겠습니까?")) return; try { await fetch(`/api/history/${logId}`, { method: 'DELETE' }); await load(); } catch(e) {} }
 
 function renderSafetyStock() { 
     const mode = document.getElementById('safe-mode') ? document.getElementById('safe-mode').value : 'pallet';
