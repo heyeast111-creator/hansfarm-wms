@@ -1,5 +1,5 @@
 // ==========================================
-// [출고관리] - 서류 출력 전용 시스템 (수량 완벽 패치 & 엑셀 다운로드)
+// [출고관리] - 서류 출력 전용 시스템 (수량 원복 & .xls 다운로드)
 // ==========================================
 
 let parsedOutboundData = []; 
@@ -7,14 +7,14 @@ let currentClientKey = '';
 
 // 💡 엑셀 원본 다운로드를 위한 전역 변수
 let globalRawExcelData = null;
-let globalExcelFileName = '발주서.xlsx';
+let globalExcelFileName = '발주서';
 
-// 💡 1. 업체별 엑셀 양식 매핑 룰 (수량 열 수정 완료)
+// 💡 1. 업체별 엑셀 양식 매핑 룰
 const outboundMappings = {
     'LOTTE': {
         name: '롯데 (롯데마트/슈퍼)',
         colItemName: '상품명',
-        colQty: '주문수',           // BOX와 EA 혼재 (로직에서 자동 변환)
+        colQty: '주문수',           
         colPrice: '단가',
         colDest: '점포명',
         colDate: '납품일',
@@ -25,7 +25,7 @@ const outboundMappings = {
     'CJ-CU': {
         name: 'CJ-CU (BGF로지스)',
         colItemName: '상품명',
-        colQty: '수정수량',         // 💡 패치: '총수량'이 아닌 실제 점포별 '수정수량'으로 변경
+        colQty: '수정수량',         
         colPrice: '납품원가',
         colDest: '센터명',
         colDate: '납품예정일자',     
@@ -101,14 +101,14 @@ function parseExcelDate(val, rule) {
     return str; 
 }
 
-// BOX 단위일 경우 품명에서 규격(EA)을 추출하여 곱해주기 위한 함수
+// 서류 출력 시 박스 수량을 구하기 위한 함수 (데이터 추출 시에는 곱하지 않음)
 function extractEaPerBox(itemName) {
     let match = itemName.match(/(\d+)(구|입|p|ea|\))/i);
     if(match && parseInt(match[1]) > 0) return parseInt(match[1]);
     return 1; 
 }
 
-// 💡 3. 화면 UI 렌더링 (다운로드 버튼 추가)
+// 💡 3. 화면 UI 렌더링
 function renderOutboundUI() {
     const container = document.getElementById('view-outbound');
     if(!container) return;
@@ -119,7 +119,7 @@ function renderOutboundUI() {
         <div class="w-full max-w-7xl mx-auto space-y-6">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-2xl font-black text-slate-800">🖨️ 고객사별 맞춤 서류 인쇄 시스템</h2>
-                <span class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">※ 수량 오류 수정 및 엑셀 다운로드 추가판</span>
+                <span class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">※ 엑셀 원본 수량 유지 / .xls 파일 다운로드 지원</span>
             </div>
             
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -139,7 +139,7 @@ function renderOutboundUI() {
                             서류용 데이터 추출
                         </button>
                         <button onclick="downloadModifiedExcel()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 px-6 rounded-lg shadow-md transition-all text-sm">
-                            📥 업로드용 엑셀 다운로드
+                            📥 업로드용 엑셀 다운로드 (.xls)
                         </button>
                     </div>
                 </div>
@@ -161,7 +161,7 @@ function renderOutboundUI() {
                                 <th class="p-3 font-black">납품일자</th>
                                 <th class="p-3 font-black">배송처(점포)</th>
                                 <th class="p-3 font-black text-blue-700">품목명 (원문)</th>
-                                <th class="p-3 font-black text-right text-rose-600">수량(EA)</th>
+                                <th class="p-3 font-black text-right text-rose-600">수량(원본기준)</th>
                             </tr>
                         </thead>
                         <tbody id="outbound-tbody" class="divide-y divide-slate-100">
@@ -192,11 +192,10 @@ async function processOutboundExcel() {
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
             
-            // 💡 다운로드를 위해 원본 데이터를 깊은 복사하여 전역 변수에 저장
             globalRawExcelData = JSON.parse(JSON.stringify(rawData)); 
-            globalExcelFileName = file.name;
+            // 확장자 제거 후 이름만 저장
+            globalExcelFileName = file.name.replace(/\.[^/.]+$/, "");
 
-            // 서류용 명세서 출력을 위한 파싱 (데이터 손상 방지를 위해 복사본 사용)
             let processData = JSON.parse(JSON.stringify(rawData));
 
             let centerName = '기본물류센터';
@@ -217,7 +216,6 @@ async function processOutboundExcel() {
             const targetItemName = cleanText(mapping.colItemName);
             const targetQtyName = cleanText(mapping.colQty);
 
-            // 헤더 동적 탐색
             for(let r = 0; r < Math.min(processData.length, 20); r++) {
                 const row = processData[r].map(h => cleanText(h));
                 let tempIdxItem = row.findIndex(h => h.includes(targetItemName));
@@ -247,12 +245,7 @@ async function processOutboundExcel() {
                 let rawQtyStr = String(row[idxQty] || '');
                 let finalQty = parseQuantity(rawQtyStr, mapping.parseQty);
                 
-                // 💡 [수량 완벽 패치] 롯데 등에서 '3 (BOX)' 문자가 섞여 들어오면 낱개로 자동 환산!
-                if(rawQtyStr.toUpperCase().includes('BOX')) {
-                    let eaPerBox = extractEaPerBox(preserveText(row[idxItem]));
-                    finalQty = finalQty * eaPerBox;
-                }
-
+                // 💡 [요청사항 반영] 엑셀의 박스/낱개 글자를 무시하고 추출된 숫자 원본을 그대로 씁니다. (곱셈 삭제)
                 if (finalQty <= 0 || isNaN(finalQty)) continue;
 
                 let dest = idxDest !== -1 ? preserveText(row[idxDest]) : '기본 배송처';
@@ -266,7 +259,7 @@ async function processOutboundExcel() {
                     destination: dest,
                     center_name: centerName, 
                     original_item_name: preserveText(row[idxItem]),
-                    quantity: finalQty,
+                    quantity: finalQty, // 엑셀에 적힌 원본 숫자 그대로 유지
                     unit_price: parseQuantity(idxPrice !== -1 ? row[idxPrice] : 0, mapping.parsePrice)
                 });
             }
@@ -278,31 +271,29 @@ async function processOutboundExcel() {
     reader.readAsArrayBuffer(file);
 }
 
-// 💡 4-1. [신규 추가] 고객사별 업로드용 엑셀 변환 및 다운로드 기능
+// 💡 4-1. [요청사항 반영] 고객사별 엑셀 변환 및 97-03 (.xls) 강제 다운로드
 function downloadModifiedExcel() {
     if(!globalRawExcelData || globalRawExcelData.length === 0) {
         return alert("먼저 엑셀 파일을 업로드하고 [서류용 데이터 추출] 버튼을 눌러주세요.");
     }
     
-    // 원본 데이터 보호를 위한 복사
     let exportData = JSON.parse(JSON.stringify(globalRawExcelData));
     
-    // 고객사별 맞춤형 데이터 가공 룰 적용
+    // 롯데 룰 적용: A1 텍스트 삭제
     if(currentClientKey === 'LOTTE') {
-        // 롯데의 경우 무조건 A1(첫번째 줄, 첫번째 칸) 내용을 삭제
         if(exportData.length > 0 && exportData[0].length > 0) {
             exportData[0][0] = "";
         }
     } 
-    // 나중에 타사(SSG, GS 등)의 특별한 다운로드 양식 룰이 생기면 여기에 else if 로 추가 가능!
 
-    // 가공된 배열 데이터를 다시 엑셀 시트로 변환하여 다운로드 트리거
     const ws = XLSX.utils.aoa_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     
     const clientPrefix = currentClientKey === 'LOTTE' ? "[롯데_업로드용]" : `[${currentClientKey}_업로드용]`;
-    XLSX.writeFile(wb, clientPrefix + "_" + globalExcelFileName);
+    
+    // 💡 biff8 포맷 지정 시 구버전 Excel 97-2003(.xls) 형식으로 완벽하게 저장됨
+    XLSX.writeFile(wb, clientPrefix + "_" + globalExcelFileName + ".xls", { bookType: 'biff8' });
 }
 
 // 💡 5. 추출된 데이터 합산 및 렌더링
@@ -342,7 +333,7 @@ function renderOutboundPreview() {
     `).join('');
 }
 
-// 💡 6. 고객사별 맞춤 템플릿 인쇄 엔진 (이전과 동일하게 완벽 작동)
+// 💡 6. 고객사별 맞춤 템플릿 인쇄 엔진 
 function printDeliveryNotes() {
     if(parsedOutboundData.length === 0) return alert("출력할 데이터가 없습니다.");
 
@@ -366,7 +357,7 @@ function printDeliveryNotes() {
     });
 
     // ==========================================
-    // 📝 템플릿 1: 롯데 (가로 크로스탭)
+    // 📝 템플릿 1: 롯데 (LOTTE) - 가로 크로스탭 양식
     // ==========================================
     if (currentClientKey === 'LOTTE') {
         pageOrientation = 'landscape';
@@ -693,7 +684,7 @@ function printDeliveryNotes() {
         }
     }
 
-    // 💡 7. 투명 Iframe 인쇄 로직
+    // 💡 7. 투명 Iframe 인쇄 로직 (페이지 방향 동적 적용)
     let iframe = document.createElement('iframe');
     iframe.style.visibility = 'hidden';
     iframe.style.position = 'absolute';
