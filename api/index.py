@@ -126,7 +126,7 @@ async def inbound_stock(data: InboundData):
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": p_date, "remarks": data.remarks}
         await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
         
-        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "production_date": p_date, "category": data.category}
+        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "payment_status": "미지급", "production_date": p_date, "category": data.category, "created_at": f"{p_date}T00:00:00Z"}
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
         return {"status": "success"}
 
@@ -188,17 +188,16 @@ async def edit_inventory_item(data: EditInventoryData):
     return {"status": "success"}
 
 # =======================================================
-# 💡 핵심 패치: 발주(주문) 등록 시 Pydantic 에러를 무시하는 무적 모드!
+# 💡 핵심 패치: 발주(주문) 등록 시 Supabase가 요구하는 필수 항목을 완벽하게 챙겨서 보냄!
 # =======================================================
 @app.post("/api/orders_create")
 async def create_orders(request: Request): 
     try:
-        items = await request.json() # 어떤 양식으로 데이터가 오든 군말 없이 다 받음
+        items = await request.json()
         today = datetime.datetime.now().strftime('%Y-%m-%d')
         payloads = []
         
         for it in items:
-            # 도착 예정일(expected_date)이 있으면 쓰고, 없으면 오늘 날짜로 채움
             p_date = it.get('production_date') or it.get('expected_date') or today
             
             payloads.append({
@@ -209,13 +208,19 @@ async def create_orders(request: Request):
                 "quantity": int(it.get('quantity', 0)), 
                 "pallet_count": float(it.get('pallet_count', 1.0)), 
                 "remarks": it.get('supplier', ''), 
-                "production_date": p_date
+                "payment_status": "미지급",                  # 💡 Supabase 필수 항목 복구!
+                "production_date": p_date,
+                "created_at": f"{today}T00:00:00Z"           # 💡 Supabase 필수 항목 복구!
             })
         
         async with httpx.AsyncClient() as client:
-            # 안전하게 DB에 발송 (에러나도 앱이 뻗지 않음)
             res = await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=payloads, headers=HEADERS)
             
+            # 만약 Supabase에서 에러를 뱉으면 프론트엔드로 에러 사유를 그대로 전달
+            if res.status_code >= 400:
+                print("DB Insert Error:", res.text)
+                return {"status": "error", "message": f"DB Error: {res.text}"}
+                
         return {"status": "success"}
     except Exception as e:
         print("발주 에러:", str(e))
@@ -243,11 +248,18 @@ async def update_history_date(data: dict):
     expected_date = data.get('expected_date')
     
     if not log_id or not expected_date:
-        return {"status": "error"}
+        return {"status": "error", "message": "ID or date is missing"}
         
     async with httpx.AsyncClient() as client:
-        await client.patch(f"{SUPABASE_URL}/rest/v1/history_log?id=eq.{log_id}", json={"production_date": expected_date}, headers=HEADERS)
-        return {"status": "success"}
+        response = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/history_log?id=eq.{log_id}", 
+            json={"production_date": expected_date}, 
+            headers=HEADERS
+        )
+        if response.status_code in [200, 204]:
+            return {"status": "success"}
+        else:
+            return {"status": "error", "message": f"Supabase error: {response.text}"}
 
 @app.post("/api/history_update")
 async def history_update(request: Request):
