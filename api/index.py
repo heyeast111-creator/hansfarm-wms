@@ -2,8 +2,12 @@ import os
 import httpx
 import asyncio
 import datetime
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, FileResponse
+import io
+import urllib.parse
+import xlrd
+from xlutils.copy import copy
+from fastapi import FastAPI, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, FileResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional, Any
 
@@ -123,11 +127,9 @@ async def delete_finished_product(item_name: str, supplier: str): return await f
 async def inbound_stock(data: InboundData):
     async with httpx.AsyncClient() as client:
         p_date = data.production_date if data.production_date else datetime.datetime.now().strftime('%Y-%m-%d')
-        # inventory_v2 에는 category 가 들어가는 게 맞습니다.
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": p_date, "remarks": data.remarks}
         await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
         
-        # 💡 history_log 에러 원인 제거: category 항목 삭제!
         log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "payment_status": "미지급", "production_date": p_date, "created_at": f"{p_date}T00:00:00Z"}
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
         return {"status": "success"}
@@ -189,9 +191,6 @@ async def edit_inventory_item(data: EditInventoryData):
             await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"production_date": data.new_date}, headers=HEADERS)
     return {"status": "success"}
 
-# =======================================================
-# 💡 핵심 패치: history_log 에 없는 category 제외!
-# =======================================================
 @app.post("/api/orders_create")
 async def create_orders(request: Request): 
     try:
@@ -205,14 +204,13 @@ async def create_orders(request: Request):
             payloads.append({
                 "location_id": "발주대기", 
                 "action_type": "발주중", 
-                # 💡 "category": it.get('category', '미분류'),  <-- 원인 제거!!
                 "item_name": it.get('item_name', '알수없음'), 
                 "quantity": int(it.get('quantity', 0)), 
                 "pallet_count": float(it.get('pallet_count', 1.0)), 
                 "remarks": it.get('supplier', ''), 
                 "payment_status": "미지급",                  
                 "production_date": p_date,
-                "created_at": f"{today}T00:00:00Z"           
+                "created_at": f"{today}T00:00:00Z"            
             })
         
         async with httpx.AsyncClient() as client:
@@ -273,7 +271,6 @@ async def history_update(request: Request):
                     "acc_qty": item.get('acc_qty'),
                     "acc_price": item.get('acc_price'),
                     "acc_adj": item.get('acc_adj'),
-                    # 💡 "category": item.get('category'), <-- 원인 제거!!
                     "item_name": item.get('item_name'),
                     "production_date": item.get('production_date')
                 }
@@ -287,3 +284,42 @@ async def history_update(request: Request):
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# =======================================================
+# 💡 핵심 추가: 롯데 엑셀 서식 유지 & A1 삭제 후 다운로드 API
+# =======================================================
+@app.post("/api/convert_lotte_excel")
+async def convert_lotte_excel(file: UploadFile = File(...)):
+    try:
+        # 1. 엑셀 원본 읽기 (formatting_info=True로 껍데기 서식 100% 보존!)
+        contents = await file.read()
+        rb = xlrd.open_workbook(file_contents=contents, formatting_info=True)
+        
+        # 2. 파일 복사 및 수정
+        wb = copy(rb)
+        ws = wb.get_sheet(0)
+        
+        # 3. A1 셀(0,0) 데이터만 삭제 (테두리, 색상은 유지됨)
+        ws.write(0, 0, "")
+        
+        # 4. 시트 이름을 'rbf'로 강제 변경
+        wb.set_name(0, 'rbf')
+        
+        # 5. 메모리 버퍼에 저장 (구형 .xls 형식)
+        output = io.BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        # 파일명 인코딩 (한글 깨짐 방지)
+        original_name = file.filename.rsplit('.', 1)[0]
+        new_filename = f"[롯데_업로드용]_{original_name}.xls"
+        encoded_filename = urllib.parse.quote(new_filename)
+        
+        return StreamingResponse(
+            output, 
+            media_type="application/vnd.ms-excel",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"}
+        )
+    except Exception as e:
+        print("엑셀 변환 오류:", str(e))
+        return {"error": str(e)}
