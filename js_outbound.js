@@ -1,5 +1,5 @@
 // ==========================================
-// [출고관리] - 서류 출력 전용 시스템 (수량 원복 & .xls 다운로드)
+// [출고관리] - 서류 출력 전용 시스템 (수량 원복, .xls 다운로드, 시트명 rbf)
 // ==========================================
 
 let parsedOutboundData = []; 
@@ -101,7 +101,6 @@ function parseExcelDate(val, rule) {
     return str; 
 }
 
-// 서류 출력 시 박스 수량을 구하기 위한 함수 (데이터 추출 시에는 곱하지 않음)
 function extractEaPerBox(itemName) {
     let match = itemName.match(/(\d+)(구|입|p|ea|\))/i);
     if(match && parseInt(match[1]) > 0) return parseInt(match[1]);
@@ -119,7 +118,7 @@ function renderOutboundUI() {
         <div class="w-full max-w-7xl mx-auto space-y-6">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-2xl font-black text-slate-800">🖨️ 고객사별 맞춤 서류 인쇄 시스템</h2>
-                <span class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">※ 엑셀 원본 수량 유지 / .xls 파일 다운로드 지원</span>
+                <span class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">※ 엑셀 원본 수량 유지 / .xls 파일(시트명: rbf) 다운로드 지원</span>
             </div>
             
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -193,7 +192,6 @@ async function processOutboundExcel() {
             const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
             
             globalRawExcelData = JSON.parse(JSON.stringify(rawData)); 
-            // 확장자 제거 후 이름만 저장
             globalExcelFileName = file.name.replace(/\.[^/.]+$/, "");
 
             let processData = JSON.parse(JSON.stringify(rawData));
@@ -245,7 +243,6 @@ async function processOutboundExcel() {
                 let rawQtyStr = String(row[idxQty] || '');
                 let finalQty = parseQuantity(rawQtyStr, mapping.parseQty);
                 
-                // 💡 [요청사항 반영] 엑셀의 박스/낱개 글자를 무시하고 추출된 숫자 원본을 그대로 씁니다. (곱셈 삭제)
                 if (finalQty <= 0 || isNaN(finalQty)) continue;
 
                 let dest = idxDest !== -1 ? preserveText(row[idxDest]) : '기본 배송처';
@@ -259,7 +256,7 @@ async function processOutboundExcel() {
                     destination: dest,
                     center_name: centerName, 
                     original_item_name: preserveText(row[idxItem]),
-                    quantity: finalQty, // 엑셀에 적힌 원본 숫자 그대로 유지
+                    quantity: finalQty, 
                     unit_price: parseQuantity(idxPrice !== -1 ? row[idxPrice] : 0, mapping.parsePrice)
                 });
             }
@@ -271,7 +268,7 @@ async function processOutboundExcel() {
     reader.readAsArrayBuffer(file);
 }
 
-// 💡 4-1. [요청사항 반영] 고객사별 엑셀 변환 및 97-03 (.xls) 강제 다운로드
+// 💡 4-1. 업로드용 엑셀 변환 및 97-03 (.xls) 강제 다운로드 (시트명: rbf)
 function downloadModifiedExcel() {
     if(!globalRawExcelData || globalRawExcelData.length === 0) {
         return alert("먼저 엑셀 파일을 업로드하고 [서류용 데이터 추출] 버튼을 눌러주세요.");
@@ -288,7 +285,9 @@ function downloadModifiedExcel() {
 
     const ws = XLSX.utils.aoa_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    
+    // 💡 [요청사항 반영] 생성되는 엑셀 시트명을 'Sheet1'에서 'rbf'로 고정
+    XLSX.utils.book_append_sheet(wb, ws, "rbf");
     
     const clientPrefix = currentClientKey === 'LOTTE' ? "[롯데_업로드용]" : `[${currentClientKey}_업로드용]`;
     
