@@ -697,7 +697,7 @@ function renderOrderCart() {
     tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
-// 💡 발주 등록 에러(무반응) 차단 및 즉각 반영 패치
+// 💡 발주 등록 에러 방어 및 즉각 화면 반영 로직 완벽 적용
 async function submitOrderCart() {
     if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
     
@@ -707,7 +707,7 @@ async function submitOrderCart() {
         text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; 
     });
 
-    // 💡 1. 뻗기 전에 화면부터 먼저 '가짜 데이터'로 채워 넣어서 무반응 방지!
+    // 1. 임시 데이터를 만들어서 화면에 먼저 띄움 (무반응 방지)
     let tempOrders = orderCart.map(item => ({
         id: 'temp_' + Date.now() + Math.random(),
         action_type: '발주중',
@@ -721,18 +721,29 @@ async function submitOrderCart() {
     }));
     
     globalHistory = [...tempOrders, ...globalHistory];
-    renderOrderList(); // 리스트에 0.1초 만에 띄움
+    renderOrderList();
 
     try { 
-        // 뒤에서 서버에 진짜 데이터 전송
-        await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(orderCart) }); 
+        // 2. 파이썬 서버로 데이터 쏘기
+        let res = await fetch('/api/orders_create', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(orderCart) 
+        }); 
         
-        // 💡 2. 클립보드 에러가 나도 앱이 멈추지 않게 방어막(try-catch) 설치!
+        let data = await res.json();
+        
+        // 3. 서버에서 DB 저장 실패 메시지가 날아오면 강제로 에러 발생시킴
+        if (data.status !== 'success') {
+            throw new Error(data.message || "알 수 없는 서버 에러");
+        }
+
+        // 4. 카톡 복사는 차단당해도 앱이 뻗지 않도록 방어
         try {
             await navigator.clipboard.writeText(text);
-            alert("발주 등록 및 카톡 복사 완료!"); 
+            alert("발주 등록 및 카카오톡 텍스트 복사 완료!"); 
         } catch(err) {
-            alert("발주 등록은 성공했습니다!\n(※ 브라우저 보안 정책으로 텍스트 자동 복사는 차단되었습니다. 직접 입력해주세요.)");
+            alert("발주가 성공적으로 등록되었습니다!\n(※ 브라우저 보안 정책으로 텍스트 자동 복사는 차단되었습니다. 직접 입력해주세요.)");
         }
 
         orderCart = []; 
@@ -740,7 +751,10 @@ async function submitOrderCart() {
         await load(); // DB와 싱크 맞추기 위해 최종 새로고침
         
     } catch(e) {
-        alert("통신 오류가 발생하여 서버에 저장하지 못했습니다.");
+        // 에러 시 화면에 띄워뒀던 가짜 데이터 깔끔하게 삭제
+        globalHistory = globalHistory.filter(h => !h.id.toString().startsWith('temp_'));
+        renderOrderList();
+        alert("❌ 발주 데이터 저장 실패!\n원인: " + e.message + "\n(데이터베이스 형식이 맞지 않습니다. 파이썬 서버 배포가 완료되었는지 확인해주세요.)");
     }
 }
 
