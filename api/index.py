@@ -123,10 +123,12 @@ async def delete_finished_product(item_name: str, supplier: str): return await f
 async def inbound_stock(data: InboundData):
     async with httpx.AsyncClient() as client:
         p_date = data.production_date if data.production_date else datetime.datetime.now().strftime('%Y-%m-%d')
+        # inventory_v2 에는 category 가 들어가는 게 맞습니다.
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": p_date, "remarks": data.remarks}
         await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
         
-        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "payment_status": "미지급", "production_date": p_date, "category": data.category, "created_at": f"{p_date}T00:00:00Z"}
+        # 💡 history_log 에러 원인 제거: category 항목 삭제!
+        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "payment_status": "미지급", "production_date": p_date, "created_at": f"{p_date}T00:00:00Z"}
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
         return {"status": "success"}
 
@@ -188,7 +190,7 @@ async def edit_inventory_item(data: EditInventoryData):
     return {"status": "success"}
 
 # =======================================================
-# 💡 핵심 패치: 발주(주문) 등록 시 Supabase가 요구하는 필수 항목을 완벽하게 챙겨서 보냄!
+# 💡 핵심 패치: history_log 에 없는 category 제외!
 # =======================================================
 @app.post("/api/orders_create")
 async def create_orders(request: Request): 
@@ -203,20 +205,19 @@ async def create_orders(request: Request):
             payloads.append({
                 "location_id": "발주대기", 
                 "action_type": "발주중", 
-                "category": it.get('category', '미분류'),
+                # 💡 "category": it.get('category', '미분류'),  <-- 원인 제거!!
                 "item_name": it.get('item_name', '알수없음'), 
                 "quantity": int(it.get('quantity', 0)), 
                 "pallet_count": float(it.get('pallet_count', 1.0)), 
                 "remarks": it.get('supplier', ''), 
-                "payment_status": "미지급",                  # 💡 Supabase 필수 항목 복구!
+                "payment_status": "미지급",                  
                 "production_date": p_date,
-                "created_at": f"{today}T00:00:00Z"           # 💡 Supabase 필수 항목 복구!
+                "created_at": f"{today}T00:00:00Z"           
             })
         
         async with httpx.AsyncClient() as client:
             res = await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=payloads, headers=HEADERS)
             
-            # 만약 Supabase에서 에러를 뱉으면 프론트엔드로 에러 사유를 그대로 전달
             if res.status_code >= 400:
                 print("DB Insert Error:", res.text)
                 return {"status": "error", "message": f"DB Error: {res.text}"}
@@ -272,7 +273,7 @@ async def history_update(request: Request):
                     "acc_qty": item.get('acc_qty'),
                     "acc_price": item.get('acc_price'),
                     "acc_adj": item.get('acc_adj'),
-                    "category": item.get('category'),
+                    # 💡 "category": item.get('category'), <-- 원인 제거!!
                     "item_name": item.get('item_name'),
                     "production_date": item.get('production_date')
                 }
