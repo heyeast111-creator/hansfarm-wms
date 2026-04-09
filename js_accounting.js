@@ -1,26 +1,21 @@
 // ==========================================
-// [정산/회계] - 명세서 대조 및 확정 로직 (Supabase 100% 영구 저장 연동)
+// [정산/회계] - 명세서 대조 및 확정 로직 (딜레이 제로 즉시 반영 패치)
 // ==========================================
 let currentAccList = []; 
 let currentAccGroupsByIndex = []; 
 
-// 💡 눈속임용 로컬 캐시 전부 제거! 오직 파이썬 서버를 통해 DB로만 전송합니다.
+// 💡 백그라운드 DB 업데이트 (화면을 멈추지 않고 뒤에서 조용히 실행됨)
 async function updateHistoryToDB(historyArray) {
     try {
-        let res = await fetch('/api/history_update', {
+        fetch('/api/history_update', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(historyArray)
+        }).then(res => {
+            if(!res.ok) console.error("DB 백그라운드 업데이트 실패");
         });
-        
-        if(!res.ok) {
-            throw new Error("서버 응답 오류 (상태코드: " + res.status + ")");
-        }
-        return true; // 성공 시 true 반환
     } catch(e) {
-        console.error("DB 업데이트 통신 실패:", e);
-        alert("❌ 서버 저장에 실패했습니다!\n(파이썬 코드가 Vercel에 정상적으로 배포(업데이트)되었는지 확인해주세요.)");
-        return false; // 실패 시 false 반환
+        console.error("DB 업데이트 통신 에러:", e);
     }
 }
 
@@ -278,7 +273,8 @@ function closeEditAccModal() {
     modal.classList.remove('flex');
 }
 
-async function submitEditAccModal() {
+// 💡 1. 딜레이 제거: 원본 데이터를 직접 뜯어고쳐서 0.001초 만에 화면에 반영!
+function submitEditAccModal() {
     let idx = document.getElementById('edit-acc-idx').value;
     let group = currentAccGroupsByIndex[idx];
     if(!group) return;
@@ -294,11 +290,10 @@ async function submitEditAccModal() {
 
     let updatePayload = [];
 
+    // 원본 데이터(globalHistory)를 직접 수정!
     group.ids.forEach((id, i) => {
-        // 깊은 복사를 통해 로컬 데이터 오염 방지
-        let originalH = globalHistory.find(x => x.id === id);
-        if(originalH) {
-            let h = JSON.parse(JSON.stringify(originalH)); 
+        let h = globalHistory.find(x => x.id === id);
+        if(h) {
             h.category = newCat;
             h.item_name = newItem;
             h.production_date = newDate;
@@ -317,66 +312,75 @@ async function submitEditAccModal() {
 
     closeEditAccModal();
     
-    // DB 업데이트 시도
-    let success = await updateHistoryToDB(updatePayload);
-    if(success) {
-        await load(); // DB 저장이 완료된 경우에만 서버 데이터 다시 불러오기
-    }
+    // 💡 화면 딜레이 제로! DB 다녀오기 전에 화면 먼저 즉시 렌더링
+    renderAccounting(); 
+    
+    // 💡 DB는 백그라운드에서 조용히 업데이트 (기다리지 않음)
+    updateHistoryToDB(updatePayload); 
 }
 
-async function confirmAccGroup(idx) {
+// 💡 2. 딜레이 제거: 원본 데이터 즉시 확정 변경
+function confirmAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
     let updatePayload = [];
     
     group.ids.forEach(id => {
-        let originalH = globalHistory.find(x => x.id === id);
-        if(originalH) {
-            let h = JSON.parse(JSON.stringify(originalH)); 
+        let h = globalHistory.find(x => x.id === id); // 원본 참조
+        if(h) {
             h.acc_status = '확정';
             if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
             if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
             if (h.acc_adj === null || h.acc_adj === undefined) h.acc_adj = 0;
+            
             updatePayload.push(h);
         }
     });
 
-    let success = await updateHistoryToDB(updatePayload);
-    if(success) await load();
+    // 💡 0.001초 만에 초록색 확정 뱃지 띄움
+    renderAccounting(); 
+    
+    // 💡 기다림 없이 조용히 DB로 전송
+    updateHistoryToDB(updatePayload); 
 }
 
-async function cancelAccGroupConfirm(idx) {
+// 💡 3. 딜레이 제거: 원본 데이터 즉시 확정 취소
+function cancelAccGroupConfirm(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
     let updatePayload = [];
     
     group.ids.forEach(id => {
-        let originalH = globalHistory.find(x => x.id === id);
-        if(originalH) { 
-            let h = JSON.parse(JSON.stringify(originalH)); 
+        let h = globalHistory.find(x => x.id === id); // 원본 참조
+        if(h) { 
             h.acc_status = '미확정'; 
             updatePayload.push(h);
         }
     });
     
-    let success = await updateHistoryToDB(updatePayload);
-    if(success) await load();
+    // 💡 즉시 화면 원상복구
+    renderAccounting(); 
+    
+    // 💡 기다림 없이 DB 통신
+    updateHistoryToDB(updatePayload); 
 }
 
-async function deleteAccGroup(idx) {
+// 💡 4. 딜레이 제거: 화면에서 즉시 삭제
+function deleteAccGroup(idx) {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     let group = currentAccGroupsByIndex[idx];
     if(!confirm(`해당 내역(총 ${group.ids.length}건 병합됨)을 완전히 삭제하시겠습니까?\n(연결된 렉의 실제 재고도 함께 차감됩니다)`)) return;
     
-    try {
-        let promises = group.ids.map(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
-        await Promise.all(promises);
-        alert("삭제 완료");
-        await load(); 
-    } catch(e) { alert("삭제 실패"); }
+    // 💡 DB 통신 기다리지 않고 화면에서 먼저 삭제해버림
+    globalHistory = globalHistory.filter(x => !group.ids.includes(x.id));
+    renderAccounting(); 
+
+    // 💡 DB 삭제 명령 발송
+    group.ids.forEach(id => fetch(`/api/history/${id}`, { method: 'DELETE' }));
 }
 
-async function batchConfirmAccounting() {
+// 💡 5. 딜레이 제거: 일괄 확정 즉시 반영
+function batchConfirmAccounting() {
     if(loginMode === 'viewer') return alert("뷰어 불가");
     
     let unconfirmedItems = currentAccList.filter(h => h.acc_status !== '확정');
@@ -385,8 +389,7 @@ async function batchConfirmAccounting() {
     if(!confirm(`현재 조회된 목록 중 미확정 건(${unconfirmedItems.length}건)을 모두 '확정' 처리하시겠습니까?\n(확정 시 금액 수정이 잠깁니다)`)) return;
 
     let updatePayload = [];
-    unconfirmedItems.forEach(originalH => {
-        let h = JSON.parse(JSON.stringify(originalH)); 
+    unconfirmedItems.forEach(h => {
         h.acc_status = '확정';
         if (h.acc_qty === null || h.acc_qty === undefined) h.acc_qty = h.quantity;
         if (h.acc_price === null || h.acc_price === undefined) h.acc_price = getAccDefaultPrice(h.item_name, h.remarks);
@@ -395,11 +398,11 @@ async function batchConfirmAccounting() {
         updatePayload.push(h);
     });
 
-    let success = await updateHistoryToDB(updatePayload);
-    if(success) {
-        alert(`성공적으로 일괄 확정되었습니다!`);
-        await load();
-    }
+    // 💡 전체 리스트에 0.001초 만에 확정 뱃지 달아버림!
+    renderAccounting(); 
+    
+    // 💡 백그라운드 DB 저장
+    updateHistoryToDB(updatePayload); 
 }
 
 function exportAccountingExcel() {
