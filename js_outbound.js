@@ -4,19 +4,7 @@
 
 let parsedOutboundData = []; 
 
-// 💡 1. 인쇄 전용 CSS 동적 추가 (화면의 다른 요소는 숨기고 인쇄 영역만 출력하게 만듭니다)
-const printStyle = document.createElement('style');
-printStyle.innerHTML = `
-    @media print {
-        body * { visibility: hidden !important; }
-        #print-zone, #print-zone * { visibility: visible !important; }
-        #print-zone { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
-        .page-break { page-break-after: always; margin-bottom: 0; }
-    }
-`;
-document.head.appendChild(printStyle);
-
-// 💡 2. 업체별 엑셀 양식 매핑 룰
+// 💡 1. 업체별 엑셀 양식 매핑 룰
 const outboundMappings = {
     'LOTTE': {
         name: '롯데 (롯데마트/슈퍼)',
@@ -32,7 +20,7 @@ const outboundMappings = {
     },
     'CJ-CU': {
         name: 'CJ-CU (BGF로지스)',
-        headerRow: 0,               
+        headerRow: 1,               // 💡 수정됨: 헤더가 2줄이라 첫 줄은 무시하고 두 번째 줄부터 인식
         colItemName: '상품명',
         colQty: '총수량',           
         colPrice: '납품원가',
@@ -80,7 +68,7 @@ const outboundMappings = {
     }
 };
 
-// 💡 3. 데이터 정제(Cleaning) 함수들
+// 💡 2. 데이터 정제(Cleaning) 함수들
 function cleanText(txt) {
     if(!txt) return '';
     return String(txt).replace(/\n/g, '').replace(/\r/g, '').trim();
@@ -119,7 +107,7 @@ function parseExcelDate(val, rule) {
     return str; 
 }
 
-// 💡 4. 화면 UI 렌더링
+// 💡 3. 화면 UI 렌더링
 function renderOutboundUI() {
     const container = document.getElementById('view-outbound');
     if(!container) return;
@@ -179,11 +167,10 @@ function renderOutboundUI() {
                 </div>
             </div>
         </div>
-        <div id="print-zone" style="visibility: hidden; position: absolute;"></div>
     `;
 }
 
-// 💡 5. 엑셀 파싱 실행
+// 💡 4. 엑셀 파싱 실행
 async function processOutboundExcel() {
     const fileInput = document.getElementById('outbound-file-upload');
     const clientKey = document.getElementById('outbound-client-select').value;
@@ -217,12 +204,16 @@ async function processOutboundExcel() {
                 const row = rawData[i];
                 if(!row[idxItem] || String(row[idxItem]).trim() === '') continue;
 
+                // 숫자로 변환된 수량이 0이거나 이상하면 추가하지 않음 (오류 방지)
+                let finalQty = parseQuantity(row[idxQty], mapping.parseQty);
+                if (finalQty <= 0 || isNaN(finalQty)) continue;
+
                 parsedOutboundData.push({
                     client_name: mapping.name,
                     expected_date: parseExcelDate(idxDate !== -1 ? row[idxDate] : '', mapping.parseDate),
                     destination: idxDest !== -1 ? cleanText(row[idxDest]) : '기본 배송처',
                     original_item_name: cleanText(row[idxItem]),
-                    quantity: parseQuantity(row[idxQty], mapping.parseQty),
+                    quantity: finalQty,
                     unit_price: parseQuantity(idxPrice !== -1 ? row[idxPrice] : 0, mapping.parsePrice)
                 });
             }
@@ -261,11 +252,11 @@ function renderOutboundPreview() {
     `).join('');
 }
 
-// 💡 6. 핵심: 추출된 데이터를 점포별로 묶어서 거래명세서 HTML 생성 및 인쇄
+// 💡 5. 핵심: 다중 인쇄 잘림 방지용 Iframe 호출 및 실무형 명세서 HTML 생성
 function printDeliveryNotes() {
     if(parsedOutboundData.length === 0) return alert("출력할 데이터가 없습니다.");
 
-    // 1) 배송처(점포)를 기준으로 데이터 묶기 (Grouping)
+    // 1) 배송처(점포)를 기준으로 데이터 묶기
     let printGroups = {};
     parsedOutboundData.forEach(item => {
         let dest = item.destination;
@@ -276,7 +267,7 @@ function printDeliveryNotes() {
         printGroups[dest].totalAmount += (item.quantity * item.unit_price);
     });
 
-    // 2) 그룹화된 데이터를 바탕으로 A4 사이즈의 거래명세서 HTML 양식 생성
+    // 2) A4 사이즈 실무용 거래명세서 HTML 양식 생성
     let htmlContent = '';
     
     for(let dest in printGroups) {
@@ -284,72 +275,148 @@ function printDeliveryNotes() {
         let todayStr = new Date().toISOString().split('T')[0];
         let printDate = data.date || todayStr;
 
-        // 서류 1장(점포 1개)의 HTML 템플릿
         htmlContent += `
-        <div class="page-break" style="padding: 40px; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; background: #fff; color: #000;">
-            <h1 style="text-align: center; font-size: 32px; font-weight: 900; margin-bottom: 30px; letter-spacing: 10px; border-bottom: 3px solid #000; padding-bottom: 15px;">
-                거 래 명 세 서
+        <div class="page-break" style="width: 100%; box-sizing: border-box; background: #fff; color: #000; font-family: 'Malgun Gothic', '맑은 고딕', sans-serif;">
+            <h1 style="text-align: center; font-size: 28px; font-weight: bold; letter-spacing: 20px; text-decoration: underline; margin-bottom: 20px;">
+                거 래 명 세 서 <span style="font-size:14px; letter-spacing:normal; text-decoration:none;">(공급받는자용)</span>
             </h1>
             
-            <div style="display: flex; justify-content: space-between; margin-bottom: 30px; line-height: 1.6;">
-                <div style="width: 45%;">
-                    <div style="border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 10px;">
-                        <span style="font-size: 18px; font-weight: bold;">[공급받는자]</span>
-                    </div>
-                    <p style="font-size: 20px; font-weight: bold; margin: 0;">${dest} <span style="font-size:16px; font-weight:normal;">귀하</span></p>
-                    <p style="font-size: 14px; margin: 5px 0 0 0;"><strong>납품(예정)일자:</strong> ${printDate}</p>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 13px;">
+                <div style="width: 48%;">
+                    <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 110px;">
+                        <tr>
+                            <td rowspan="4" style="width: 30px; text-align: center; border-right: 1px solid #000; font-weight: bold; line-height: 1.5;">공<br>급<br>받<br>는<br>자</td>
+                            <td style="width: 70px; text-align: center; border: 1px solid #000; font-weight: bold;">사업장</td>
+                            <td colspan="3" style="border: 1px solid #000; padding: 0 10px; font-size: 16px; font-weight: bold;">${dest}</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td>
+                            <td colspan="3" style="border: 1px solid #000; padding: 0 10px;"></td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td>
+                            <td style="border: 1px solid #000; padding: 0 10px; width: 30%;"></td>
+                            <td style="width: 50px; text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td>
+                            <td style="border: 1px solid #000; padding: 0 10px;"></td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">연락처</td>
+                            <td colspan="3" style="border: 1px solid #000; padding: 0 10px;"></td>
+                        </tr>
+                    </table>
                 </div>
-                <div style="width: 45%;">
-                    <div style="border-bottom: 1px solid #000; padding-bottom: 5px; margin-bottom: 10px;">
-                        <span style="font-size: 18px; font-weight: bold;">[공 급 자]</span>
-                    </div>
-                    <p style="font-size: 18px; font-weight: bold; margin: 0;">농업회사법인 (주)한스팜</p>
-                    <p style="font-size: 14px; margin: 5px 0 0 0;"><strong>주소:</strong> 경기도 여주시 백사면 현방리</p>
+
+                <div style="width: 48%;">
+                    <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; height: 110px;">
+                        <tr>
+                            <td rowspan="4" style="width: 30px; text-align: center; border-right: 1px solid #000; font-weight: bold; line-height: 1.5;">공<br>급<br>자</td>
+                            <td style="width: 70px; text-align: center; border: 1px solid #000; font-weight: bold;">등록번호</td>
+                            <td colspan="3" style="border: 1px solid #000; padding: 0 10px; text-align: center; font-size: 16px; font-weight: bold; letter-spacing: 2px;">126 - 81 - 70776</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">상 호</td>
+                            <td style="border: 1px solid #000; padding: 0 10px; font-weight: bold;">농업회사법인(주)한스팜</td>
+                            <td style="width: 50px; text-align: center; border: 1px solid #000; font-weight: bold;">성 명</td>
+                            <td style="border: 1px solid #000; padding: 0 10px; text-align: center; font-weight: bold;">한 스 팜</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">주 소</td>
+                            <td colspan="3" style="border: 1px solid #000; padding: 0 10px;">경기도 여주시 백사면 현방리</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">업 태</td>
+                            <td style="border: 1px solid #000; padding: 0 10px;">제조,도소매</td>
+                            <td style="text-align: center; border: 1px solid #000; font-weight: bold;">종 목</td>
+                            <td style="border: 1px solid #000; padding: 0 10px;">농산물(계란)</td>
+                        </tr>
+                    </table>
                 </div>
             </div>
 
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 30px;">
+            <div style="margin-bottom: 5px; font-size: 14px; font-weight: bold; display: flex; justify-content: space-between;">
+                <div>작성일자 : ${printDate}</div>
+                <div>합계금액 : <span style="font-size: 18px; border-bottom: 2px solid #000;">₩ ${(data.totalAmount * 1.1).toLocaleString()}</span> (공급가액 + 부가세)</div>
+            </div>
+
+            <table style="width: 100%; border-collapse: collapse; border: 2px solid #000; font-size: 13px; text-align: center;">
                 <thead>
-                    <tr>
-                        <th style="border: 1px solid #333; padding: 10px 5px; background: #f8fafc; text-align: center; width: 8%;">No.</th>
-                        <th style="border: 1px solid #333; padding: 10px; background: #f8fafc; text-align: left;">품목명</th>
-                        <th style="border: 1px solid #333; padding: 10px; background: #f8fafc; text-align: right; width: 15%;">수량(EA)</th>
-                        <th style="border: 1px solid #333; padding: 10px; background: #f8fafc; text-align: right; width: 15%;">단가(원)</th>
-                        <th style="border: 1px solid #333; padding: 10px; background: #f8fafc; text-align: right; width: 20%;">공급가액(원)</th>
+                    <tr style="background-color: #f1f5f9;">
+                        <th style="border: 1px solid #000; padding: 8px 0; width: 8%;">월/일</th>
+                        <th style="border: 1px solid #000; padding: 8px 0; width: 42%;">품 목 명</th>
+                        <th style="border: 1px solid #000; padding: 8px 0; width: 10%;">수 량</th>
+                        <th style="border: 1px solid #000; padding: 8px 0; width: 12%;">단 가</th>
+                        <th style="border: 1px solid #000; padding: 8px 0; width: 14%;">공급가액</th>
+                        <th style="border: 1px solid #000; padding: 8px 0; width: 14%;">세 액</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${data.items.map((item, i) => `
-                    <tr>
-                        <td style="border: 1px solid #333; padding: 10px 5px; text-align: center;">${i+1}</td>
-                        <td style="border: 1px solid #333; padding: 10px; font-weight: bold;">${item.original_item_name}</td>
-                        <td style="border: 1px solid #333; padding: 10px; text-align: right;">${item.quantity.toLocaleString()}</td>
-                        <td style="border: 1px solid #333; padding: 10px; text-align: right;">${item.unit_price.toLocaleString()}</td>
-                        <td style="border: 1px solid #333; padding: 10px; text-align: right;">${(item.quantity * item.unit_price).toLocaleString()}</td>
+                    ${data.items.map(item => {
+                        let amount = item.quantity * item.unit_price;
+                        let tax = Math.round(amount * 0.1);
+                        let md = item.expected_date ? item.expected_date.substring(5).replace('-', '/') : '';
+                        return `
+                        <tr>
+                            <td style="border: 1px solid #000; padding: 8px 0;">${md}</td>
+                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: left; font-weight: bold;">${item.original_item_name}</td>
+                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${item.quantity.toLocaleString()}</td>
+                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${item.unit_price.toLocaleString()}</td>
+                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${amount.toLocaleString()}</td>
+                            <td style="border: 1px solid #000; padding: 8px 10px; text-align: right;">${tax.toLocaleString()}</td>
+                        </tr>
+                        `;
+                    }).join('')}
+                    <tr style="font-weight: bold; background-color: #f1f5f9;">
+                        <td colspan="2" style="border: 1px solid #000; padding: 10px 0;">합 계</td>
+                        <td style="border: 1px solid #000; padding: 10px 10px; text-align: right;">${data.items.reduce((s, i) => s + i.quantity, 0).toLocaleString()}</td>
+                        <td style="border: 1px solid #000; padding: 10px 0;"></td>
+                        <td style="border: 1px solid #000; padding: 10px 10px; text-align: right;">${data.totalAmount.toLocaleString()}</td>
+                        <td style="border: 1px solid #000; padding: 10px 10px; text-align: right;">${Math.round(data.totalAmount * 0.1).toLocaleString()}</td>
                     </tr>
-                    `).join('')}
                 </tbody>
             </table>
-
-            <div style="text-align: right; font-size: 20px; border: 2px solid #000; padding: 15px; background: #f8fafc;">
-                <strong>총 청구금액:</strong> <span style="font-size: 24px; color: #b91c1c;">₩ ${data.totalAmount.toLocaleString()}</span>
-            </div>
             
-            <div style="margin-top: 50px; text-align: center; color: #64748b; font-size: 12px;">
-                본 명세서는 한스팜 WMS 시스템에 의해 전자적으로 발행되었습니다.
+            <div style="margin-top: 10px; font-size: 12px; text-align: left; border: 1px solid #000; padding: 10px;">
+                <strong>비고:</strong> 상기 내용과 같이 납품합니다. 인수자는 물품 확인 후 서명 바랍니다. (인수자 서명: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;)
             </div>
         </div>
         `;
     }
 
-    // 3) 숨겨둔 인쇄 영역에 HTML을 꽂아넣고 브라우저 인쇄 실행
-    let printZone = document.getElementById('print-zone');
-    printZone.innerHTML = htmlContent;
+    // 3) 💡 다중 페이지 절단 방지용 히든 Iframe 인쇄 로직 (메인 화면 CSS의 간섭을 완전히 차단)
+    let iframe = document.createElement('iframe');
+    iframe.style.visibility = 'hidden';
+    iframe.style.position = 'absolute';
+    iframe.style.width = '0px';
+    iframe.style.height = '0px';
+    document.body.appendChild(iframe);
 
-    // 약간의 렌더링 대기 시간 후 인쇄 창 호출
+    let doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <html>
+        <head>
+            <style>
+                @media print {
+                    @page { size: A4 portrait; margin: 10mm 15mm; }
+                    body { font-family: 'Malgun Gothic', '맑은 고딕', sans-serif; margin: 0; padding: 0; }
+                    .page-break { page-break-after: always; margin-bottom: 20mm; }
+                    .page-break:last-child { page-break-after: auto; margin-bottom: 0; }
+                    table { page-break-inside: auto; }
+                    tr { page-break-inside: avoid; page-break-after: auto; }
+                }
+            </style>
+        </head>
+        <body>
+            ${htmlContent}
+        </body>
+        </html>
+    `);
+    doc.close();
+
+    // 로딩 후 인쇄 창 띄우고 삭제
     setTimeout(() => {
-        window.print();
-        // 인쇄 창이 닫히면 내용을 비워서 다음 작업을 준비
-        setTimeout(() => { printZone.innerHTML = ''; }, 1000);
-    }, 300);
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => { document.body.removeChild(iframe); }, 2000);
+    }, 500);
 }
