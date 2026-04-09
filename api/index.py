@@ -5,7 +5,7 @@ import datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import List, Optional
 
 app = FastAPI()
 
@@ -13,6 +13,7 @@ SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co"
 SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu"
 HEADERS = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}", "Content-Type": "application/json", "Prefer": "return=representation"}
 
+# 💡 Vercel 바깥쪽(루트) 폴더 경로를 귀신같이 찾아냄
 API_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(API_DIR)
 
@@ -22,7 +23,7 @@ async def add_cache_control_header(request: Request, call_next):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
-# ==== 화면 및 파일 제공 ====
+# ==== 💡 화면 및 파일 제공 라우터 (파이썬이 직접 화면을 띄움) ====
 @app.get("/")
 @app.get("/api")
 @app.get("/api/")
@@ -32,6 +33,7 @@ async def serve_ui():
         return FileResponse(path)
     return HTMLResponse(f"<h1>HTML 파일을 찾을 수 없습니다. (경로: {path})</h1>", status_code=404)
 
+# 어떤 이름의 js 파일이든 다 화면으로 보내주는 마법의 라우터
 @app.get("/{file_name}.js")
 @app.get("/api/{file_name}.js")
 async def serve_js(file_name: str):
@@ -48,15 +50,13 @@ async def serve_logo():
         return FileResponse(path)
     return HTMLResponse("Logo Not Found", status_code=404)
 
-# ==== 데이터 모델 정의 ====
+# ==== API 라우터 (데이터베이스 통신) ====
 class InboundData(BaseModel): location_id: str; category: str; item_name: str; quantity: int; pallet_count: float = 1.0; production_date: Optional[str] = None; remarks: Optional[str] = ""
 class OutboundData(BaseModel): inventory_id: str; location_id: str; item_name: str; quantity: int; pallet_count: float = 1.0
 class ProductData(BaseModel): category: str; item_name: str; supplier: str = "기본입고처"; daily_usage: int = 0; unit_price: int = 0; pallet_ea: int = 1
 class TransferData(BaseModel): inventory_id: str; from_location: str; to_location: str; item_name: str; quantity: int; pallet_count: float = 1.0
 class EditInventoryData(BaseModel): inventory_id: str; location_id: str; item_name: str; action: str; new_quantity: Optional[int] = None; new_date: Optional[str] = None; pallet_count: Optional[float] = None
-class OrderCreateData(BaseModel): category: Optional[str] = None; item_name: str; quantity: int; pallet_count: float; supplier: str; production_date: Optional[str] = None
 
-# ==== 헬퍼 함수 ====
 async def fetch_get(endpoint):
     async with httpx.AsyncClient() as client:
         r = await client.get(f"{SUPABASE_URL}/rest/v1/{endpoint}", headers=HEADERS)
@@ -67,7 +67,6 @@ async def fetch_delete(endpoint):
         await client.delete(f"{SUPABASE_URL}/rest/v1/{endpoint}", headers=HEADERS)
         return {"status": "success"}
 
-# ==== 데이터 조회 API ====
 @app.get("/api/products")
 async def get_products(): return await fetch_get("products?select=*")
 @app.get("/api/finished_products")
@@ -79,7 +78,6 @@ async def get_inventory(): return await fetch_get("inventory_v2?select=*")
 @app.get("/api/history")
 async def get_history(): return await fetch_get("history_log?select=*")
 
-# ==== BOM 관리 API ====
 @app.post("/api/bom")
 async def add_bom(data: dict):
     async with httpx.AsyncClient() as client:
@@ -89,7 +87,6 @@ async def add_bom(data: dict):
 @app.delete("/api/bom")
 async def delete_bom(id: str): return await fetch_delete(f"bom_master?id=eq.{id}")
 
-# ==== 품목 마스터 API ====
 @app.post("/api/products")
 async def add_product(data: ProductData):
     async with httpx.AsyncClient() as client:
@@ -120,15 +117,13 @@ async def update_finished_product(old_name: str, old_supplier: str, data: Produc
 @app.delete("/api/finished_products")
 async def delete_finished_product(item_name: str, supplier: str): return await fetch_delete(f"finished_products?item_name=eq.{item_name}&supplier=eq.{supplier}")
 
-# ==== 💡 입/출고/이동 (DB 직접 업데이트 패치 완료) ====
 @app.post("/api/inbound")
 async def inbound_stock(data: InboundData):
     async with httpx.AsyncClient() as client:
         p_date = data.production_date if data.production_date else datetime.datetime.now().strftime('%Y-%m-%d')
         inv_payload = {"location_id": data.location_id, "category": data.category, "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "production_date": p_date, "remarks": data.remarks}
         await client.post(f"{SUPABASE_URL}/rest/v1/inventory_v2", json=inv_payload, headers=HEADERS)
-        
-        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "payment_status": "미지급", "production_date": p_date, "category": data.category, "created_at": f"{p_date}T00:00:00Z"}
+        log_payload = {"location_id": data.location_id, "action_type": "입고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count, "remarks": data.remarks, "payment_status": "미지급", "production_date": p_date, "created_at": f"{p_date}T00:00:00Z"}
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=log_payload, headers=HEADERS)
         return {"status": "success"}
 
@@ -138,15 +133,9 @@ async def outbound_stock(data: OutboundData):
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
         inv = r.json()
         if not inv: return {"status": "error"}
-        
-        current_qty = inv[0]['quantity']
-        current_pallet = inv[0].get('pallet_count', 1.0)
-        
-        if data.quantity >= current_qty: 
-            await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
-        else: 
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity, "pallet_count": current_pallet - data.pallet_count}, headers=HEADERS)
-            
+        current_qty = inv[0]['quantity']; current_pallet = inv[0].get('pallet_count', 1.0)
+        if data.quantity >= current_qty: await client.delete(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
+        else: await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity, "pallet_count": current_pallet - data.pallet_count}, headers=HEADERS)
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json={"location_id": data.location_id, "action_type": "출고", "item_name": data.item_name, "quantity": data.quantity, "pallet_count": data.pallet_count}, headers=HEADERS)
         return {"status": "success"}
 
@@ -156,17 +145,12 @@ async def transfer_stock(data: TransferData):
         r = await client.get(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", headers=HEADERS)
         inv = r.json()
         if not inv: return {"status": "error"}
-        
-        item_data = inv[0]
-        current_qty = item_data['quantity']
-        current_pallet = item_data.get('pallet_count', 1.0)
-        
+        item_data = inv[0]; current_qty = item_data['quantity']; current_pallet = item_data.get('pallet_count', 1.0)
         to_loc = data.to_location.upper()
         if not to_loc.startswith("FL-") and not to_loc.startswith("R-") and not to_loc.startswith("C-") and not to_loc.startswith("W-"):
             to_loc = ("C-" if "C-" in data.from_location else "R-") + to_loc
         
-        if data.quantity >= current_qty: 
-            await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": to_loc}, headers=HEADERS)
+        if data.quantity >= current_qty: await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"location_id": to_loc}, headers=HEADERS)
         else:
             await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"quantity": current_qty - data.quantity, "pallet_count": current_pallet - data.pallet_count}, headers=HEADERS)
             new_row = item_data.copy()
@@ -189,33 +173,31 @@ async def edit_inventory_item(data: EditInventoryData):
             await client.patch(f"{SUPABASE_URL}/rest/v1/inventory_v2?id=eq.{data.inventory_id}", json={"production_date": data.new_date}, headers=HEADERS)
     return {"status": "success"}
 
-# ==== 발주 관련 API ====
+# 💡 모델 제약조건 우회: 프론트에서 카테고리와 예상일을 보내므로 dict로 받도록 복구했습니다.
 @app.post("/api/orders_create")
-async def create_orders(items: List[OrderCreateData]):
+async def create_orders(items: List[dict]): 
     today = datetime.datetime.now().strftime('%Y-%m-%d')
     payloads = []
     for it in items:
-        p_date = it.production_date if it.production_date else today
+        p_date = it.get('production_date') if it.get('production_date') else today
         payloads.append({
             "location_id": "발주대기", 
             "action_type": "발주중", 
-            "category": it.category or '미분류',
-            "item_name": it.item_name, 
-            "quantity": it.quantity, 
-            "pallet_count": it.pallet_count, 
-            "remarks": it.supplier, 
+            "category": it.get('category', '미분류'),
+            "item_name": it.get('item_name'), 
+            "quantity": it.get('quantity'), 
+            "pallet_count": it.get('pallet_count'), 
+            "remarks": it.get('supplier'), 
             "payment_status": "미지급", 
             "production_date": p_date, 
             "created_at": f"{today}T00:00:00Z"
         })
-        
     async with httpx.AsyncClient() as client:
         await client.post(f"{SUPABASE_URL}/rest/v1/history_log", json=payloads, headers=HEADERS)
     return {"status": "success"}
 
 @app.delete("/api/history/{log_id}")
-async def delete_history_log(log_id: str): 
-    return await fetch_delete(f"history_log?id=eq.{log_id}")
+async def delete_history_log(log_id: str): return await fetch_delete(f"history_log?id=eq.{log_id}")
 
 @app.post("/api/close_inventory")
 async def close_inventory():
@@ -230,7 +212,29 @@ async def close_inventory():
         return {"status": "success"}
 
 # =======================================================
-# 💡 [정산/회계 확정 DB 연동] - httpx 로 완벽 통신
+# 💡 조(Jo)님의 원본 복구: 발주 내역 예정도착일(production_date) 업데이트
+# =======================================================
+@app.post("/api/history_update_date")
+async def update_history_date(data: dict):
+    log_id = data.get('id')
+    expected_date = data.get('expected_date')
+    
+    if not log_id or not expected_date:
+        return {"status": "error", "message": "ID or date is missing"}
+        
+    async with httpx.AsyncClient() as client:
+        response = await client.patch(
+            f"{SUPABASE_URL}/rest/v1/history_log?id=eq.{log_id}", 
+            json={"production_date": expected_date}, 
+            headers=HEADERS
+        )
+        if response.status_code in [200, 204]:
+            return {"status": "success"}
+        else:
+            return {"status": "error", "message": f"Supabase error: {response.text}"}
+
+# =======================================================
+# 💡 새로 병합됨: 정산/회계 확정 데이터 DB 연동
 # =======================================================
 @app.post("/api/history_update")
 async def history_update(request: Request):
