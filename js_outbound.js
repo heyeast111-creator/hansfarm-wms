@@ -192,12 +192,18 @@ async function processOutboundExcel() {
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
             
+            // 💡 [요청사항 반영] 롯데의 경우 가장 먼저 A1 셀 텍스트 삭제
+            if (currentClientKey === 'LOTTE' && rawData.length > 0 && rawData[0].length > 0) {
+                rawData[0][0] = ""; 
+            }
+
+            // 💡 센터명(용인, 오산, 경산 등) 자동 추출 로직
             let centerName = '기본물류센터';
             if (currentClientKey === 'LOTTE') {
-                for(let r=0; r<10; r++) {
+                for(let r=0; r<15; r++) {
                     if(!rawData[r]) continue;
                     let cIdx = rawData[r].findIndex(cell => String(cell).replace(/\s/g,'') === '점포(센터)');
-                    if(cIdx !== -1 && rawData[r+1]) {
+                    if(cIdx !== -1 && rawData[r+1] && rawData[r+1][cIdx]) {
                         centerName = String(rawData[r+1][cIdx]).trim();
                         break;
                     }
@@ -210,7 +216,7 @@ async function processOutboundExcel() {
             const targetItemName = cleanText(mapping.colItemName);
             const targetQtyName = cleanText(mapping.colQty);
 
-            // 헤더 자동 탐색
+            // 헤더 동적 탐색 (A7이든 A9이든 상품명이 있는 줄을 정확히 찾아냄)
             for(let r = 0; r < Math.min(rawData.length, 20); r++) {
                 const row = rawData[r].map(h => cleanText(h));
                 let tempIdxItem = row.findIndex(h => h.includes(targetItemName));
@@ -222,8 +228,14 @@ async function processOutboundExcel() {
                     idxItem = tempIdxItem;
                     idxQty = tempIdxQty;
                     idxPrice = row.findIndex(h => h.includes(cleanText(mapping.colPrice)));
-                    idxDest = row.findIndex(h => h.includes(cleanText(mapping.colDest)));
                     idxDate = row.findIndex(h => h.includes(cleanText(mapping.colDate)));
+                    
+                    // 💡 [요청사항 반영] 롯데는 무조건 D열(인덱스 3)을 점포명으로 고정
+                    if (currentClientKey === 'LOTTE') {
+                        idxDest = 3; 
+                    } else {
+                        idxDest = row.findIndex(h => h.includes(cleanText(mapping.colDest)));
+                    }
                     break;
                 }
             }
@@ -240,9 +252,8 @@ async function processOutboundExcel() {
 
                 let dest = idxDest !== -1 ? preserveText(row[idxDest]) : '기본 배송처';
                 
-                if(currentClientKey === 'LOTTE') {
-                    dest = '롯데쇼핑(주)';
-                } else if(currentClientKey === 'CJ-CU' || currentClientKey === 'CJ-GS' || currentClientKey === 'GS') {
+                // 타사 합산용 강제 목적지 변경
+                if(currentClientKey === 'CJ-CU' || currentClientKey === 'CJ-GS' || currentClientKey === 'GS') {
                     dest = '씨제이제일제당 주식회사';
                 }
 
@@ -264,7 +275,7 @@ async function processOutboundExcel() {
     reader.readAsArrayBuffer(file);
 }
 
-// 💡 5. 추출된 데이터 화면 렌더링
+// 💡 5. 추출된 데이터 합산 및 렌더링
 function renderOutboundPreview() {
     const tbody = document.getElementById('outbound-tbody');
     const countSpan = document.getElementById('outbound-count');
@@ -309,9 +320,8 @@ function printDeliveryNotes() {
     if(parsedOutboundData.length === 0) return alert("출력할 데이터가 없습니다.");
 
     let htmlContent = '';
-    let pageOrientation = 'portrait'; // 💡 기본은 세로 방향 출력
+    let pageOrientation = 'portrait'; 
 
-    // 데이터 합산
     let printGroups = {};
     parsedOutboundData.forEach(item => {
         let dest = item.destination;
@@ -329,10 +339,10 @@ function printDeliveryNotes() {
     });
 
     // ==========================================
-    // 📝 템플릿 1: 롯데 (가로 방향 크로스탭 양식)
+    // 📝 템플릿 1: 롯데 (LOTTE) - 가로 크로스탭 양식
     // ==========================================
     if (currentClientKey === 'LOTTE') {
-        pageOrientation = 'landscape'; // 💡 롯데는 무조건 가로(Landscape)로 출력!
+        pageOrientation = 'landscape'; // 💡 롯데 무조건 가로 출력
         
         let centerGroups = {};
         parsedOutboundData.forEach(item => {
@@ -353,9 +363,12 @@ function printDeliveryNotes() {
             let stores = {};
             data.items.forEach(i => {
                 if(!stores[i.destination]) {
+                    // 점포명에 (2302) 코드가 있으면 분리
                     let match = i.destination.match(/\((\d+)\)/);
                     let code = match ? match[1] : '';
                     let name = i.destination.replace(/\(\d+\)/, '').trim();
+                    if(!code) name = i.destination;
+
                     stores[i.destination] = { code: code, name: name, products: {}, total: 0 };
                     productNames.forEach(p => stores[i.destination].products[p] = 0);
                 }
@@ -423,11 +436,12 @@ function printDeliveryNotes() {
                         </tr>
                     </thead>
                     <tbody>
-                        ${storeKeys.map(k => {
+                        ${storeKeys.map((k, index) => {
                             let s = stores[k];
+                            let displayNo = s.code ? s.code : (index + 1);
                             return `
                             <tr>
-                                <td style="border: 1px solid #000; padding: 6px 2px;">${s.code}</td>
+                                <td style="border: 1px solid #000; padding: 6px 2px;">${displayNo}</td>
                                 <td style="border: 1px solid #000; padding: 6px 4px; text-align:left;">${s.name}</td>
                                 ${productNames.map(p => {
                                     let q = s.products[p];
