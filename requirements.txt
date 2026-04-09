@@ -3,5 +3,7 @@ uvicorn
 httpx
 mangum
 pydantic
+python-multipart
 xlrd==1.2.0
+xlwt
 xlutils==2.0.0
