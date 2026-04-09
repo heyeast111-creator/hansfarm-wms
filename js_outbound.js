@@ -1,16 +1,20 @@
 // ==========================================
-// [출고관리] - 서류 출력 전용 시스템 (재고 차감 X)
+// [출고관리] - 서류 출력 전용 시스템 (수량 완벽 패치 & 엑셀 다운로드)
 // ==========================================
 
 let parsedOutboundData = []; 
 let currentClientKey = '';
 
-// 💡 1. 업체별 엑셀 양식 매핑 룰
+// 💡 엑셀 원본 다운로드를 위한 전역 변수
+let globalRawExcelData = null;
+let globalExcelFileName = '발주서.xlsx';
+
+// 💡 1. 업체별 엑셀 양식 매핑 룰 (수량 열 수정 완료)
 const outboundMappings = {
     'LOTTE': {
         name: '롯데 (롯데마트/슈퍼)',
         colItemName: '상품명',
-        colQty: '주문수',
+        colQty: '주문수',           // BOX와 EA 혼재 (로직에서 자동 변환)
         colPrice: '단가',
         colDest: '점포명',
         colDate: '납품일',
@@ -21,7 +25,7 @@ const outboundMappings = {
     'CJ-CU': {
         name: 'CJ-CU (BGF로지스)',
         colItemName: '상품명',
-        colQty: '총수량',           
+        colQty: '수정수량',         // 💡 패치: '총수량'이 아닌 실제 점포별 '수정수량'으로 변경
         colPrice: '납품원가',
         colDest: '센터명',
         colDate: '납품예정일자',     
@@ -32,7 +36,7 @@ const outboundMappings = {
     'GS': {
         name: 'GS (지에스리테일)',
         colItemName: '상품명',
-        colQty: '발주량',         
+        colQty: '낱개수량',         
         colPrice: '발주단가',
         colDest: '배송처',         
         colDate: '납품일자',       
@@ -87,31 +91,24 @@ function parseQuantity(val, rule) {
 function parseExcelDate(val, rule) {
     if(!val) return '';
     let str = String(val).trim();
-    
     if(rule === 'EXCEL_SERIAL') {
         let num = parseFloat(str);
-        if(!isNaN(num)) {
-            let date = new Date(Math.round((num - 25569) * 86400 * 1000));
-            return date.toISOString().split('T')[0];
-        }
-    } 
-    else if (rule === 'YYYYMMDD_14') {
+        if(!isNaN(num)) return new Date(Math.round((num - 25569) * 86400 * 1000)).toISOString().split('T')[0];
+    } else if (rule === 'YYYYMMDD_14') {
         if(str.length >= 8) return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`;
     }
-    
-    if(str.length === 8 && !str.includes('-')) {
-        return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`; 
-    }
+    if(str.length === 8 && !str.includes('-')) return `${str.substring(0,4)}-${str.substring(4,6)}-${str.substring(6,8)}`; 
     return str; 
 }
 
+// BOX 단위일 경우 품명에서 규격(EA)을 추출하여 곱해주기 위한 함수
 function extractEaPerBox(itemName) {
     let match = itemName.match(/(\d+)(구|입|p|ea|\))/i);
     if(match && parseInt(match[1]) > 0) return parseInt(match[1]);
     return 1; 
 }
 
-// 💡 3. 화면 UI 렌더링
+// 💡 3. 화면 UI 렌더링 (다운로드 버튼 추가)
 function renderOutboundUI() {
     const container = document.getElementById('view-outbound');
     if(!container) return;
@@ -122,7 +119,7 @@ function renderOutboundUI() {
         <div class="w-full max-w-7xl mx-auto space-y-6">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-2xl font-black text-slate-800">🖨️ 고객사별 맞춤 서류 인쇄 시스템</h2>
-                <span class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">※ 현재 모드: 명세서 인쇄 전용</span>
+                <span class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full border border-rose-200">※ 수량 오류 수정 및 엑셀 다운로드 추가판</span>
             </div>
             
             <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -133,13 +130,16 @@ function renderOutboundUI() {
                             ${optionsHtml}
                         </select>
                     </div>
-                    <div class="flex-1">
+                    <div class="flex-[1.5]">
                         <label class="block text-xs font-black text-slate-500 mb-2">2. 발주서(Excel/CSV) 업로드</label>
                         <input type="file" id="outbound-file-upload" accept=".xlsx, .xls, .csv" class="w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-black file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer border border-slate-200 rounded-lg">
                     </div>
-                    <div class="w-full md:w-auto">
-                        <button onclick="processOutboundExcel()" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-black py-3 px-8 rounded-lg shadow-md transition-all">
-                            데이터 자동 추출
+                    <div class="w-full md:w-auto flex flex-col gap-2">
+                        <button onclick="processOutboundExcel()" class="w-full bg-slate-700 hover:bg-slate-800 text-white font-black py-2.5 px-6 rounded-lg shadow-md transition-all text-sm">
+                            서류용 데이터 추출
+                        </button>
+                        <button onclick="downloadModifiedExcel()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-2.5 px-6 rounded-lg shadow-md transition-all text-sm">
+                            📥 업로드용 엑셀 다운로드
                         </button>
                     </div>
                 </div>
@@ -192,19 +192,20 @@ async function processOutboundExcel() {
             const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
             
-            // 💡 [요청사항 반영] 롯데의 경우 가장 먼저 A1 셀 텍스트 삭제
-            if (currentClientKey === 'LOTTE' && rawData.length > 0 && rawData[0].length > 0) {
-                rawData[0][0] = ""; 
-            }
+            // 💡 다운로드를 위해 원본 데이터를 깊은 복사하여 전역 변수에 저장
+            globalRawExcelData = JSON.parse(JSON.stringify(rawData)); 
+            globalExcelFileName = file.name;
 
-            // 💡 센터명(용인, 오산, 경산 등) 자동 추출 로직
+            // 서류용 명세서 출력을 위한 파싱 (데이터 손상 방지를 위해 복사본 사용)
+            let processData = JSON.parse(JSON.stringify(rawData));
+
             let centerName = '기본물류센터';
             if (currentClientKey === 'LOTTE') {
                 for(let r=0; r<15; r++) {
-                    if(!rawData[r]) continue;
-                    let cIdx = rawData[r].findIndex(cell => String(cell).replace(/\s/g,'') === '점포(센터)');
-                    if(cIdx !== -1 && rawData[r+1] && rawData[r+1][cIdx]) {
-                        centerName = String(rawData[r+1][cIdx]).trim();
+                    if(!processData[r]) continue;
+                    let cIdx = processData[r].findIndex(cell => String(cell).replace(/\s/g,'') === '점포(센터)');
+                    if(cIdx !== -1 && processData[r+1] && processData[r+1][cIdx]) {
+                        centerName = String(processData[r+1][cIdx]).trim();
                         break;
                     }
                 }
@@ -216,9 +217,9 @@ async function processOutboundExcel() {
             const targetItemName = cleanText(mapping.colItemName);
             const targetQtyName = cleanText(mapping.colQty);
 
-            // 헤더 동적 탐색 (A7이든 A9이든 상품명이 있는 줄을 정확히 찾아냄)
-            for(let r = 0; r < Math.min(rawData.length, 20); r++) {
-                const row = rawData[r].map(h => cleanText(h));
+            // 헤더 동적 탐색
+            for(let r = 0; r < Math.min(processData.length, 20); r++) {
+                const row = processData[r].map(h => cleanText(h));
                 let tempIdxItem = row.findIndex(h => h.includes(targetItemName));
                 let tempIdxQty = row.findIndex(h => h.includes(targetQtyName));
 
@@ -230,12 +231,8 @@ async function processOutboundExcel() {
                     idxPrice = row.findIndex(h => h.includes(cleanText(mapping.colPrice)));
                     idxDate = row.findIndex(h => h.includes(cleanText(mapping.colDate)));
                     
-                    // 💡 [요청사항 반영] 롯데는 무조건 D열(인덱스 3)을 점포명으로 고정
-                    if (currentClientKey === 'LOTTE') {
-                        idxDest = 3; 
-                    } else {
-                        idxDest = row.findIndex(h => h.includes(cleanText(mapping.colDest)));
-                    }
+                    if (currentClientKey === 'LOTTE') { idxDest = 3; } 
+                    else { idxDest = row.findIndex(h => h.includes(cleanText(mapping.colDest))); }
                     break;
                 }
             }
@@ -243,16 +240,22 @@ async function processOutboundExcel() {
             if(actualHeaderRow === -1) throw new Error(`[${mapping.colItemName}] 또는 [${mapping.colQty}] 열을 찾을 수 없습니다.`);
 
             parsedOutboundData = [];
-            for(let i = actualHeaderRow + 1; i < rawData.length; i++) {
-                const row = rawData[i];
+            for(let i = actualHeaderRow + 1; i < processData.length; i++) {
+                const row = processData[i];
                 if(!row[idxItem] || String(row[idxItem]).trim() === '') continue;
 
-                let finalQty = parseQuantity(row[idxQty], mapping.parseQty);
+                let rawQtyStr = String(row[idxQty] || '');
+                let finalQty = parseQuantity(rawQtyStr, mapping.parseQty);
+                
+                // 💡 [수량 완벽 패치] 롯데 등에서 '3 (BOX)' 문자가 섞여 들어오면 낱개로 자동 환산!
+                if(rawQtyStr.toUpperCase().includes('BOX')) {
+                    let eaPerBox = extractEaPerBox(preserveText(row[idxItem]));
+                    finalQty = finalQty * eaPerBox;
+                }
+
                 if (finalQty <= 0 || isNaN(finalQty)) continue;
 
                 let dest = idxDest !== -1 ? preserveText(row[idxDest]) : '기본 배송처';
-                
-                // 타사 합산용 강제 목적지 변경
                 if(currentClientKey === 'CJ-CU' || currentClientKey === 'CJ-GS' || currentClientKey === 'GS') {
                     dest = '씨제이제일제당 주식회사';
                 }
@@ -275,6 +278,33 @@ async function processOutboundExcel() {
     reader.readAsArrayBuffer(file);
 }
 
+// 💡 4-1. [신규 추가] 고객사별 업로드용 엑셀 변환 및 다운로드 기능
+function downloadModifiedExcel() {
+    if(!globalRawExcelData || globalRawExcelData.length === 0) {
+        return alert("먼저 엑셀 파일을 업로드하고 [서류용 데이터 추출] 버튼을 눌러주세요.");
+    }
+    
+    // 원본 데이터 보호를 위한 복사
+    let exportData = JSON.parse(JSON.stringify(globalRawExcelData));
+    
+    // 고객사별 맞춤형 데이터 가공 룰 적용
+    if(currentClientKey === 'LOTTE') {
+        // 롯데의 경우 무조건 A1(첫번째 줄, 첫번째 칸) 내용을 삭제
+        if(exportData.length > 0 && exportData[0].length > 0) {
+            exportData[0][0] = "";
+        }
+    } 
+    // 나중에 타사(SSG, GS 등)의 특별한 다운로드 양식 룰이 생기면 여기에 else if 로 추가 가능!
+
+    // 가공된 배열 데이터를 다시 엑셀 시트로 변환하여 다운로드 트리거
+    const ws = XLSX.utils.aoa_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    
+    const clientPrefix = currentClientKey === 'LOTTE' ? "[롯데_업로드용]" : `[${currentClientKey}_업로드용]`;
+    XLSX.writeFile(wb, clientPrefix + "_" + globalExcelFileName);
+}
+
 // 💡 5. 추출된 데이터 합산 및 렌더링
 function renderOutboundPreview() {
     const tbody = document.getElementById('outbound-tbody');
@@ -291,11 +321,8 @@ function renderOutboundPreview() {
     let merged = {};
     parsedOutboundData.forEach(item => {
         let key = item.destination + '|' + item.expected_date + '|' + item.original_item_name;
-        if(!merged[key]) {
-            merged[key] = { ...item };
-        } else {
-            merged[key].quantity += item.quantity;
-        }
+        if(!merged[key]) { merged[key] = { ...item }; } 
+        else { merged[key].quantity += item.quantity; }
     });
 
     let displayData = Object.values(merged);
@@ -315,7 +342,7 @@ function renderOutboundPreview() {
     `).join('');
 }
 
-// 💡 6. 고객사별 맞춤 템플릿 인쇄 엔진
+// 💡 6. 고객사별 맞춤 템플릿 인쇄 엔진 (이전과 동일하게 완벽 작동)
 function printDeliveryNotes() {
     if(parsedOutboundData.length === 0) return alert("출력할 데이터가 없습니다.");
 
@@ -339,20 +366,17 @@ function printDeliveryNotes() {
     });
 
     // ==========================================
-    // 📝 템플릿 1: 롯데 (LOTTE) - 가로 크로스탭 양식
+    // 📝 템플릿 1: 롯데 (가로 크로스탭)
     // ==========================================
     if (currentClientKey === 'LOTTE') {
-        pageOrientation = 'landscape'; // 💡 롯데 무조건 가로 출력
-        
+        pageOrientation = 'landscape';
         let centerGroups = {};
         parsedOutboundData.forEach(item => {
             let center = item.center_name || '물류센터';
             let dateKey = item.expected_date || new Date().toISOString().split('T')[0];
             let groupKey = center + "_" + dateKey;
             
-            if(!centerGroups[groupKey]) {
-                centerGroups[groupKey] = { center: center, date: dateKey, items: [] };
-            }
+            if(!centerGroups[groupKey]) { centerGroups[groupKey] = { center: center, date: dateKey, items: [] }; }
             centerGroups[groupKey].items.push(item);
         });
 
@@ -363,7 +387,6 @@ function printDeliveryNotes() {
             let stores = {};
             data.items.forEach(i => {
                 if(!stores[i.destination]) {
-                    // 점포명에 (2302) 코드가 있으면 분리
                     let match = i.destination.match(/\((\d+)\)/);
                     let code = match ? match[1] : '';
                     let name = i.destination.replace(/\(\d+\)/, '').trim();
@@ -386,9 +409,7 @@ function printDeliveryNotes() {
                 grandTotal += i.quantity;
             });
 
-            let year = data.date.substring(0,4);
-            let month = data.date.substring(5,7);
-            let day = data.date.substring(8,10);
+            let year = data.date.substring(0,4); let month = data.date.substring(5,7); let day = data.date.substring(8,10);
             let printDateStr = `${year} 년 ${month} 월 ${day} 일`;
 
             htmlContent += `
@@ -465,7 +486,7 @@ function printDeliveryNotes() {
         }
     } 
     // ==========================================
-    // 📝 템플릿 2: CJ-CU (세로 방향)
+    // 📝 템플릿 2: CJ-CU
     // ==========================================
     else if (currentClientKey === 'CJ-CU') {
         for(let key in printGroups) {
@@ -672,7 +693,7 @@ function printDeliveryNotes() {
         }
     }
 
-    // 💡 7. 투명 Iframe 인쇄 로직 (페이지 방향 동적 적용)
+    // 💡 7. 투명 Iframe 인쇄 로직
     let iframe = document.createElement('iframe');
     iframe.style.visibility = 'hidden';
     iframe.style.position = 'absolute';
