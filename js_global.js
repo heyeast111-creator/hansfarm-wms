@@ -32,7 +32,7 @@ function siteLogin() {
     if (pw === '0000') {
         loginMode = 'viewer';
         alert("뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
-    } else if (pw === '00700') {
+    } else if (pw === '11111') {
         loginMode = 'editor';
         alert("일반 사용자 모드로 접속되었습니다.");
     } else {
