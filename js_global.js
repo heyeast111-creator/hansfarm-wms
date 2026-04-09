@@ -32,16 +32,18 @@ function siteLogin() {
     if (pw === '0000') {
         loginMode = 'viewer';
         alert("뷰어 모드로 접속되었습니다.\n(모든 기능을 '보기'만 가능합니다)");
-    } else if (pw === '11111') {
+    } else if (pw === '00700') {
         loginMode = 'editor';
         alert("일반 사용자 모드로 접속되었습니다.");
     } else {
         alert("비밀번호가 틀렸습니다.");
         return;
     }
+    // 💡 로그인 성공 시 창을 숨기고 앱 화면을 띄움
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('main-app').classList.remove('hidden');
     document.getElementById('main-app').classList.add('flex');
+    
     load(); 
     showView('dashboard');
 }
@@ -79,7 +81,7 @@ function renderAll() {
     try { updateMapSearchCategoryDropdown(); } catch(e){}
     try { updateSummarySupplierDropdown(); } catch(e){}
     try { renderSafetyStock(); } catch(e){}
-    try { if(typeof renderAccounting === 'function') renderAccounting(); } catch(e){} // 💡 날짜 튕김 버그(updateAccFilters) 삭제!
+    try { if(typeof renderAccounting === 'function') renderAccounting(); } catch(e){} 
     try { populateProductFilters('finished'); renderProductMaster('finished'); } catch(e){}
     try { populateProductFilters('materials'); renderProductMaster('materials'); } catch(e){}
     try { updateBomDropdowns(); renderBomMaster(); } catch(e){}
@@ -184,7 +186,7 @@ function showView(viewName) {
     } 
     else if(viewName === 'order') { switchOrderTab(currentOrderTab); } 
     else if(viewName === 'dashboard') updateDashboard(); 
-    else if(viewName === 'accounting') { if(typeof renderAccounting === 'function') renderAccounting(); } // 💡 날짜 초기화 방지
+    else if(viewName === 'accounting') { if(typeof renderAccounting === 'function') renderAccounting(); } 
 }
 
 function toggleRightPanel() {
@@ -271,10 +273,7 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
-window.onload = function() { 
-    let loginScreen = document.getElementById('login-screen');
-    if(loginScreen) loginScreen.style.display = 'flex'; 
-};
+// 💡 악명 높았던 강제 재팝업(window.onload) 꼼수 완전 삭제 완료!!
 
 // ==========================================
 // 대시보드 로직 
