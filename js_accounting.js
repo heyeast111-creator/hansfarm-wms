@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (에러 100% 제거 및 긴급 복구 탑재)
+// [정산/회계] 명세서 대조 및 확정 로직 (유령 데이터 픽스 및 긴급 복구)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -49,18 +49,16 @@ function populateAccDropdowns() {
     if (itemSelect.innerHTML !== itemHtml) { itemSelect.innerHTML = itemHtml; itemSelect.value = Array.from(items).includes(currentItem) ? currentItem : 'ALL'; }
 }
 
-// 💡 날짜/업체 변경 시 즉각 렌더링되도록 연결
 window.updateAccFilters = function(type) {
     if(type === 'supplier') populateAccDropdowns(); 
     renderAccounting();
 };
 
-// 💡 꼬여버린 수량을 원래대로 되돌리는 복구 버튼 로직
+// 💡 꼬여버린 수량/숨어버린 유령 데이터를 원래대로 되돌리는 복구 버튼 로직
 async function emergencyResetAccQty() {
-    if(!confirm("🚨 경고: 꼬여버린 정산 수량을 [최초 입고된 정상 수량]으로 100% 강제 초기화합니다. 진행하시겠습니까?")) return;
+    if(!confirm("🚨 경고: 화면에서 사라지거나 꼬여버린 데이터를 [최초 입고된 정상 상태]로 100% 강제 초기화합니다. 진행하시겠습니까?")) return;
     try {
         let targetHistory = globalHistory.filter(h => h.action_type === '입고' && (h.acc_qty !== null || h.acc_status === '확정'));
-        // acc_qty를 null로 만들어서 원본 quantity를 따라가게 리셋
         let payload = targetHistory.map(h => ({ id: h.id, acc_qty: null, acc_status: '미확정' }));
         
         if(payload.length === 0) return alert("복구할 데이터가 없습니다.");
@@ -69,15 +67,13 @@ async function emergencyResetAccQty() {
             let chunk = payload.slice(i, i+100);
             await fetch('/api/history_update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chunk) });
         }
-        alert("✅ 복구 완료! 모든 수량이 정상으로 돌아왔습니다.");
+        alert("✅ 복구 완료! 사라졌던 항목들이 모두 돌아왔습니다.");
         load();
     } catch(e) { alert("복구 중 에러 발생: " + e.message); }
 }
 
-// 💡 메인 렌더링 함수
 window.renderAccounting = async function() {
     try {
-        // 복구 버튼 동적 생성
         let headerDiv = document.querySelector('#view-accounting .flex.space-x-2');
         if(headerDiv && !document.getElementById('emergency-reset-btn')) {
             let btn = document.createElement('button');
@@ -119,7 +115,7 @@ window.renderAccounting = async function() {
             let merged = {};
             targetHistory.forEach(h => {
                 let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
-                if (current_qty <= 0) return; // 분할 후 0개가 된 찌꺼기는 숨김
+                if (current_qty <= 0) return; // 0개짜리 찌꺼기 방지
 
                 let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
                 let pDate = h.production_date || (h.created_at ? h.created_at.substring(0, 10) : '');
@@ -135,7 +131,7 @@ window.renderAccounting = async function() {
                 } else {
                     merged[key].ids.push(h.id);
                     merged[key].original_qty += h.quantity;
-                    merged[key].qty += current_qty; // 확정 여부 상관없이 실제 수량 합산
+                    merged[key].qty += current_qty; 
                     merged[key].adj += (h.acc_adj || 0); 
                 }
             });
@@ -228,7 +224,7 @@ function renderIndividualTable() {
     `;
 
     if(accTableData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 조회된 내역이 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다.</td></tr>`;
         return;
     }
 
@@ -277,6 +273,38 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
+// 💡 [이름 보호 및 수량 검증 로직 추가] 
+function updateEditAccCategoryDropdown(selectedCategory) {
+    const type = document.getElementById('acc-type').value; 
+    let set = new Set();
+    if (type === 'FINISHED') finishedProductMaster.forEach(p => set.add(p.category)); 
+    else if (type === 'MATERIAL') productMaster.forEach(p => set.add(p.category)); 
+    else { finishedProductMaster.forEach(p => set.add(p.category)); productMaster.forEach(p => set.add(p.category)); }
+    
+    const catSelect = document.getElementById('edit-acc-cat');
+    catSelect.innerHTML = Array.from(set).map(c => `<option value="${c}">${c}</option>`).join('');
+    if(selectedCategory) catSelect.value = selectedCategory;
+}
+
+function updateEditAccItemDropdown(category, selectedItem) {
+    const type = document.getElementById('acc-type').value; 
+    let list = [];
+    if (type === 'FINISHED') list = finishedProductMaster.filter(p => p.category === category); 
+    else if (type === 'MATERIAL') list = productMaster.filter(p => p.category === category); 
+    else { list = finishedProductMaster.filter(p => p.category === category).concat(productMaster.filter(p => p.category === category)); }
+    
+    const itemSelect = document.getElementById('edit-acc-item');
+    let optionsHtml = list.map(p => `<option value="${p.item_name}">${p.item_name}</option>`);
+    
+    // 💡 핵심: 엑셀 원본 이름이 마스터(드롭다운)에 없으면 억지로 첫번째 항목으로 바꾸지 않고, 선택지에 원본 이름을 강제로 끼워 넣음!
+    if (selectedItem && !list.find(p => p.item_name === selectedItem)) {
+        optionsHtml.unshift(`<option value="${selectedItem}">${selectedItem}</option>`);
+    }
+    
+    itemSelect.innerHTML = optionsHtml.join('');
+    if(selectedItem) itemSelect.value = selectedItem;
+}
+
 function openEditAccModal(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx];
@@ -289,9 +317,12 @@ function openEditAccModal(idx) {
     document.getElementById('edit-acc-price').value = item.price;
     document.getElementById('edit-acc-adj').value = item.adj || 0;
 
-    updateEditAccCategoryDropdown();
     let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name) || productMaster.find(p => p.item_name === item.item_name);
-    if(pInfo) { document.getElementById('edit-acc-cat').value = pInfo.category; updateEditAccItemDropdown(pInfo.category); document.getElementById('edit-acc-item').value = item.item_name; }
+    
+    // 💡 카테고리가 없더라도 원본 이름을 유지
+    updateEditAccCategoryDropdown(pInfo ? pInfo.category : null);
+    let currentCat = document.getElementById('edit-acc-cat').value;
+    updateEditAccItemDropdown(currentCat, item.item_name);
 
     let modal = document.getElementById('edit-acc-modal'); modal.classList.remove('hidden'); modal.classList.add('flex');
 }
@@ -304,11 +335,18 @@ async function submitEditAccModal() {
     let item = sortedData[idx];
     if(!item) return;
 
+    // 💡 수량 입력란에 콤마가 있거나 0이 입력되어 숨겨지는 것을 방지
+    let inputQty = parseInt(String(document.getElementById('edit-acc-qty').value).replace(/,/g, ''));
+    if(isNaN(inputQty) || inputQty <= 0) return alert("수량을 1개 이상 정확히 입력해주세요.");
+
     try {
         let updatePayload = item.ids.map(id => ({
-            id: id, production_date: document.getElementById('edit-acc-date').value, item_name: document.getElementById('edit-acc-item').value,
-            acc_qty: Math.floor((parseInt(document.getElementById('edit-acc-qty').value) || 0) / item.ids.length), 
-            acc_price: parseInt(document.getElementById('edit-acc-price').value) || 0, acc_adj: Math.floor((parseInt(document.getElementById('edit-acc-adj').value) || 0) / item.ids.length)
+            id: id, 
+            production_date: document.getElementById('edit-acc-date').value, 
+            item_name: document.getElementById('edit-acc-item').value, // 💡 이제 이름이 강제로 엉뚱하게 바뀌지 않음
+            acc_qty: Math.floor(inputQty / item.ids.length), 
+            acc_price: parseInt(document.getElementById('edit-acc-price').value) || 0, 
+            acc_adj: Math.floor((parseInt(document.getElementById('edit-acc-adj').value) || 0) / item.ids.length)
         }));
 
         const res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
@@ -433,19 +471,6 @@ async function batchConfirmAccounting() {
         let res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         if((await res.json()).status === 'success') { alert("일괄 확정 완료!"); load(); } else { alert("일괄 확정 실패"); }
     } catch (e) { alert("일괄 확정 중 오류: " + e.message); }
-}
-
-function updateEditAccCategoryDropdown() {
-    const type = document.getElementById('acc-type').value; let set = new Set();
-    if (type === 'FINISHED') finishedProductMaster.forEach(p => set.add(p.category)); else if (type === 'MATERIAL') productMaster.forEach(p => set.add(p.category)); else { finishedProductMaster.forEach(p => set.add(p.category)); productMaster.forEach(p => set.add(p.category)); }
-    document.getElementById('edit-acc-cat').innerHTML = Array.from(set).map(c => `<option value="${c}">${c}</option>`).join('');
-    updateEditAccItemDropdown(document.getElementById('edit-acc-cat').value);
-}
-
-function updateEditAccItemDropdown(category) {
-    const type = document.getElementById('acc-type').value; let list = [];
-    if (type === 'FINISHED') list = finishedProductMaster.filter(p => p.category === category); else if (type === 'MATERIAL') list = productMaster.filter(p => p.category === category); else { list = finishedProductMaster.filter(p => p.category === category).concat(productMaster.filter(p => p.category === category)); }
-    document.getElementById('edit-acc-item').innerHTML = list.map(p => `<option value="${p.item_name}">${p.item_name}</option>`).join('');
 }
 
 function exportAccountingExcel() {
