@@ -430,3 +430,72 @@ function exportAccountingExcel() {
     let today = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `한스팜_정산회계_명세서대조_${today}.xlsx`);
 }
+// ==========================================
+// 💡 정산/회계 드롭다운 자동 채우기 패치
+// ==========================================
+
+function populateAccDropdowns() {
+    const supSelect = document.getElementById('acc-supplier');
+    const itemSelect = document.getElementById('acc-item');
+    if(!supSelect || !itemSelect) return;
+
+    // 현재 선택된 값 기억해두기
+    const currentSup = supSelect.value || 'ALL';
+    const currentItem = itemSelect.value || 'ALL';
+
+    let suppliers = new Set();
+    let items = new Set();
+
+    // 전체 히스토리에서 '입고' 내역만 스캔하여 매입처와 품목명 추출
+    globalHistory.forEach(h => {
+        if(h.action_type === '입고') {
+            let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
+            let itm = (h.item_name || "").trim();
+            
+            if(sup) suppliers.add(sup);
+            
+            // 매입처가 '전체'이거나 선택된 매입처와 같을 때만 해당 품목을 추가 (연동 필터링)
+            if(currentSup === 'ALL' || currentSup === sup) {
+                if(itm) items.add(itm);
+            }
+        }
+    });
+
+    // 매입처 드롭다운 그리기 (옵션이 비어있거나 업데이트가 필요할 때)
+    let supHtml = '<option value="ALL">전체 매입처</option>' + Array.from(suppliers).sort().map(s => `<option value="${s}">${s}</option>`).join('');
+    if (supSelect.innerHTML !== supHtml) {
+        supSelect.innerHTML = supHtml;
+        supSelect.value = Array.from(suppliers).includes(currentSup) ? currentSup : 'ALL';
+    }
+
+    // 품목명 드롭다운 그리기
+    let itemHtml = '<option value="ALL">전체 품목</option>' + Array.from(items).sort().map(i => `<option value="${i}">${i}</option>`).join('');
+    if (itemSelect.innerHTML !== itemHtml) {
+        itemSelect.innerHTML = itemHtml;
+        itemSelect.value = Array.from(items).includes(currentItem) ? currentItem : 'ALL';
+    }
+}
+
+// 💡 기존 필터 함수 안전하게 가로채서 드롭다운 연동시키기
+const originalUpdateAccFilters = typeof updateAccFilters === 'function' ? updateAccFilters : null;
+window.updateAccFilters = function(type) {
+    if(type === 'supplier') {
+        // 매입처를 바꿨을 때 품목명 리스트 새로고침
+        populateAccDropdowns(); 
+    }
+    if(originalUpdateAccFilters) {
+        originalUpdateAccFilters(type);
+    } else if(typeof renderAccounting === 'function') {
+        renderAccounting();
+    }
+};
+
+// 💡 테이블 렌더링될 때 드롭다운도 무조건 같이 세팅되도록 후킹(Hooking)
+const originalRenderAcc = typeof renderAccounting === 'function' ? renderAccounting : null;
+window.renderAccounting = function() {
+    const supSelect = document.getElementById('acc-supplier');
+    if (supSelect && supSelect.options.length <= 1) {
+        populateAccDropdowns();
+    }
+    if(originalRenderAcc) originalRenderAcc();
+};
