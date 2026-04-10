@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (수기 입력 기능 추가)
+// [정산/회계] 명세서 대조 및 확정 로직 (실시간 동기화 완벽 보장판)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -66,33 +66,30 @@ async function emergencyResetAccQty() {
             let chunk = payload.slice(i, i+100);
             await fetch('/api/history_update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chunk) });
         }
+        // 💡 모든 DB 작업이 끝나면 무조건 await load() 를 호출하여 화면 갱신 보장
+        await load();
         alert("✅ 복구 완료! 사라졌던 항목들이 모두 돌아왔습니다.");
-        load();
     } catch(e) { alert("복구 중 에러 발생: " + e.message); }
 }
 
 window.renderAccounting = async function() {
     try {
         let headerDiv = document.querySelector('#view-accounting .flex.space-x-2');
-        
-        // 💡 1. [긴급 복구] 버튼 동적 생성
         if(headerDiv && !document.getElementById('emergency-reset-btn')) {
             let btn = document.createElement('button');
             btn.id = 'emergency-reset-btn';
-            btn.className = 'bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md text-sm transition-colors animate-pulse whitespace-nowrap';
+            btn.className = 'bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md text-sm transition-colors whitespace-nowrap';
             btn.innerText = '🚨 수량 오류 초기화';
             btn.onclick = emergencyResetAccQty;
             headerDiv.prepend(btn);
         }
-
-        // 💡 2. [수기 입력] 버튼 동적 생성
         if(headerDiv && !document.getElementById('direct-input-btn')) {
             let btn = document.createElement('button');
             btn.id = 'direct-input-btn';
             btn.className = 'bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md text-sm transition-colors whitespace-nowrap';
             btn.innerText = '📝 명세서 수기 입력';
             btn.onclick = openDirectInputModal;
-            headerDiv.prepend(btn); // 긴급 복구 버튼 옆에 추가
+            headerDiv.prepend(btn);
         }
 
         const supSelect = document.getElementById('acc-supplier');
@@ -137,8 +134,7 @@ window.renderAccounting = async function() {
                         ids: [h.id], date: pDate, supplier: sup, item_name: h.item_name,
                         original_qty: h.quantity, qty: current_qty,
                         price: h.acc_price || getUnitPrice(h.item_name, 'materials', sup), 
-                        adj: h.acc_adj || 0, status: h.acc_status || '미확정',
-                        location_id: h.location_id
+                        adj: h.acc_adj || 0, status: h.acc_status || '미확정', location_id: h.location_id
                     };
                 } else {
                     merged[key].ids.push(h.id);
@@ -204,165 +200,6 @@ window.renderAccounting = async function() {
     } catch (e) { console.error("정산 렌더링 에러:", e); }
 };
 
-// ==========================================
-// 💡 [신규] 명세서 수기 입력 모달 및 로직
-// ==========================================
-
-function openDirectInputModal() {
-    let modal = document.getElementById('direct-input-modal');
-    if(!modal) {
-        modal = document.createElement('div');
-        modal.id = 'direct-input-modal';
-        modal.className = 'hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]';
-        document.body.appendChild(modal);
-    }
-
-    let today = new Date().toISOString().split('T')[0];
-
-    // 기존 품목 마스터에서 매입처(supplier) 목록 추출
-    let suppliers = new Set();
-    finishedProductMaster.forEach(p => { if(p.supplier) suppliers.add(p.supplier); });
-    productMaster.forEach(p => { if(p.supplier) suppliers.add(p.supplier); });
-    let supOptions = Array.from(suppliers).map(s => `<option value="${s}">${s}</option>`).join('');
-
-    modal.innerHTML = `
-        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col w-[400px] transform transition-all animate-[popup_0.2s_ease-out_forwards]">
-            <h2 class="text-xl font-black text-teal-800 mb-4 border-b pb-2">📝 명세서 수기 입력</h2>
-            
-            <div class="mb-3">
-                <label class="block text-xs font-bold text-slate-500 mb-1">명세서 입고 일자</label>
-                <input type="date" id="di-date" value="${today}" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500">
-            </div>
-
-            <div class="mb-3">
-                <label class="block text-xs font-bold text-slate-500 mb-1">매입처</label>
-                <select id="di-supplier" onchange="updateDiCategoryDropdown()" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500">
-                    <option value="">-- 매입처를 선택하세요 --</option>
-                    ${supOptions}
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label>
-                <select id="di-cat" onchange="updateDiItemDropdown()" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500"></select>
-            </div>
-
-            <div class="mb-3">
-                <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label>
-                <select id="di-item" onchange="updateDiPrice()" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500"></select>
-            </div>
-
-            <div class="flex space-x-3 mb-6">
-                <div class="w-1/2">
-                    <label class="block text-xs font-bold text-slate-500 mb-1">수량 (EA)</label>
-                    <input type="number" id="di-qty" placeholder="수량 입력" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-black text-indigo-700 outline-none focus:border-teal-500">
-                </div>
-                <div class="w-1/2">
-                    <label class="block text-xs font-bold text-slate-500 mb-1">단가 (원)</label>
-                    <input type="number" id="di-price" placeholder="단가" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-black text-emerald-700 outline-none focus:border-teal-500">
-                </div>
-            </div>
-
-            <div class="flex space-x-3">
-                <button onclick="closeDirectInputModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button>
-                <button onclick="submitDirectInput()" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">장부에 입력</button>
-            </div>
-        </div>
-    `;
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-window.updateDiCategoryDropdown = function() {
-    let sup = document.getElementById('di-supplier').value;
-    let categories = new Set();
-    finishedProductMaster.forEach(p => { if(!sup || p.supplier === sup) categories.add(p.category); });
-    productMaster.forEach(p => { if(!sup || p.supplier === sup) categories.add(p.category); });
-    
-    let catSelect = document.getElementById('di-cat');
-    catSelect.innerHTML = Array.from(categories).map(c => `<option value="${c}">${c}</option>`).join('');
-    updateDiItemDropdown();
-}
-
-window.updateDiItemDropdown = function() {
-    let sup = document.getElementById('di-supplier').value;
-    let cat = document.getElementById('di-cat').value;
-    let items = [];
-    finishedProductMaster.forEach(p => { if((!sup || p.supplier === sup) && p.category === cat) items.push(p); });
-    productMaster.forEach(p => { if((!sup || p.supplier === sup) && p.category === cat) items.push(p); });
-    
-    let itemSelect = document.getElementById('di-item');
-    itemSelect.innerHTML = items.map(i => `<option value="${i.item_name}">${i.item_name}</option>`).join('');
-    updateDiPrice();
-}
-
-window.updateDiPrice = function() {
-    let sup = document.getElementById('di-supplier').value;
-    let itemName = document.getElementById('di-item').value;
-    let found = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === sup) 
-             || productMaster.find(p => p.item_name === itemName && p.supplier === sup);
-    if(found) {
-        document.getElementById('di-price').value = found.unit_price || 0;
-    }
-}
-
-function closeDirectInputModal() {
-    let modal = document.getElementById('direct-input-modal');
-    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
-}
-
-async function submitDirectInput() {
-    const date = document.getElementById('di-date').value;
-    const supplier = document.getElementById('di-supplier').value;
-    const item_name = document.getElementById('di-item').value;
-    const qty = parseInt(document.getElementById('di-qty').value) || 0;
-    const price = parseInt(document.getElementById('di-price').value) || 0;
-
-    if(!date || !supplier || !item_name || qty <= 0) {
-        return alert("날짜, 매입처, 품목명, 수량을 정확히 입력해주세요.");
-    }
-
-    try {
-        let newPayload = {
-            location_id: "[명세서수기입력]", // WMS 렉맵에는 보이지 않음
-            action_type: "입고",
-            item_name: item_name,
-            quantity: qty,
-            acc_qty: qty,
-            acc_price: price,
-            acc_status: '미확정',
-            pallet_count: 1, 
-            remarks: supplier,
-            payment_status: "미지급",
-            production_date: date,
-            created_at: `${date}T00:00:00Z` 
-        };
-
-        const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu";
-
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/history_log`, {
-            method: 'POST',
-            headers: {
-                "apikey": SUPABASE_KEY,
-                "Authorization": `Bearer ${SUPABASE_KEY}`,
-                "Content-Type": "application/json",
-                "Prefer": "return=representation"
-            },
-            body: JSON.stringify([newPayload])
-        });
-
-        if(!res.ok) throw new Error("수기 입력 데이터 생성 실패");
-        
-        alert("장부에 수기 입력이 완료되었습니다!");
-        closeDirectInputModal();
-        load(); 
-
-    } catch (e) {
-        alert("오류 발생: " + e.message);
-    }
-}
-
 function getUnitPrice(itemName, type, supplier) {
     let list = type === 'finished' ? finishedProductMaster : productMaster;
     let found = list.find(p => p.item_name === itemName && (p.supplier === supplier || !p.supplier));
@@ -411,7 +248,6 @@ function renderIndividualTable() {
         let statusBadge = isConf ? `<span class="bg-emerald-50 text-emerald-600 px-2 py-1 rounded border border-emerald-200 text-[10px] font-black">✅ 확정됨</span>` : `<span class="bg-orange-50 text-orange-600 px-2 py-1 rounded border border-orange-200 text-[10px] font-black">⚠️ 미확정</span>`;
         let total = (item.qty * item.price) + item.adj;
         let mergeInfo = item.ids.length > 1 ? `<span class="text-[9px] text-slate-400 ml-1">(${item.ids.length}건 병합)</span>` : '';
-        
         let manualBadge = item.location_id === '[명세서수기입력]' ? `<span class="text-[9px] text-teal-600 bg-teal-50 border border-teal-200 px-1 rounded ml-1">수기입력</span>` : '';
 
         let actionBtns = isConf 
@@ -446,87 +282,151 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
+// 💡 명세서 수기 입력 모달
+function openDirectInputModal() {
+    let modal = document.getElementById('direct-input-modal');
+    if(!modal) {
+        modal = document.createElement('div');
+        modal.id = 'direct-input-modal';
+        modal.className = 'hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]';
+        document.body.appendChild(modal);
+    }
+
+    let today = new Date().toISOString().split('T')[0];
+    let suppliers = new Set();
+    finishedProductMaster.forEach(p => { if(p.supplier) suppliers.add(p.supplier); });
+    productMaster.forEach(p => { if(p.supplier) suppliers.add(p.supplier); });
+    let supOptions = Array.from(suppliers).map(s => `<option value="${s}">${s}</option>`).join('');
+
+    modal.innerHTML = `
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col w-[400px] transform transition-all animate-[popup_0.2s_ease-out_forwards]">
+            <h2 class="text-xl font-black text-teal-800 mb-4 border-b pb-2">📝 명세서 수기 입력</h2>
+            <div class="mb-3"><label class="block text-xs font-bold text-slate-500 mb-1">명세서 입고 일자</label><input type="date" id="di-date" value="${today}" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500"></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-slate-500 mb-1">매입처</label><select id="di-supplier" onchange="updateDiCategoryDropdown()" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500"><option value="">-- 매입처 선택 --</option>${supOptions}</select></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><select id="di-cat" onchange="updateDiItemDropdown()" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500"></select></div>
+            <div class="mb-3"><label class="block text-xs font-bold text-slate-500 mb-1">품목명</label><select id="di-item" onchange="updateDiPrice()" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-bold outline-none focus:border-teal-500"></select></div>
+            <div class="flex space-x-3 mb-6">
+                <div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">수량 (EA)</label><input type="number" id="di-qty" placeholder="수량 입력" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-black text-indigo-700 outline-none focus:border-teal-500"></div>
+                <div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">단가 (원)</label><input type="number" id="di-price" placeholder="단가" class="w-full border-2 border-slate-300 rounded p-2 text-sm font-black text-emerald-700 outline-none focus:border-teal-500"></div>
+            </div>
+            <div class="flex space-x-3"><button onclick="closeDirectInputModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button><button onclick="submitDirectInput()" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">장부에 입력</button></div>
+        </div>
+    `;
+    modal.classList.remove('hidden'); modal.classList.add('flex');
+}
+
+window.updateDiCategoryDropdown = function() {
+    let sup = document.getElementById('di-supplier').value; let categories = new Set();
+    finishedProductMaster.forEach(p => { if(!sup || p.supplier === sup) categories.add(p.category); });
+    productMaster.forEach(p => { if(!sup || p.supplier === sup) categories.add(p.category); });
+    document.getElementById('di-cat').innerHTML = Array.from(categories).map(c => `<option value="${c}">${c}</option>`).join('');
+    updateDiItemDropdown();
+}
+
+window.updateDiItemDropdown = function() {
+    let sup = document.getElementById('di-supplier').value; let cat = document.getElementById('di-cat').value; let items = [];
+    finishedProductMaster.forEach(p => { if((!sup || p.supplier === sup) && p.category === cat) items.push(p); });
+    productMaster.forEach(p => { if((!sup || p.supplier === sup) && p.category === cat) items.push(p); });
+    document.getElementById('di-item').innerHTML = items.map(i => `<option value="${i.item_name}">${i.item_name}</option>`).join('');
+    updateDiPrice();
+}
+
+window.updateDiPrice = function() {
+    let sup = document.getElementById('di-supplier').value; let itemName = document.getElementById('di-item').value;
+    let found = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === sup) || productMaster.find(p => p.item_name === itemName && p.supplier === sup);
+    if(found) document.getElementById('di-price').value = found.unit_price || 0;
+}
+
+function closeDirectInputModal() { let modal = document.getElementById('direct-input-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
+
+// 💡 [핵심] 수기입력 완료 시 무조건 await load()로 잠그고 새로고침 보장
+async function submitDirectInput() {
+    const date = document.getElementById('di-date').value;
+    const supplier = document.getElementById('di-supplier').value;
+    const item_name = document.getElementById('di-item').value;
+    const qty = parseInt(document.getElementById('di-qty').value) || 0;
+    const price = parseInt(document.getElementById('di-price').value) || 0;
+
+    if(!date || !supplier || !item_name || qty <= 0) return alert("입력값을 확인해주세요.");
+
+    try {
+        let newPayload = {
+            location_id: "[명세서수기입력]", action_type: "입고", item_name: item_name, quantity: qty, acc_qty: qty, acc_price: price,
+            acc_status: '미확정', pallet_count: 1, remarks: supplier, payment_status: "미지급", production_date: date, created_at: `${date}T00:00:00Z` 
+        };
+        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
+            method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" },
+            body: JSON.stringify([newPayload])
+        });
+        if(!res.ok) throw new Error("수기 입력 데이터 생성 실패");
+        
+        closeDirectInputModal();
+        await load(); // 💡 여기서 완벽하게 로딩창 띄우고 다 끝날때까지 기다림!!
+        alert("✅ 장부에 수기 입력이 실시간으로 완료되었습니다!"); 
+    } catch (e) { alert("오류 발생: " + e.message); }
+}
+
 function updateEditAccCategoryDropdown(selectedCategory) {
-    const type = document.getElementById('acc-type').value; 
-    let set = new Set();
-    if (type === 'FINISHED') finishedProductMaster.forEach(p => set.add(p.category)); 
-    else if (type === 'MATERIAL') productMaster.forEach(p => set.add(p.category)); 
-    else { finishedProductMaster.forEach(p => set.add(p.category)); productMaster.forEach(p => set.add(p.category)); }
-    
+    const type = document.getElementById('acc-type').value; let set = new Set();
+    if (type === 'FINISHED') finishedProductMaster.forEach(p => set.add(p.category)); else if (type === 'MATERIAL') productMaster.forEach(p => set.add(p.category)); else { finishedProductMaster.forEach(p => set.add(p.category)); productMaster.forEach(p => set.add(p.category)); }
     const catSelect = document.getElementById('edit-acc-cat');
     catSelect.innerHTML = Array.from(set).map(c => `<option value="${c}">${c}</option>`).join('');
     if(selectedCategory) catSelect.value = selectedCategory;
 }
 
 function updateEditAccItemDropdown(category, selectedItem) {
-    const type = document.getElementById('acc-type').value; 
-    let list = [];
-    if (type === 'FINISHED') list = finishedProductMaster.filter(p => p.category === category); 
-    else if (type === 'MATERIAL') list = productMaster.filter(p => p.category === category); 
-    else { list = finishedProductMaster.filter(p => p.category === category).concat(productMaster.filter(p => p.category === category)); }
-    
+    const type = document.getElementById('acc-type').value; let list = [];
+    if (type === 'FINISHED') list = finishedProductMaster.filter(p => p.category === category); else if (type === 'MATERIAL') list = productMaster.filter(p => p.category === category); else { list = finishedProductMaster.filter(p => p.category === category).concat(productMaster.filter(p => p.category === category)); }
     const itemSelect = document.getElementById('edit-acc-item');
     let optionsHtml = list.map(p => `<option value="${p.item_name}">${p.item_name}</option>`);
-    
-    if (selectedItem && !list.find(p => p.item_name === selectedItem)) {
-        optionsHtml.unshift(`<option value="${selectedItem}">${selectedItem}</option>`);
-    }
-    
+    if (selectedItem && !list.find(p => p.item_name === selectedItem)) optionsHtml.unshift(`<option value="${selectedItem}">${selectedItem}</option>`);
     itemSelect.innerHTML = optionsHtml.join('');
     if(selectedItem) itemSelect.value = selectedItem;
 }
 
 function openEditAccModal(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
-    let item = sortedData[idx];
-    if(!item) return;
+    let item = sortedData[idx]; if(!item) return;
 
-    document.getElementById('edit-acc-idx').value = idx;
-    document.getElementById('edit-acc-supplier').innerText = item.supplier;
-    document.getElementById('edit-acc-date').value = item.date;
-    document.getElementById('edit-acc-qty').value = item.qty;
-    document.getElementById('edit-acc-price').value = item.price;
-    document.getElementById('edit-acc-adj').value = item.adj || 0;
+    document.getElementById('edit-acc-idx').value = idx; document.getElementById('edit-acc-supplier').innerText = item.supplier; document.getElementById('edit-acc-date').value = item.date;
+    document.getElementById('edit-acc-qty').value = item.qty; document.getElementById('edit-acc-price').value = item.price; document.getElementById('edit-acc-adj').value = item.adj || 0;
 
     let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name) || productMaster.find(p => p.item_name === item.item_name);
-    
     updateEditAccCategoryDropdown(pInfo ? pInfo.category : null);
-    let currentCat = document.getElementById('edit-acc-cat').value;
-    updateEditAccItemDropdown(currentCat, item.item_name);
+    updateEditAccItemDropdown(document.getElementById('edit-acc-cat').value, item.item_name);
 
     let modal = document.getElementById('edit-acc-modal'); modal.classList.remove('hidden'); modal.classList.add('flex');
 }
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
 
+// 💡 수정 후 완벽 동기화
 async function submitEditAccModal() {
     const idx = document.getElementById('edit-acc-idx').value;
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
-    let item = sortedData[idx];
-    if(!item) return;
+    let item = sortedData[idx]; if(!item) return;
 
     let inputQty = parseInt(String(document.getElementById('edit-acc-qty').value).replace(/,/g, ''));
     if(isNaN(inputQty) || inputQty <= 0) return alert("수량을 1개 이상 정확히 입력해주세요.");
 
     try {
         let updatePayload = item.ids.map(id => ({
-            id: id, 
-            production_date: document.getElementById('edit-acc-date').value, 
-            item_name: document.getElementById('edit-acc-item').value, 
-            acc_qty: Math.floor(inputQty / item.ids.length), 
-            acc_price: parseInt(document.getElementById('edit-acc-price').value) || 0, 
-            acc_adj: Math.floor((parseInt(document.getElementById('edit-acc-adj').value) || 0) / item.ids.length)
+            id: id, production_date: document.getElementById('edit-acc-date').value, item_name: document.getElementById('edit-acc-item').value, 
+            acc_qty: Math.floor(inputQty / item.ids.length), acc_price: parseInt(document.getElementById('edit-acc-price').value) || 0, acc_adj: Math.floor((parseInt(document.getElementById('edit-acc-adj').value) || 0) / item.ids.length)
         }));
 
         const res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { closeEditAccModal(); load(); } else { alert("수정 실패"); }
+        if((await res.json()).status === 'success') { 
+            closeEditAccModal(); 
+            await load(); // 💡 여기서 대기
+            alert("✅ 수정 내용이 실시간으로 적용되었습니다.");
+        } else { alert("수정 실패"); }
     } catch (e) { alert("오류 발생: " + e.message); }
 }
 
 function openSplitAccModal(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
-    splitTargetItem = sortedData[idx];
-    if(!splitTargetItem) return;
+    splitTargetItem = sortedData[idx]; if(!splitTargetItem) return;
 
     let modal = document.getElementById('split-acc-modal');
     if(!modal) { modal = document.createElement('div'); modal.id = 'split-acc-modal'; modal.className = 'hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]'; document.body.appendChild(modal); }
@@ -534,15 +434,8 @@ function openSplitAccModal(idx) {
     modal.innerHTML = `
         <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col w-[400px] transform transition-all animate-[popup_0.2s_ease-out_forwards]">
             <h2 class="text-xl font-black text-purple-800 mb-4 border-b pb-2">✂️ 항목 분할 (나누기)</h2>
-            <div class="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm">
-                <div class="text-slate-500 font-bold mb-1">원본 품목명: <span class="text-slate-800 font-black">${splitTargetItem.item_name}</span></div>
-                <div class="text-slate-500 font-bold">현재 총 수량: <span class="text-indigo-600 font-black">${splitTargetItem.qty.toLocaleString()}</span> EA</div>
-            </div>
-            <div class="mb-4">
-                <label class="block text-xs font-bold text-slate-500 mb-1">분할해 낼 수량 (새로운 행으로 분리)</label>
-                <div class="flex items-center space-x-2"><input type="number" id="split-out-qty" onkeyup="calcSplitRemain()" onchange="calcSplitRemain()" max="${splitTargetItem.qty - 1}" min="1" placeholder="예: 50" class="w-full border-2 border-purple-300 rounded p-2.5 text-sm font-black text-purple-700 outline-none"><span class="font-bold text-slate-500 text-sm">EA</span></div>
-                <div class="mt-2 text-xs font-bold text-rose-500 hidden" id="split-error-msg">수량은 1부터 ${splitTargetItem.qty - 1} 사이여야 합니다.</div>
-            </div>
+            <div class="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-200 text-sm"><div class="text-slate-500 font-bold mb-1">원본 품목명: <span class="text-slate-800 font-black">${splitTargetItem.item_name}</span></div><div class="text-slate-500 font-bold">현재 총 수량: <span class="text-indigo-600 font-black">${splitTargetItem.qty.toLocaleString()}</span> EA</div></div>
+            <div class="mb-4"><label class="block text-xs font-bold text-slate-500 mb-1">분할해 낼 수량 (새로운 행으로 분리)</label><div class="flex items-center space-x-2"><input type="number" id="split-out-qty" onkeyup="calcSplitRemain()" onchange="calcSplitRemain()" max="${splitTargetItem.qty - 1}" min="1" placeholder="예: 50" class="w-full border-2 border-purple-300 rounded p-2.5 text-sm font-black text-purple-700 outline-none"><span class="font-bold text-slate-500 text-sm">EA</span></div><div class="mt-2 text-xs font-bold text-rose-500 hidden" id="split-error-msg">수량은 1부터 ${splitTargetItem.qty - 1} 사이여야 합니다.</div></div>
             <div class="mb-6"><label class="block text-xs font-bold text-slate-500 mb-1">분할 후 원본 행에 남을 수량</label><div class="w-full border border-slate-200 bg-slate-100 rounded p-2.5 text-sm font-black text-slate-500" id="split-remain-qty">${splitTargetItem.qty}</div></div>
             <div class="flex space-x-3"><button onclick="closeSplitAccModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button><button onclick="executeSplitAcc()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">이대로 분할하기</button></div>
         </div>
@@ -554,60 +447,38 @@ function closeSplitAccModal() { let modal = document.getElementById('split-acc-m
 
 window.calcSplitRemain = function() {
     if(!splitTargetItem) return;
-    let outQty = parseInt(document.getElementById('split-out-qty').value) || 0;
-    let currentQty = splitTargetItem.qty;
+    let outQty = parseInt(document.getElementById('split-out-qty').value) || 0; let currentQty = splitTargetItem.qty;
     if(outQty <= 0 || outQty >= currentQty) { document.getElementById('split-out-qty').classList.add('border-rose-500'); document.getElementById('split-error-msg').classList.remove('hidden'); document.getElementById('split-remain-qty').innerText = '-'; } 
     else { document.getElementById('split-out-qty').classList.remove('border-rose-500'); document.getElementById('split-error-msg').classList.add('hidden'); document.getElementById('split-remain-qty').innerText = (currentQty - outQty).toLocaleString(); }
 }
 
+// 💡 분할 후 완벽 동기화
 async function executeSplitAcc() {
     if(!splitTargetItem) return;
     let outQty = parseInt(document.getElementById('split-out-qty').value) || 0;
     if(outQty <= 0 || outQty >= splitTargetItem.qty) return alert("분할 수량이 올바르지 않습니다.");
 
     try {
-        let remainToDeduct = outQty;
-        let updatePayload = [];
-        
+        let remainToDeduct = outQty; let updatePayload = [];
         let targetRows = splitTargetItem.ids.map(id => globalHistory.find(h => h.id === id)).filter(Boolean);
         let originLog = null;
 
         for(let row of targetRows) {
             if(!originLog) originLog = row; 
             let currentQty = row.acc_qty !== undefined && row.acc_qty !== null ? row.acc_qty : row.quantity;
-            
             if (remainToDeduct <= 0) continue;
-            
-            if (currentQty <= remainToDeduct) {
-                updatePayload.push({ id: row.id, acc_qty: 0 }); 
-                remainToDeduct -= currentQty;
-            } else {
-                updatePayload.push({ id: row.id, acc_qty: currentQty - remainToDeduct });
-                remainToDeduct = 0;
-            }
+            if (currentQty <= remainToDeduct) { updatePayload.push({ id: row.id, acc_qty: 0 }); remainToDeduct -= currentQty; } 
+            else { updatePayload.push({ id: row.id, acc_qty: currentQty - remainToDeduct }); remainToDeduct = 0; }
         }
+        if(updatePayload.length > 0) await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
 
-        if(updatePayload.length > 0) {
-            await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        }
-
-        let newPayload = {
-            location_id: originLog.location_id, action_type: originLog.action_type, item_name: originLog.item_name, 
-            quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price,
-            acc_status: '미확정', pallet_count: originLog.pallet_count, remarks: originLog.remarks, 
-            payment_status: originLog.payment_status, production_date: originLog.production_date, created_at: originLog.created_at
-        };
-
-        const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu";
-
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/history_log`, {
-            method: 'POST', headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": "return=representation" },
-            body: JSON.stringify([newPayload])
-        });
-
+        let newPayload = { location_id: originLog.location_id, action_type: originLog.action_type, item_name: originLog.item_name, quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price, acc_status: '미확정', pallet_count: originLog.pallet_count, remarks: originLog.remarks, payment_status: originLog.payment_status, production_date: originLog.production_date, created_at: originLog.created_at };
+        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, { method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" }, body: JSON.stringify([newPayload]) });
         if(!res.ok) throw new Error("새로운 행 분할 생성 실패");
-        alert("성공적으로 분할되었습니다!"); closeSplitAccModal(); load();
+
+        closeSplitAccModal(); 
+        await load(); // 💡 여기서 대기
+        alert("✅ 분할이 완료되었습니다."); 
     } catch (e) { alert("분할 중 오류 발생: " + e.message); }
 }
 
@@ -617,7 +488,7 @@ async function confirmSingleAccounting(idx) {
     try {
         let updatePayload = item.ids.map(id => ({ id: id, acc_status: '확정', acc_price: item.price }));
         await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        load();
+        await load();
     } catch (e) { alert("확정 오류: " + e.message); }
 }
 
@@ -627,7 +498,7 @@ async function cancelConfirmAccounting(idx) {
     try {
         let updatePayload = item.ids.map(id => ({ id: id, acc_status: '미확정' }));
         await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        load();
+        await load();
     } catch (e) { alert("확정 취소 오류: " + e.message); }
 }
 
@@ -638,7 +509,10 @@ async function batchConfirmAccounting() {
         let updatePayload = [];
         unconfirmedData.forEach(item => { item.ids.forEach(id => { updatePayload.push({ id: id, acc_status: '확정', acc_price: item.price }); }); });
         let res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { alert("일괄 확정 완료!"); load(); } else { alert("일괄 확정 실패"); }
+        if((await res.json()).status === 'success') { 
+            await load(); 
+            alert("✅ 일괄 확정 완료!"); 
+        } else { alert("일괄 확정 실패"); }
     } catch (e) { alert("일괄 확정 중 오류: " + e.message); }
 }
 
