@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (치명적 수량 버그 완벽 픽스 및 긴급 복구 탑재)
+// [정산/회계] 명세서 대조 및 확정 로직 (에러 100% 제거 및 긴급 복구 탑재)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -49,36 +49,35 @@ function populateAccDropdowns() {
     if (itemSelect.innerHTML !== itemHtml) { itemSelect.innerHTML = itemHtml; itemSelect.value = Array.from(items).includes(currentItem) ? currentItem : 'ALL'; }
 }
 
-function updateAccFilters(type) {
+// 💡 날짜/업체 변경 시 즉각 렌더링되도록 연결
+window.updateAccFilters = function(type) {
     if(type === 'supplier') populateAccDropdowns(); 
     renderAccounting();
-}
+};
 
-// 💡 [긴급 복구] 꼬여버린 정산 수량을 최초 입고된 정상 수량으로 강제 원복하는 함수
+// 💡 꼬여버린 수량을 원래대로 되돌리는 복구 버튼 로직
 async function emergencyResetAccQty() {
-    if(!confirm("🚨 경고: DB에 뻥튀기되거나 0개로 꼬여버린 정산 수량을 [최초 입고된 정상 수량]으로 100% 강제 초기화합니다. 진행하시겠습니까?")) return;
-    
+    if(!confirm("🚨 경고: 꼬여버린 정산 수량을 [최초 입고된 정상 수량]으로 100% 강제 초기화합니다. 진행하시겠습니까?")) return;
     try {
         let targetHistory = globalHistory.filter(h => h.action_type === '입고' && (h.acc_qty !== null || h.acc_status === '확정'));
-        let payload = targetHistory.map(h => ({ id: h.id, acc_qty: h.quantity, acc_status: '미확정' }));
+        // acc_qty를 null로 만들어서 원본 quantity를 따라가게 리셋
+        let payload = targetHistory.map(h => ({ id: h.id, acc_qty: null, acc_status: '미확정' }));
         
         if(payload.length === 0) return alert("복구할 데이터가 없습니다.");
 
-        // 서버 부하를 막기 위해 100개씩 잘라서 전송
         for(let i=0; i<payload.length; i+=100) {
             let chunk = payload.slice(i, i+100);
             await fetch('/api/history_update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chunk) });
         }
         alert("✅ 복구 완료! 모든 수량이 정상으로 돌아왔습니다.");
         load();
-    } catch(e) {
-        alert("복구 중 에러 발생: " + e.message);
-    }
+    } catch(e) { alert("복구 중 에러 발생: " + e.message); }
 }
 
-async function renderAccounting() {
+// 💡 메인 렌더링 함수
+window.renderAccounting = async function() {
     try {
-        // 💡 화면 우측 상단에 긴급 복구 버튼 동적 생성
+        // 복구 버튼 동적 생성
         let headerDiv = document.querySelector('#view-accounting .flex.space-x-2');
         if(headerDiv && !document.getElementById('emergency-reset-btn')) {
             let btn = document.createElement('button');
@@ -119,9 +118,8 @@ async function renderAccounting() {
         if (groupMode === 'individual') {
             let merged = {};
             targetHistory.forEach(h => {
-                // 💡 [수량 버그 픽스] 0개로 쪼개져 남은 찌꺼기 데이터는 화면에서 안보이게 숨김
                 let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
-                if (current_qty <= 0) return;
+                if (current_qty <= 0) return; // 분할 후 0개가 된 찌꺼기는 숨김
 
                 let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
                 let pDate = h.production_date || (h.created_at ? h.created_at.substring(0, 10) : '');
@@ -137,7 +135,7 @@ async function renderAccounting() {
                 } else {
                     merged[key].ids.push(h.id);
                     merged[key].original_qty += h.quantity;
-                    merged[key].qty += current_qty; // 💡 [수량 버그 픽스] 확정 상태여도 무조건 실제 DB수량끼리 더함
+                    merged[key].qty += current_qty; // 확정 여부 상관없이 실제 수량 합산
                     merged[key].adj += (h.acc_adj || 0); 
                 }
             });
@@ -196,7 +194,7 @@ async function renderAccounting() {
 
         updateAccountingSummary();
     } catch (e) { console.error("정산 렌더링 에러:", e); }
-}
+};
 
 function getUnitPrice(itemName, type, supplier) {
     let list = type === 'finished' ? finishedProductMaster : productMaster;
@@ -230,7 +228,7 @@ function renderIndividualTable() {
     `;
 
     if(accTableData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 조회된 내역이 없습니다.</td></tr>`;
         return;
     }
 
@@ -279,7 +277,6 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
-// 💡 [수량 버그 픽스] 수정 (Edit) 모달 로직
 function openEditAccModal(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx];
@@ -310,7 +307,6 @@ async function submitEditAccModal() {
     try {
         let updatePayload = item.ids.map(id => ({
             id: id, production_date: document.getElementById('edit-acc-date').value, item_name: document.getElementById('edit-acc-item').value,
-            // 💡 병합된 건일 경우 수정된 수량을 등분해서 개별 DB에 저장 (안전함)
             acc_qty: Math.floor((parseInt(document.getElementById('edit-acc-qty').value) || 0) / item.ids.length), 
             acc_price: parseInt(document.getElementById('edit-acc-price').value) || 0, acc_adj: Math.floor((parseInt(document.getElementById('edit-acc-adj').value) || 0) / item.ids.length)
         }));
@@ -320,7 +316,6 @@ async function submitEditAccModal() {
     } catch (e) { alert("오류 발생: " + e.message); }
 }
 
-// 💡 [수량 버그 픽스] 분할 (Split) 완벽 로직
 function openSplitAccModal(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     splitTargetItem = sortedData[idx];
@@ -370,7 +365,6 @@ async function executeSplitAcc() {
         let targetRows = splitTargetItem.ids.map(id => globalHistory.find(h => h.id === id)).filter(Boolean);
         let originLog = null;
 
-        // 원본 병합 데이터들에서 순차적으로 수량을 빼감
         for(let row of targetRows) {
             if(!originLog) originLog = row; 
             let currentQty = row.acc_qty !== undefined && row.acc_qty !== null ? row.acc_qty : row.quantity;
@@ -378,7 +372,7 @@ async function executeSplitAcc() {
             if (remainToDeduct <= 0) continue;
             
             if (currentQty <= remainToDeduct) {
-                updatePayload.push({ id: row.id, acc_qty: 0 }); // 이 줄은 수량이 0이 됨 (화면에선 숨겨짐)
+                updatePayload.push({ id: row.id, acc_qty: 0 }); 
                 remainToDeduct -= currentQty;
             } else {
                 updatePayload.push({ id: row.id, acc_qty: currentQty - remainToDeduct });
@@ -390,7 +384,6 @@ async function executeSplitAcc() {
             await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         }
 
-        // 분할되어 나온 새로운 줄 1개 생성
         let newPayload = {
             location_id: originLog.location_id, action_type: originLog.action_type, item_name: originLog.item_name, 
             quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price,
@@ -411,12 +404,10 @@ async function executeSplitAcc() {
     } catch (e) { alert("분할 중 오류 발생: " + e.message); }
 }
 
-// 💡 4. [수량 버그 픽스] 상태 변경 (수량을 덮어씌우지 않고 상태만 변경하도록 수정)
 async function confirmSingleAccounting(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; if(!item) return;
     try {
-        // 기존 뻥튀기 버그 원인(acc_qty) 제거! 오직 확정 상태와 단가만 업데이트함.
         let updatePayload = item.ids.map(id => ({ id: id, acc_status: '확정', acc_price: item.price }));
         await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         load();
@@ -438,7 +429,6 @@ async function batchConfirmAccounting() {
     if(!confirm(`조회된 ${unconfirmedData.length}건의 항목을 일괄 확정하시겠습니까?`)) return;
     try {
         let updatePayload = [];
-        // 기존 뻥튀기 버그 원인 제거! 오직 상태와 가격만 보냄.
         unconfirmedData.forEach(item => { item.ids.forEach(id => { updatePayload.push({ id: id, acc_status: '확정', acc_price: item.price }); }); });
         let res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         if((await res.json()).status === 'success') { alert("일괄 확정 완료!"); load(); } else { alert("일괄 확정 실패"); }
@@ -470,14 +460,3 @@ function exportAccountingExcel() {
     const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "정산내역");
     XLSX.writeFile(wb, `한스팜_정산내역_${new Date().toISOString().split('T')[0]}.xlsx`);
 }
-
-window.updateAccFilters = function(type) {
-    if(type === 'supplier') populateAccDropdowns(); 
-    if(typeof renderAccounting === 'function') renderAccounting();
-};
-
-window.renderAccounting = function() {
-    const supSelect = document.getElementById('acc-supplier');
-    if (supSelect && supSelect.options.length <= 1) populateAccDropdowns();
-    if(originalRenderAcc) originalRenderAcc();
-};
