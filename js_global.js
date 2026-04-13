@@ -307,3 +307,208 @@ function updateDashboard() {
         console.error("대시보드 에러 방어:", error);
     }
 }
+
+// ==========================================
+// 📊 [신규] 주간 경영 요약 보고서 (Weekly Report) 생성 기능
+// ==========================================
+
+// 대시보드 화면에 '주간 보고서' 버튼 동적 추가
+const originalUpdateDashboard = typeof updateDashboard === 'function' ? updateDashboard : null;
+window.updateDashboard = function() {
+    if(originalUpdateDashboard) originalUpdateDashboard();
+
+    if(isAdmin) {
+        let headerDiv = document.querySelector('#view-dashboard .flex.justify-between.items-center');
+        if(headerDiv && !document.getElementById('weekly-report-btn')) {
+            let btn = document.createElement('button');
+            btn.id = 'weekly-report-btn';
+            btn.className = 'bg-slate-800 hover:bg-slate-900 text-white font-black py-2.5 px-5 rounded-lg shadow-md text-sm transition-colors flex items-center ml-auto';
+            btn.innerHTML = '📊 주간 경영 요약 보고서';
+            btn.onclick = openWeeklyReportModal;
+            headerDiv.appendChild(btn);
+        }
+    }
+};
+
+function openWeeklyReportModal() {
+    let modal = document.getElementById('weekly-report-modal');
+    if(!modal) {
+        modal = document.createElement('div');
+        modal.id = 'weekly-report-modal';
+        modal.className = 'hidden fixed inset-0 bg-slate-900 bg-opacity-70 items-center justify-center z-[300] p-4';
+        document.body.appendChild(modal);
+    }
+
+    // 1. 기준일자 설정 (오늘 ~ 7일 전)
+    let today = new Date();
+    let sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(today.getDate() - 7);
+    
+    let dateStr = `${sevenDaysAgo.toLocaleDateString('ko-KR')} ~ ${today.toLocaleDateString('ko-KR')}`;
+
+    // =====================================================
+    // 💡 [카테고리 1] 매입 및 자금 집행 현황 (최근 7일 입고 기준)
+    // =====================================================
+    let weeklyTotalPurchase = 0;
+    let supplierMap = {};
+
+    globalHistory.forEach(h => {
+        let hDate = new Date(h.created_at);
+        if(h.action_type === '입고' && hDate >= sevenDaysAgo && hDate <= today) {
+            let qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
+            if(qty <= 0) return;
+
+            let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
+            
+            // 단가 찾기
+            let pInfo = finishedProductMaster.find(p => p.item_name === h.item_name) || productMaster.find(p => p.item_name === h.item_name);
+            let price = h.acc_price || (pInfo ? (pInfo.unit_price || 0) : 0);
+            
+            let amount = qty * price;
+            weeklyTotalPurchase += amount;
+
+            if(!supplierMap[sup]) supplierMap[sup] = 0;
+            supplierMap[sup] += amount;
+        }
+    });
+
+    // 매입 비중 Top 3 계산
+    let topSuppliers = Object.entries(supplierMap)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+    
+    let topSupHtml = topSuppliers.length > 0 ? topSuppliers.map((s, idx) => {
+        let pct = weeklyTotalPurchase > 0 ? Math.round((s[1] / weeklyTotalPurchase) * 100) : 0;
+        let rankColor = idx === 0 ? 'text-rose-600' : (idx === 1 ? 'text-orange-500' : 'text-amber-500');
+        return `<div class="flex justify-between items-center py-1 border-b border-slate-100 last:border-0">
+                    <span class="text-sm font-bold text-slate-700"><span class="font-black ${rankColor} mr-1">${idx+1}.</span> ${s[0]}</span>
+                    <span class="text-sm font-black text-slate-800">${s[1].toLocaleString()} 원 <span class="text-xs text-slate-400 font-bold ml-1">(${pct}%)</span></span>
+                </div>`;
+    }).join('') : '<div class="text-sm text-slate-400 text-center py-2">이번 주 매입 내역이 없습니다.</div>';
+
+    // =====================================================
+    // 💡 [카테고리 3] 창고 공간 및 재고 자산 현황
+    // =====================================================
+    let totalAssetValue = 0;
+    let roomOcc = 0, coldOcc = 0, floorOcc = 0;
+    let stagnantHtml = '';
+    let stagnantCount = 0;
+
+    // 점유율 계산을 위한 전체 렉 수 (updateDashboard 로직과 동일)
+    let roomTotal = 0; if(typeof layoutRoom !== 'undefined') { layoutRoom.forEach(c => { if(!c.gap && !c.aisle) roomTotal += c.cols * 2; }); roomTotal += 20; } else { roomTotal = 150; }
+    let coldTotal = 0; if(typeof layoutCold !== 'undefined') { layoutCold.forEach(c => { if(!c.gap && !c.aisle) coldTotal += c.cols * 2; }); coldTotal += 16; } else { coldTotal = 100; }
+    let floorTotal = 0; ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => { floorTotal += parseInt(localStorage.getItem(area + '_cols')) || 10; });
+
+    let fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(today.getDate() - 14);
+
+    globalOccupancy.forEach(item => {
+        if (!item || !item.location_id) return;
+        
+        // 1. 구역 카운트
+        if (item.location_id.startsWith('R-')) roomOcc++;
+        else if (item.location_id.startsWith('C-')) coldOcc++;
+        else if (item.location_id.startsWith('FL-')) floorOcc++;
+
+        // 2. 자산 가치 합산
+        let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name) || productMaster.find(p => p.item_name === item.item_name);
+        let price = pInfo ? (pInfo.unit_price || 0) : 0;
+        totalAssetValue += (item.quantity * price);
+
+        // 3. 장기 체화 재고 (입고/산란일 기준 14일 초과 경과)
+        if(item.production_date) {
+            let pDate = new Date(item.production_date);
+            if(pDate < fourteenDaysAgo) {
+                stagnantCount++;
+                if(stagnantCount <= 5) { // 최대 5개까지만 표시
+                    stagnantHtml += `<div class="flex justify-between items-center py-1.5 border-b border-slate-100 last:border-0">
+                        <span class="text-[11px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded mr-2">${item.location_id}</span>
+                        <span class="text-sm font-bold text-slate-700 truncate flex-1">${item.item_name}</span>
+                        <span class="text-sm font-black text-rose-600">${item.quantity.toLocaleString()} <span class="text-xs text-rose-400">EA</span></span>
+                    </div>`;
+                }
+            }
+        }
+    });
+
+    if(stagnantCount > 5) stagnantHtml += `<div class="text-xs text-center text-slate-400 mt-2 font-bold">...외 ${stagnantCount - 5}건 더 있음</div>`;
+    if(stagnantCount === 0) stagnantHtml = `<div class="text-sm text-emerald-500 text-center py-2 font-bold">장기 체화 재고가 없습니다! 🎉</div>`;
+
+    let roomPct = roomTotal > 0 ? Math.min(100, Math.round((roomOcc / roomTotal) * 100)) : 0;
+    let coldPct = coldTotal > 0 ? Math.min(100, Math.round((coldOcc / coldTotal) * 100)) : 0;
+    let floorPct = floorTotal > 0 ? Math.min(100, Math.round((floorOcc / floorTotal) * 100)) : 0;
+
+    // =====================================================
+    // 💡 모달 HTML 렌더링
+    // =====================================================
+    modal.innerHTML = `
+        <div class="bg-slate-50 w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-[popup_0.2s_ease-out_forwards]">
+            <div class="bg-slate-800 p-5 flex justify-between items-center">
+                <div>
+                    <h2 class="text-xl md:text-2xl font-black text-white flex items-center">📈 주간 경영 요약 보고서</h2>
+                    <p class="text-slate-300 text-sm font-bold mt-1">기준일: ${dateStr}</p>
+                </div>
+                <button onclick="document.getElementById('weekly-report-modal').classList.add('hidden'); document.getElementById('weekly-report-modal').classList.remove('flex');" class="text-slate-400 hover:text-white transition-colors">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto custom-scrollbar space-y-6">
+                
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-blue-500">
+                    <h3 class="text-lg font-black text-slate-800 mb-4 flex items-center">💳 1. 매입 및 자금 집행 현황 (최근 7일)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-blue-50 p-4 rounded-lg flex flex-col justify-center items-center text-center border border-blue-100">
+                            <span class="text-xs font-bold text-blue-600 mb-1">주간 총 매입액 (공급가액 기준)</span>
+                            <span class="text-2xl font-black text-blue-700">${weeklyTotalPurchase.toLocaleString()} <span class="text-lg">원</span></span>
+                            <span class="text-xs font-bold text-slate-400 mt-2">※ 부가세 별도 금액입니다.</span>
+                        </div>
+                        <div>
+                            <span class="block text-xs font-black text-slate-500 mb-2 border-b pb-1">🏆 거래처별 매입 비중 (Top 3)</span>
+                            ${topSupHtml}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-emerald-500">
+                    <h3 class="text-lg font-black text-slate-800 mb-4 flex items-center">🏢 2. 창고 공간 및 재고 자산 현황 (현재)</h3>
+                    
+                    <div class="mb-5 bg-emerald-50 p-4 rounded-lg flex justify-between items-center border border-emerald-100">
+                        <span class="text-sm font-bold text-emerald-700">현재 보유 재고 총 자산 가치</span>
+                        <span class="text-2xl font-black text-emerald-700">${totalAssetValue.toLocaleString()} <span class="text-lg">원</span></span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <span class="block text-xs font-black text-slate-500 mb-3 border-b pb-1">📦 창고 구역별 점유율</span>
+                            <div class="space-y-3">
+                                <div>
+                                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-slate-600">실온창고 (Room)</span><span class="text-orange-600">${roomPct}%</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-orange-500 h-2 rounded-full" style="width: ${roomPct}%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-slate-600">저온창고 (Cold)</span><span class="text-indigo-600">${coldPct}%</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-indigo-500 h-2 rounded-full" style="width: ${coldPct}%"></div></div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-xs font-bold mb-1"><span class="text-slate-600">평구 (Floor)</span><span class="text-emerald-600">${floorPct}%</span></div>
+                                    <div class="w-full bg-slate-100 rounded-full h-2"><div class="bg-emerald-500 h-2 rounded-full" style="width: ${floorPct}%"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="block text-xs font-black text-slate-500 mb-2 border-b pb-1">🚨 장기 체화 재고 (입고 후 14일 경과)</span>
+                            <div class="bg-rose-50/50 rounded-lg p-3 border border-rose-100 min-h-[100px]">
+                                ${stagnantHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
