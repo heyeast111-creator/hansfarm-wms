@@ -1,5 +1,5 @@
 // ==========================================
-// 전역 변수 (오직 이 파일에서만 단 한 번 선언)
+// 전역 변수
 // ==========================================
 let globalOccupancy = []; 
 let productMaster = []; 
@@ -38,29 +38,14 @@ function siteLogin() {
     showView('dashboard');
 }
 
-// 💡 [핵심 패치] 강력한 실시간 동기화 로딩창 (사용자 상호작용 차단 및 완벽 업데이트 보장)
+// 💡 악명높은 뱅글뱅글 로딩창 완전히 삭제, 백그라운드에서 조용히 100% 최신화
 async function load() {
-    let loader = document.getElementById('global-sync-loader');
-    if(!loader) {
-        loader = document.createElement('div');
-        loader.id = 'global-sync-loader';
-        loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[9999]';
-        loader.innerHTML = `
-            <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col items-center animate-pulse">
-                <svg class="animate-spin h-12 w-12 text-indigo-600 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                <span class="text-base font-black text-slate-700">실시간 데이터 동기화 중...</span>
-            </div>
-        `;
-        document.body.appendChild(loader);
-    }
-    loader.classList.remove('hidden');
-    loader.classList.add('flex');
-
     try {
         const ts = new Date().getTime(); 
         const [occRes, prodRes, fpRes, histRes, bomRes] = await Promise.all([ 
             fetch('/api/inventory?t=' + ts), fetch('/api/products?t=' + ts), fetch('/api/finished_products?t=' + ts), fetch('/api/history?t=' + ts), fetch('/api/bom?t=' + ts) 
         ]);
+        
         let occData = await occRes.json(); globalOccupancy = Array.isArray(occData) ? occData : [];
         let prodData = await prodRes.json(); productMaster = Array.isArray(prodData) ? prodData : [];
         let fpData = await fpRes.json(); finishedProductMaster = Array.isArray(fpData) ? fpData : [];
@@ -78,13 +63,9 @@ async function load() {
             let fp = document.getElementById('admin-finance-panel');
             if(fp) fp.classList.add('hidden');
         }
-        
         renderAll(); 
     } catch (e) { 
         console.error("로딩 에러:", e); 
-    } finally {
-        loader.classList.add('hidden');
-        loader.classList.remove('flex');
     }
 }
 
@@ -115,9 +96,7 @@ function adminLogin() {
     let modal = document.getElementById('admin-pw-modal');
     let input = document.getElementById('admin-pw-input');
     if(modal && input) {
-        input.value = '';
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        input.value = ''; modal.classList.remove('hidden'); modal.classList.add('flex');
         setTimeout(() => input.focus(), 100); 
     } else {
         const pw = prompt("관리자 비밀번호를 입력하세요:"); 
@@ -130,7 +109,6 @@ function adminLogin() {
 }
 
 function closeAdminModal() { let modal = document.getElementById('admin-pw-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
-
 function submitAdminPassword() {
     let input = document.getElementById('admin-pw-input'); if(!input) return;
     let pw = input.value; let fp = document.getElementById('admin-finance-panel');
@@ -222,46 +200,110 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
+// 💡 [핵심 복구] 대시보드 동적 렉 계산 로직 100% 원상 복구 (하드코딩 제거)
 function updateDashboard() {
     try {
         if (!document.getElementById('dash-room-percent')) return;
+
         let roomOcc = 0, coldOcc = 0, floorOcc = 0;
+        
         globalOccupancy.forEach(item => {
             if (!item || !item.location_id) return;
-            if (item.location_id.startsWith('R-')) roomOcc++; else if (item.location_id.startsWith('C-')) coldOcc++; else if (item.location_id.startsWith('FL-')) floorOcc++;
+            if (item.location_id.startsWith('R-')) roomOcc++;
+            else if (item.location_id.startsWith('C-')) coldOcc++;
+            else if (item.location_id.startsWith('FL-')) floorOcc++;
         });
-        let roomTotal = 150; let coldTotal = 100; let floorTotal = 60;
+
+        // 💡 배열 순회를 통해 실제 렉 개수를 동적으로 계산!
+        let roomTotal = 0;
+        if(typeof layoutRoom !== 'undefined') {
+            layoutRoom.forEach(c => { if(!c.gap && !c.aisle) roomTotal += c.cols * 2; }); 
+            roomTotal += 20; 
+        } else { roomTotal = 150; }
+
+        let coldTotal = 0;
+        if(typeof layoutCold !== 'undefined') {
+            layoutCold.forEach(c => { if(!c.gap && !c.aisle) coldTotal += c.cols * 2; });
+            coldTotal += 16; 
+        } else { coldTotal = 100; }
+
+        let floorTotal = 0;
+        ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => {
+            floorTotal += parseInt(localStorage.getItem(area + '_cols')) || 10;
+        });
+
         let roomPct = roomTotal > 0 ? Math.min(100, Math.round((roomOcc / roomTotal) * 100)) : 0;
         let coldPct = coldTotal > 0 ? Math.min(100, Math.round((coldOcc / coldTotal) * 100)) : 0;
         let floorPct = floorTotal > 0 ? Math.min(100, Math.round((floorOcc / floorTotal) * 100)) : 0;
 
-        document.getElementById('dash-room-percent').innerText = roomPct + '%'; document.getElementById('dash-room-total').innerText = roomTotal.toLocaleString() + ' 렉'; document.getElementById('dash-room-occ').innerText = roomOcc.toLocaleString() + ' 렉'; document.getElementById('dash-room-empty').innerText = Math.max(0, roomTotal - roomOcc).toLocaleString() + ' 렉'; document.getElementById('dash-room-donut').style.background = `conic-gradient(#f97316 ${roomPct}%, #e2e8f0 0%)`;
-        document.getElementById('dash-cold-percent').innerText = coldPct + '%'; document.getElementById('dash-cold-total').innerText = coldTotal.toLocaleString() + ' 렉'; document.getElementById('dash-cold-occ').innerText = coldOcc.toLocaleString() + ' 렉'; document.getElementById('dash-cold-empty').innerText = Math.max(0, coldTotal - coldOcc).toLocaleString() + ' 렉'; document.getElementById('dash-cold-donut').style.background = `conic-gradient(#6366f1 ${coldPct}%, #e2e8f0 0%)`;
-        document.getElementById('dash-floor-percent').innerText = floorPct + '%'; document.getElementById('dash-floor-total').innerText = floorTotal.toLocaleString() + ' 렉'; document.getElementById('dash-floor-occ').innerText = floorOcc.toLocaleString() + ' 렉'; document.getElementById('dash-floor-empty').innerText = Math.max(0, floorTotal - floorOcc).toLocaleString() + ' 렉'; document.getElementById('dash-floor-donut').style.background = `conic-gradient(#10b981 ${floorPct}%, #e2e8f0 0%)`;
+        document.getElementById('dash-room-percent').innerText = roomPct + '%';
+        document.getElementById('dash-room-total').innerText = roomTotal.toLocaleString() + ' 렉';
+        document.getElementById('dash-room-occ').innerText = roomOcc.toLocaleString() + ' 렉';
+        document.getElementById('dash-room-empty').innerText = Math.max(0, roomTotal - roomOcc).toLocaleString() + ' 렉';
+        document.getElementById('dash-room-donut').style.background = `conic-gradient(#f97316 ${roomPct}%, #e2e8f0 0%)`;
+
+        document.getElementById('dash-cold-percent').innerText = coldPct + '%';
+        document.getElementById('dash-cold-total').innerText = coldTotal.toLocaleString() + ' 렉';
+        document.getElementById('dash-cold-occ').innerText = coldOcc.toLocaleString() + ' 렉';
+        document.getElementById('dash-cold-empty').innerText = Math.max(0, coldTotal - coldOcc).toLocaleString() + ' 렉';
+        document.getElementById('dash-cold-donut').style.background = `conic-gradient(#6366f1 ${coldPct}%, #e2e8f0 0%)`;
+
+        document.getElementById('dash-floor-percent').innerText = floorPct + '%';
+        document.getElementById('dash-floor-total').innerText = floorTotal.toLocaleString() + ' 렉';
+        document.getElementById('dash-floor-occ').innerText = floorOcc.toLocaleString() + ' 렉';
+        document.getElementById('dash-floor-empty').innerText = Math.max(0, floorTotal - floorOcc).toLocaleString() + ' 렉';
+        document.getElementById('dash-floor-donut').style.background = `conic-gradient(#10b981 ${floorPct}%, #e2e8f0 0%)`;
 
         if(isAdmin) {
-            let pnl = document.getElementById('admin-finance-panel'); if(pnl) pnl.classList.remove('hidden');
+            let pnl = document.getElementById('admin-finance-panel');
+            if(pnl) pnl.classList.remove('hidden');
             let roomVal = 0, coldVal = 0, floorVal = 0;
+            
             globalOccupancy.forEach(item => {
+                let price = 0;
                 let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name) || productMaster.find(p => p.item_name === item.item_name);
-                let val = item.quantity * (pInfo ? (pInfo.unit_price || 0) : 0);
-                if (item.location_id.startsWith('R-')) roomVal += val; else if (item.location_id.startsWith('C-')) coldVal += val; else if (item.location_id.startsWith('FL-')) floorVal += val;
-            });
-            document.getElementById('dash-val-room').innerText = roomVal.toLocaleString() + ' 원'; document.getElementById('dash-val-cold').innerText = coldVal.toLocaleString() + ' 원'; document.getElementById('dash-val-floor').innerText = floorVal.toLocaleString() + ' 원'; document.getElementById('dash-val-total').innerText = (roomVal + coldVal + floorVal).toLocaleString() + ' 원';
+                price = pInfo ? (pInfo.unit_price || 0) : 0;
+                let val = item.quantity * price;
 
-            let period = document.getElementById('dash-period') ? document.getElementById('dash-period').value : 'daily';
-            let outCost = 0; let now = new Date();
+                if (item.location_id.startsWith('R-')) roomVal += val;
+                else if (item.location_id.startsWith('C-')) coldVal += val;
+                else if (item.location_id.startsWith('FL-')) floorVal += val;
+            });
+
+            let dr = document.getElementById('dash-val-room'); if(dr) dr.innerText = roomVal.toLocaleString() + ' 원';
+            let dc = document.getElementById('dash-val-cold'); if(dc) dc.innerText = coldVal.toLocaleString() + ' 원';
+            let df = document.getElementById('dash-val-floor'); if(df) df.innerText = floorVal.toLocaleString() + ' 원';
+            let dt = document.getElementById('dash-val-total'); if(dt) dt.innerText = (roomVal + coldVal + floorVal).toLocaleString() + ' 원';
+
+            let periodSelect = document.getElementById('dash-period');
+            let period = periodSelect ? periodSelect.value : 'daily';
+            let outCost = 0;
+            let now = new Date();
+            
             globalHistory.forEach(h => {
                 if(h.action_type === '출고') {
-                    let diffDays = (now - new Date(h.created_at)) / (1000 * 60 * 60 * 24);
-                    if((period === 'daily' && diffDays <= 1) || (period === 'weekly' && diffDays <= 7) || (period === 'monthly' && diffDays <= 30)) {
+                    let hDate = new Date(h.created_at);
+                    let diffDays = (now - hDate) / (1000 * 60 * 60 * 24);
+                    let include = false;
+
+                    if(period === 'daily' && diffDays <= 1) include = true;
+                    else if(period === 'weekly' && diffDays <= 7) include = true;
+                    else if(period === 'monthly' && diffDays <= 30) include = true;
+
+                    if(include) {
+                        let price = 0;
                         let pInfo = finishedProductMaster.find(p => p.item_name === h.item_name) || productMaster.find(p => p.item_name === h.item_name);
-                        outCost += h.quantity * (pInfo ? (pInfo.unit_price || 0) : 0);
+                        price = pInfo ? (pInfo.unit_price || 0) : 0;
+                        outCost += h.quantity * price;
                     }
                 }
             });
-            document.getElementById('dash-cost-out').innerText = outCost.toLocaleString() + ' 원';
-            document.getElementById('dash-cost-label').innerText = period === 'daily' ? '일간 기준' : (period === 'weekly' ? '주간 기준' : '월간 기준');
+
+            let dco = document.getElementById('dash-cost-out'); if(dco) dco.innerText = outCost.toLocaleString() + ' 원';
+            let lbl = period === 'daily' ? '일간 기준' : (period === 'weekly' ? '주간 기준' : '월간 기준');
+            let dcl = document.getElementById('dash-cost-label'); if(dcl) dcl.innerText = lbl;
         }
-    } catch (error) { console.error("대시보드 에러 방어:", error); }
+    } catch (error) {
+        console.error("대시보드 에러 방어:", error);
+    }
 }
