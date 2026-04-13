@@ -41,7 +41,6 @@ function siteLogin() {
     showView('dashboard');
 }
 
-// 💡 뱅글뱅글 로딩창 없이 백그라운드에서 실시간 동기화
 async function load() {
     try {
         const ts = new Date().getTime(); 
@@ -113,7 +112,7 @@ function adminLogin() {
             isAdmin = true; alert("관리자 권한이 활성화되었습니다."); 
             document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
             if(fp) fp.classList.remove('hidden');
-            updateDashboard(); // 버튼 생성을 위해 대시보드 갱신
+            updateDashboard(); 
         } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
     }
 }
@@ -229,7 +228,6 @@ function updateDashboard() {
             else if (item.location_id.startsWith('FL-')) floorOcc++;
         });
 
-        // 💡 동적 렉 개수 계산 100% 복구
         let roomTotal = 0;
         if(typeof layoutRoom !== 'undefined') {
             layoutRoom.forEach(c => { if(!c.gap && !c.aisle) roomTotal += c.cols * 2; }); 
@@ -269,7 +267,6 @@ function updateDashboard() {
         document.getElementById('dash-floor-empty').innerText = Math.max(0, floorTotal - floorOcc).toLocaleString() + ' 렉';
         document.getElementById('dash-floor-donut').style.background = `conic-gradient(#10b981 ${floorPct}%, #e2e8f0 0%)`;
 
-        // 💡 [주간 보고서 버튼 생성] 
         let headerDiv = document.querySelector('#view-dashboard .flex.justify-between.items-center');
         if(headerDiv) {
             let existingBtn = document.getElementById('weekly-report-btn');
@@ -339,7 +336,7 @@ function updateDashboard() {
     }
 }
 
-// 💡 경영 요약 보고서 모달 (기간설정 + 3개월 체화)
+// 💡 [수정] 가용률(빈 공간) 직관적 표시 패치 완료
 function openWeeklyReportModal(start, end) {
     let modal = document.getElementById('weekly-report-modal');
     if(!modal) {
@@ -419,9 +416,14 @@ function openWeeklyReportModal(start, end) {
     let coldTotal = 0; if(typeof layoutCold !== 'undefined') { layoutCold.forEach(c => { if(!c.gap && !c.aisle) coldTotal += c.cols * 2; }); coldTotal += 16; } else { coldTotal = 100; }
     let floorTotal = 0; ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => { floorTotal += parseInt(localStorage.getItem(area + '_cols')) || 10; });
 
-    let roomPct = roomTotal > 0 ? Math.round((roomOcc / roomTotal) * 100) : 0;
-    let coldPct = coldTotal > 0 ? Math.round((coldOcc / coldTotal) * 100) : 0;
-    let floorPct = floorTotal > 0 ? Math.round((floorOcc / floorTotal) * 100) : 0;
+    let roomPct = roomTotal > 0 ? Math.min(100, Math.round((roomOcc / roomTotal) * 100)) : 0;
+    let coldPct = coldTotal > 0 ? Math.min(100, Math.round((coldOcc / coldTotal) * 100)) : 0;
+    let floorPct = floorTotal > 0 ? Math.min(100, Math.round((floorOcc / floorTotal) * 100)) : 0;
+
+    // 💡 [추가] 비어있는 공간의 비율 (가용률)
+    let roomEmptyPct = Math.max(0, 100 - roomPct);
+    let coldEmptyPct = Math.max(0, 100 - coldPct);
+    let floorEmptyPct = Math.max(0, 100 - floorPct);
 
     modal.innerHTML = `
         <div class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-[popup_0.2s_ease-out_forwards]">
@@ -443,7 +445,7 @@ function openWeeklyReportModal(start, end) {
             <div class="p-6 overflow-y-auto space-y-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500">
-                        <span class="text-xs font-black text-blue-500 block mb-1">총 매입액 (공급가)</span>
+                        <span class="text-xs font-black text-blue-500 block mb-1">조회 기간 내 총 매입액 (공급가)</span>
                         <span class="text-2xl font-black text-slate-800">${totalPurchase.toLocaleString()} <span class="text-sm">원</span></span>
                         <div class="mt-4">
                             <span class="text-[10px] font-black text-slate-400 block border-b pb-1 mb-2">거래처별 매입 TOP 3</span>
@@ -451,12 +453,31 @@ function openWeeklyReportModal(start, end) {
                         </div>
                     </div>
                     <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm border-l-4 border-l-emerald-500">
-                        <span class="text-xs font-black text-emerald-500 block mb-1">재고 자산 가치</span>
+                        <span class="text-xs font-black text-emerald-500 block mb-1">현재 재고 자산 총액 및 창고 가용률</span>
                         <span class="text-2xl font-black text-slate-800">${totalAssetValue.toLocaleString()} <span class="text-sm">원</span></span>
-                        <div class="mt-4 grid grid-cols-3 gap-2">
-                            <div class="text-center"><span class="text-[9px] font-bold text-slate-400 block">실온</span><span class="text-xs font-black text-orange-600">${roomPct}%</span></div>
-                            <div class="text-center"><span class="text-[9px] font-bold text-slate-400 block">저온</span><span class="text-xs font-black text-indigo-600">${coldPct}%</span></div>
-                            <div class="text-center"><span class="text-[9px] font-bold text-slate-400 block">평구</span><span class="text-xs font-black text-emerald-600">${floorPct}%</span></div>
+                        
+                        <div class="mt-4 space-y-3">
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold mb-1">
+                                    <span class="text-slate-600">실온창고 (현재 가용 <span class="text-emerald-500 font-black">${roomEmptyPct}%</span>)</span>
+                                    <span class="text-slate-400">점유 ${roomPct}%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div class="bg-orange-500 h-1.5 rounded-full" style="width: ${roomPct}%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold mb-1">
+                                    <span class="text-slate-600">저온창고 (현재 가용 <span class="text-emerald-500 font-black">${coldEmptyPct}%</span>)</span>
+                                    <span class="text-slate-400">점유 ${coldPct}%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div class="bg-indigo-500 h-1.5 rounded-full" style="width: ${coldPct}%"></div></div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[10px] font-bold mb-1">
+                                    <span class="text-slate-600">평구 (현재 가용 <span class="text-emerald-500 font-black">${floorEmptyPct}%</span>)</span>
+                                    <span class="text-slate-400">점유 ${floorPct}%</span>
+                                </div>
+                                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden"><div class="bg-emerald-500 h-1.5 rounded-full" style="width: ${floorPct}%"></div></div>
+                            </div>
                         </div>
                     </div>
                 </div>
