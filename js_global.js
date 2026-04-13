@@ -1,5 +1,5 @@
 // ==========================================
-// 전역 변수
+// 전역 변수 (Global Variables)
 // ==========================================
 let globalOccupancy = []; 
 let productMaster = []; 
@@ -24,6 +24,9 @@ let isRightPanelVisible = false;
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
 
+// ==========================================
+// 로그인 및 초기 로딩
+// ==========================================
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') { loginMode = 'viewer'; alert("뷰어 모드로 접속되었습니다."); } 
@@ -38,7 +41,7 @@ function siteLogin() {
     showView('dashboard');
 }
 
-// 💡 악명높은 뱅글뱅글 로딩창 완전히 삭제, 백그라운드에서 조용히 100% 최신화
+// 💡 뱅글뱅글 로딩창 없이 백그라운드에서 실시간 동기화
 async function load() {
     try {
         const ts = new Date().getTime(); 
@@ -83,6 +86,9 @@ function renderAll() {
     try { populateWaitDropdowns(); } catch(e){}
 }
 
+// ==========================================
+// 관리자 및 뷰 네비게이션
+// ==========================================
 function adminLogin() {
     let fp = document.getElementById('admin-finance-panel');
     if(isAdmin) { 
@@ -91,6 +97,9 @@ function adminLogin() {
         if(fp) fp.classList.add('hidden');
         let viewAcc = document.getElementById('view-accounting');
         if(viewAcc && !viewAcc.classList.contains('hidden')) showView('dashboard'); 
+        
+        let reportBtn = document.getElementById('weekly-report-btn');
+        if(reportBtn) reportBtn.remove();
         return; 
     }
     let modal = document.getElementById('admin-pw-modal');
@@ -104,6 +113,7 @@ function adminLogin() {
             isAdmin = true; alert("관리자 권한이 활성화되었습니다."); 
             document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden')); 
             if(fp) fp.classList.remove('hidden');
+            updateDashboard(); // 버튼 생성을 위해 대시보드 갱신
         } else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
     }
 }
@@ -156,6 +166,9 @@ function toggleRightPanel() { let rs = document.getElementById('right-sidebar');
 function clearInfo() { const panel = document.getElementById('info-panel'); if(panel) panel.innerHTML = `<div class="text-center text-slate-400 py-10 mt-10">도면에서 위치를 선택해주세요</div>`; }
 function closeInfoPanel() { let rs = document.getElementById('right-sidebar'); if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; } selectedCellId = null; movingItem = null; renderMap(); }
 
+// ==========================================
+// 유틸리티 및 엑셀 다운로드
+// ==========================================
 function getDynamicPalletCount(itemObj) {
     if(!itemObj) return 0;
     let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
@@ -200,7 +213,9 @@ function exportAllHistoryExcel() {
     } catch(e) { alert("엑셀 다운로드 중 오류가 발생했습니다."); }
 }
 
-// 💡 [핵심 복구] 대시보드 동적 렉 계산 로직 100% 원상 복구 (하드코딩 제거)
+// ==========================================
+// 대시보드 렌더링 및 📊 주간 보고서
+// ==========================================
 function updateDashboard() {
     try {
         if (!document.getElementById('dash-room-percent')) return;
@@ -214,7 +229,7 @@ function updateDashboard() {
             else if (item.location_id.startsWith('FL-')) floorOcc++;
         });
 
-        // 💡 배열 순회를 통해 실제 렉 개수를 동적으로 계산!
+        // 💡 동적 렉 개수 계산 100% 복구
         let roomTotal = 0;
         if(typeof layoutRoom !== 'undefined') {
             layoutRoom.forEach(c => { if(!c.gap && !c.aisle) roomTotal += c.cols * 2; }); 
@@ -253,6 +268,22 @@ function updateDashboard() {
         document.getElementById('dash-floor-occ').innerText = floorOcc.toLocaleString() + ' 렉';
         document.getElementById('dash-floor-empty').innerText = Math.max(0, floorTotal - floorOcc).toLocaleString() + ' 렉';
         document.getElementById('dash-floor-donut').style.background = `conic-gradient(#10b981 ${floorPct}%, #e2e8f0 0%)`;
+
+        // 💡 [주간 보고서 버튼 생성] 
+        let headerDiv = document.querySelector('#view-dashboard .flex.justify-between.items-center');
+        if(headerDiv) {
+            let existingBtn = document.getElementById('weekly-report-btn');
+            if(isAdmin && !existingBtn) {
+                let btn = document.createElement('button');
+                btn.id = 'weekly-report-btn';
+                btn.className = 'bg-slate-800 hover:bg-slate-900 text-white font-black py-2.5 px-5 rounded-lg shadow-md text-sm transition-colors flex items-center ml-auto whitespace-nowrap';
+                btn.innerHTML = '📊 경영 요약 보고서 조회';
+                btn.onclick = () => openWeeklyReportModal();
+                headerDiv.appendChild(btn);
+            } else if (!isAdmin && existingBtn) {
+                existingBtn.remove();
+            }
+        }
 
         if(isAdmin) {
             let pnl = document.getElementById('admin-finance-panel');
@@ -308,48 +339,7 @@ function updateDashboard() {
     }
 }
 
-// ==========================================
-// 📊 [신규] 주간 경영 요약 보고서 (Weekly Report) 생성 기능
-// ==========================================
-
-// 대시보드 화면에 '주간 보고서' 버튼 동적 추가
-const originalUpdateDashboard = typeof updateDashboard === 'function' ? updateDashboard : null;
-window.updateDashboard = function() {
-    if(originalUpdateDashboard) originalUpdateDashboard();
-
-    if(isAdmin) {
-        let headerDiv = document.querySelector('#view-dashboard .flex.justify-between.items-center');
-        if(headerDiv && !document.getElementById('weekly-report-btn')) {
-            let btn = document.createElement('button');
-            btn.id = 'weekly-report-btn';
-            btn.className = 'bg-slate-800 hover:bg-slate-900 text-white font-black py-2.5 px-5 rounded-lg shadow-md text-sm transition-colors flex items-center ml-auto';
-            btn.innerHTML = '📊 주간 경영 요약 보고서';
-            btn.onclick = openWeeklyReportModal;
-            headerDiv.appendChild(btn);
-        }
-    }
-};
-
-// ==========================================
-// 📊 [업데이트] 경영 요약 보고서 (기간 선택 및 3개월 체화 기준 적용)
-// ==========================================
-
-const originalUpdateDashboard = typeof updateDashboard === 'function' ? updateDashboard : null;
-window.updateDashboard = function() {
-    if(originalUpdateDashboard) originalUpdateDashboard();
-    if(isAdmin) {
-        let headerDiv = document.querySelector('#view-dashboard .flex.justify-between.items-center');
-        if(headerDiv && !document.getElementById('weekly-report-btn')) {
-            let btn = document.createElement('button');
-            btn.id = 'weekly-report-btn';
-            btn.className = 'bg-slate-800 hover:bg-slate-900 text-white font-black py-2.5 px-5 rounded-lg shadow-md text-sm transition-colors flex items-center ml-auto';
-            btn.innerHTML = '📊 경영 요약 보고서 조회';
-            btn.onclick = () => openWeeklyReportModal();
-            headerDiv.appendChild(btn);
-        }
-    }
-};
-
+// 💡 경영 요약 보고서 모달 (기간설정 + 3개월 체화)
 function openWeeklyReportModal(start, end) {
     let modal = document.getElementById('weekly-report-modal');
     if(!modal) {
@@ -359,7 +349,6 @@ function openWeeklyReportModal(start, end) {
         document.body.appendChild(modal);
     }
 
-    // 기본값 세팅 (최근 7일)
     let today = new Date();
     let defaultStart = new Date();
     defaultStart.setDate(today.getDate() - 7);
@@ -367,7 +356,6 @@ function openWeeklyReportModal(start, end) {
     let startDate = start ? new Date(start) : defaultStart;
     let endDate = end ? new Date(end) : today;
     
-    // 데이터 추출 (매입 현황)
     let totalPurchase = 0;
     let supplierMap = {};
 
@@ -395,13 +383,11 @@ function openWeeklyReportModal(start, end) {
                 </div>`;
     }).join('') : '<div class="text-sm text-slate-400 text-center py-4">조회 기간 내 매입 내역이 없습니다.</div>';
 
-    // 데이터 추출 (창고/자산)
     let totalAssetValue = 0;
     let roomOcc = 0, coldOcc = 0, floorOcc = 0;
     let stagnantHtml = '';
     let stagnantCount = 0;
     
-    // 💡 [요청사항 반영] 3개월(90일) 기준일 설정
     let threeMonthsAgo = new Date();
     threeMonthsAgo.setMonth(today.getMonth() - 3);
 
@@ -414,7 +400,6 @@ function openWeeklyReportModal(start, end) {
         let pInfo = finishedProductMaster.find(p => p.item_name === item.item_name) || productMaster.find(p => p.item_name === item.item_name);
         totalAssetValue += (item.quantity * (pInfo ? (pInfo.unit_price || 0) : 0));
 
-        // 💡 [요청사항 반영] 입고 후 3개월 이상 경과된 것만 표시
         if(item.production_date) {
             let pDate = new Date(item.production_date);
             if(pDate < threeMonthsAgo) {
@@ -430,10 +415,13 @@ function openWeeklyReportModal(start, end) {
         }
     });
 
-    let roomTotal = 150, coldTotal = 100, floorTotal = 60; // 기초 정보
-    let roomPct = Math.round((roomOcc / roomTotal) * 100);
-    let coldPct = Math.round((coldOcc / coldTotal) * 100);
-    let floorPct = Math.round((floorOcc / floorTotal) * 100);
+    let roomTotal = 0; if(typeof layoutRoom !== 'undefined') { layoutRoom.forEach(c => { if(!c.gap && !c.aisle) roomTotal += c.cols * 2; }); roomTotal += 20; } else { roomTotal = 150; }
+    let coldTotal = 0; if(typeof layoutCold !== 'undefined') { layoutCold.forEach(c => { if(!c.gap && !c.aisle) coldTotal += c.cols * 2; }); coldTotal += 16; } else { coldTotal = 100; }
+    let floorTotal = 0; ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => { floorTotal += parseInt(localStorage.getItem(area + '_cols')) || 10; });
+
+    let roomPct = roomTotal > 0 ? Math.round((roomOcc / roomTotal) * 100) : 0;
+    let coldPct = coldTotal > 0 ? Math.round((coldOcc / coldTotal) * 100) : 0;
+    let floorPct = floorTotal > 0 ? Math.round((floorOcc / floorTotal) * 100) : 0;
 
     modal.innerHTML = `
         <div class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-[popup_0.2s_ease-out_forwards]">
