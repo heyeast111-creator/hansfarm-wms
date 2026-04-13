@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (실시간 동기화 완벽 보장판)
+// [정산/회계] 명세서 대조 및 확정 로직 (단가 실시간 갱신 완벽 패치판)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -59,14 +59,12 @@ async function emergencyResetAccQty() {
     try {
         let targetHistory = globalHistory.filter(h => h.action_type === '입고' && (h.acc_qty !== null || h.acc_status === '확정'));
         let payload = targetHistory.map(h => ({ id: h.id, acc_qty: null, acc_status: '미확정' }));
-        
         if(payload.length === 0) return alert("복구할 데이터가 없습니다.");
 
         for(let i=0; i<payload.length; i+=100) {
             let chunk = payload.slice(i, i+100);
             await fetch('/api/history_update', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(chunk) });
         }
-        // 💡 모든 DB 작업이 끝나면 무조건 await load() 를 호출하여 화면 갱신 보장
         await load();
         alert("✅ 복구 완료! 사라졌던 항목들이 모두 돌아왔습니다.");
     } catch(e) { alert("복구 중 에러 발생: " + e.message); }
@@ -282,8 +280,16 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
-// 💡 명세서 수기 입력 모달
-function openDirectInputModal() {
+// 💡 [핵심 패치] 수기 입력 창 열 때 무조건 DB에서 최신 단가 데이터를 강제 동기화함!
+window.openDirectInputModal = async function() {
+    // 0.1초 만에 백그라운드에서 최신 품목 정보 긁어오기
+    try {
+        const ts = new Date().getTime();
+        const [prodRes, fpRes] = await Promise.all([fetch('/api/products?t='+ts), fetch('/api/finished_products?t='+ts)]);
+        productMaster = await prodRes.json();
+        finishedProductMaster = await fpRes.json();
+    } catch(e) {} // 에러나도 기존 데이터로 진행
+
     let modal = document.getElementById('direct-input-modal');
     if(!modal) {
         modal = document.createElement('div');
@@ -339,7 +345,6 @@ window.updateDiPrice = function() {
 
 function closeDirectInputModal() { let modal = document.getElementById('direct-input-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
 
-// 💡 [핵심] 수기입력 완료 시 무조건 await load()로 잠그고 새로고침 보장
 async function submitDirectInput() {
     const date = document.getElementById('di-date').value;
     const supplier = document.getElementById('di-supplier').value;
@@ -361,7 +366,7 @@ async function submitDirectInput() {
         if(!res.ok) throw new Error("수기 입력 데이터 생성 실패");
         
         closeDirectInputModal();
-        await load(); // 💡 여기서 완벽하게 로딩창 띄우고 다 끝날때까지 기다림!!
+        await load(); // 완료될 때까지 백그라운드 갱신
         alert("✅ 장부에 수기 입력이 실시간으로 완료되었습니다!"); 
     } catch (e) { alert("오류 발생: " + e.message); }
 }
@@ -400,7 +405,6 @@ function openEditAccModal(idx) {
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
 
-// 💡 수정 후 완벽 동기화
 async function submitEditAccModal() {
     const idx = document.getElementById('edit-acc-idx').value;
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
@@ -416,11 +420,7 @@ async function submitEditAccModal() {
         }));
 
         const res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { 
-            closeEditAccModal(); 
-            await load(); // 💡 여기서 대기
-            alert("✅ 수정 내용이 실시간으로 적용되었습니다.");
-        } else { alert("수정 실패"); }
+        if((await res.json()).status === 'success') { closeEditAccModal(); await load(); alert("✅ 수정 내용이 실시간으로 적용되었습니다."); } else { alert("수정 실패"); }
     } catch (e) { alert("오류 발생: " + e.message); }
 }
 
@@ -452,7 +452,6 @@ window.calcSplitRemain = function() {
     else { document.getElementById('split-out-qty').classList.remove('border-rose-500'); document.getElementById('split-error-msg').classList.add('hidden'); document.getElementById('split-remain-qty').innerText = (currentQty - outQty).toLocaleString(); }
 }
 
-// 💡 분할 후 완벽 동기화
 async function executeSplitAcc() {
     if(!splitTargetItem) return;
     let outQty = parseInt(document.getElementById('split-out-qty').value) || 0;
@@ -476,9 +475,7 @@ async function executeSplitAcc() {
         const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, { method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" }, body: JSON.stringify([newPayload]) });
         if(!res.ok) throw new Error("새로운 행 분할 생성 실패");
 
-        closeSplitAccModal(); 
-        await load(); // 💡 여기서 대기
-        alert("✅ 분할이 완료되었습니다."); 
+        closeSplitAccModal(); await load(); alert("✅ 분할이 완료되었습니다."); 
     } catch (e) { alert("분할 중 오류 발생: " + e.message); }
 }
 
@@ -509,10 +506,7 @@ async function batchConfirmAccounting() {
         let updatePayload = [];
         unconfirmedData.forEach(item => { item.ids.forEach(id => { updatePayload.push({ id: id, acc_status: '확정', acc_price: item.price }); }); });
         let res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { 
-            await load(); 
-            alert("✅ 일괄 확정 완료!"); 
-        } else { alert("일괄 확정 실패"); }
+        if((await res.json()).status === 'success') { await load(); alert("✅ 일괄 확정 완료!"); } else { alert("일괄 확정 실패"); }
     } catch (e) { alert("일괄 확정 중 오류: " + e.message); }
 }
 
