@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (단가 실시간 갱신 완벽 패치판)
+// [정산/회계] 명세서 대조 및 확정 로직 (병합 수량 나머지 유실 완벽 픽스판)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -59,6 +59,7 @@ async function emergencyResetAccQty() {
     try {
         let targetHistory = globalHistory.filter(h => h.action_type === '입고' && (h.acc_qty !== null || h.acc_status === '확정'));
         let payload = targetHistory.map(h => ({ id: h.id, acc_qty: null, acc_status: '미확정' }));
+        
         if(payload.length === 0) return alert("복구할 데이터가 없습니다.");
 
         for(let i=0; i<payload.length; i+=100) {
@@ -280,15 +281,13 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
-// 💡 [핵심 패치] 수기 입력 창 열 때 무조건 DB에서 최신 단가 데이터를 강제 동기화함!
 window.openDirectInputModal = async function() {
-    // 0.1초 만에 백그라운드에서 최신 품목 정보 긁어오기
     try {
         const ts = new Date().getTime();
         const [prodRes, fpRes] = await Promise.all([fetch('/api/products?t='+ts), fetch('/api/finished_products?t='+ts)]);
         productMaster = await prodRes.json();
         finishedProductMaster = await fpRes.json();
-    } catch(e) {} // 에러나도 기존 데이터로 진행
+    } catch(e) {} 
 
     let modal = document.getElementById('direct-input-modal');
     if(!modal) {
@@ -366,7 +365,7 @@ async function submitDirectInput() {
         if(!res.ok) throw new Error("수기 입력 데이터 생성 실패");
         
         closeDirectInputModal();
-        await load(); // 완료될 때까지 백그라운드 갱신
+        await load(); 
         alert("✅ 장부에 수기 입력이 실시간으로 완료되었습니다!"); 
     } catch (e) { alert("오류 발생: " + e.message); }
 }
@@ -405,22 +404,43 @@ function openEditAccModal(idx) {
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
 
+// 💡 [핵심 버그 픽스] 나머지(자투리) 수량을 첫 번째 행에 몰아넣어 총합 완벽 보장!
 async function submitEditAccModal() {
     const idx = document.getElementById('edit-acc-idx').value;
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; if(!item) return;
 
     let inputQty = parseInt(String(document.getElementById('edit-acc-qty').value).replace(/,/g, ''));
+    let inputPrice = parseInt(String(document.getElementById('edit-acc-price').value).replace(/,/g, '')) || 0;
+    let inputAdj = parseInt(String(document.getElementById('edit-acc-adj').value).replace(/,/g, '')) || 0;
+
     if(isNaN(inputQty) || inputQty <= 0) return alert("수량을 1개 이상 정확히 입력해주세요.");
 
     try {
-        let updatePayload = item.ids.map(id => ({
-            id: id, production_date: document.getElementById('edit-acc-date').value, item_name: document.getElementById('edit-acc-item').value, 
-            acc_qty: Math.floor(inputQty / item.ids.length), acc_price: parseInt(document.getElementById('edit-acc-price').value) || 0, acc_adj: Math.floor((parseInt(document.getElementById('edit-acc-adj').value) || 0) / item.ids.length)
-        }));
+        let updatePayload = [];
+        let len = item.ids.length;
+        
+        // 💡 수량/조정액을 병합 개수(len)로 나누고 남은 나머지를 구함
+        let baseQty = Math.floor(inputQty / len);
+        let remQty = inputQty % len;
+        
+        let baseAdj = Math.floor(inputAdj / len);
+        let remAdj = inputAdj % len;
+
+        item.ids.forEach((id, index) => {
+            updatePayload.push({
+                id: id, 
+                production_date: document.getElementById('edit-acc-date').value, 
+                item_name: document.getElementById('edit-acc-item').value, 
+                acc_price: inputPrice,
+                // 첫 번째 줄(index 0)에만 나머지를 더해서 총합을 완벽하게 맞춤!
+                acc_qty: index === 0 ? baseQty + remQty : baseQty, 
+                acc_adj: index === 0 ? baseAdj + remAdj : baseAdj 
+            });
+        });
 
         const res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { closeEditAccModal(); await load(); alert("✅ 수정 내용이 실시간으로 적용되었습니다."); } else { alert("수정 실패"); }
+        if((await res.json()).status === 'success') { closeEditAccModal(); await load(); alert("✅ 수정 내용이 정확한 수량으로 적용되었습니다."); } else { alert("수정 실패"); }
     } catch (e) { alert("오류 발생: " + e.message); }
 }
 
