@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (병합 수량 나머지 유실 완벽 픽스판)
+// [정산/회계] 명세서 대조 및 확정 로직 (에러 100% 제거 및 완전체)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -22,7 +22,7 @@ function toggleAccDateInput() {
     else if(type === 'month' && monthInput) monthInput.classList.remove('hidden');
 }
 
-// 💡 정산회계 매입처 드롭다운 텅 빔 현상 픽스
+// 💡 매입처/품목명 드롭다운에 [기존재고] 꼬리표 완벽 분리
 function populateAccDropdowns() {
     const supSelect = document.getElementById('acc-supplier');
     const itemSelect = document.getElementById('acc-item');
@@ -35,8 +35,8 @@ function populateAccDropdowns() {
     let items = new Set();
 
     globalHistory.forEach(h => {
-        // [기존재고] 아이템을 걸러내는 대신, 드롭다운 추출 시에는 [기존재고] 글씨만 깔끔하게 제거!
-        if(h.action_type === '입고' && !(h.remarks && String(h.remarks).includes('[기존재고]'))) {
+        if(h.action_type === '입고') {
+            // [기존재고] 글자를 떼어내서 순수한 매입처 이름만 추출
             let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
             let itm = String(h.item_name || "").trim();
             
@@ -54,11 +54,9 @@ function populateAccDropdowns() {
     itemSelect.value = Array.from(items).includes(currentItem) ? currentItem : 'ALL';
 }
 
-// 💡 렌더링 시 강제로 한 번 더 추출하도록 패치 (js_accounting.js 내부 아무 곳이나)
-const originalRenderAcc = window.renderAccounting;
-window.renderAccounting = async function() {
-    populateAccDropdowns();
-    if(originalRenderAcc) await originalRenderAcc();
+window.updateAccFilters = function(type) {
+    if(type === 'supplier') populateAccDropdowns(); 
+    renderAccounting();
 };
 
 async function emergencyResetAccQty() {
@@ -78,8 +76,11 @@ async function emergencyResetAccQty() {
     } catch(e) { alert("복구 중 에러 발생: " + e.message); }
 }
 
+// 💡 메인 렌더링 함수 (무한루프 제거 완료)
 window.renderAccounting = async function() {
     try {
+        populateAccDropdowns(); // 드롭다운 최신화
+
         let headerDiv = document.querySelector('#view-accounting .flex.space-x-2');
         if(headerDiv && !document.getElementById('emergency-reset-btn')) {
             let btn = document.createElement('button');
@@ -98,9 +99,6 @@ window.renderAccounting = async function() {
             headerDiv.prepend(btn);
         }
 
-        const supSelect = document.getElementById('acc-supplier');
-        if (supSelect && supSelect.options.length <= 1) populateAccDropdowns();
-
         const type = document.getElementById('acc-type')?.value || 'date';
         const dateVal = document.getElementById('acc-date')?.value;
         const startVal = document.getElementById('acc-period-start')?.value;
@@ -110,7 +108,7 @@ window.renderAccounting = async function() {
         const itemFilter = document.getElementById('acc-item')?.value || 'ALL';
         const groupMode = document.getElementById('acc-group')?.value || 'individual';
         
-        let targetHistory = globalHistory.filter(h => h.action_type === '입고' && !(h.remarks && String(h.remarks).includes('[기존재고]')));
+        let targetHistory = globalHistory.filter(h => h.action_type === '입고');
 
         targetHistory = targetHistory.filter(h => {
             let hDate = h.production_date || (h.created_at ? h.created_at.substring(0, 10) : '');
@@ -120,8 +118,12 @@ window.renderAccounting = async function() {
             return true;
         });
 
-        if(supFilter !== 'ALL') { targetHistory = targetHistory.filter(h => (h.remarks || "기본입고처").replace('[기존재고]', '').trim() === supFilter); }
-        if(itemFilter !== 'ALL') { targetHistory = targetHistory.filter(h => h.item_name === itemFilter); }
+        if(supFilter !== 'ALL') { 
+            targetHistory = targetHistory.filter(h => String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim() === supFilter); 
+        }
+        if(itemFilter !== 'ALL') { 
+            targetHistory = targetHistory.filter(h => h.item_name === itemFilter); 
+        }
 
         unconfirmedData = []; confirmedData = []; accTableData = [];
 
@@ -131,7 +133,7 @@ window.renderAccounting = async function() {
                 let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
                 if (current_qty <= 0) return; 
 
-                let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
+                let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
                 let pDate = h.production_date || (h.created_at ? h.created_at.substring(0, 10) : '');
                 let key = pDate + '|' + sup + '|' + h.item_name + '|' + (h.acc_status || '미확정');
                 
@@ -164,7 +166,8 @@ window.renderAccounting = async function() {
                 let key = pDate + '|' + h.item_name;
                 if(!summary[key]) summary[key] = { date: pDate, item_name: h.item_name, qty: 0, amount: 0 };
                 
-                let price = h.acc_price || getUnitPrice(h.item_name, 'materials', (h.remarks || "").replace('[기존재고]', '').trim());
+                let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
+                let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
                 summary[key].qty += current_qty;
                 summary[key].amount += (current_qty * price) + (h.acc_adj || 0);
             });
@@ -177,7 +180,7 @@ window.renderAccounting = async function() {
                 let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
                 if (current_qty <= 0) return;
 
-                let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
+                let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
                 if(!summary[sup]) summary[sup] = { name: sup, qty: 0, amount: 0 };
                 let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
                 summary[sup].qty += current_qty;
@@ -193,7 +196,7 @@ window.renderAccounting = async function() {
                 if (current_qty <= 0) return;
 
                 if(!summary[h.item_name]) summary[h.item_name] = { name: h.item_name, qty: 0, amount: 0 };
-                let sup = (h.remarks || "").replace('[기존재고]', '').trim();
+                let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
                 let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
                 summary[h.item_name].qty += current_qty;
                 summary[h.item_name].amount += (current_qty * price) + (h.acc_adj || 0);
@@ -427,7 +430,6 @@ async function submitEditAccModal() {
         let updatePayload = [];
         let len = item.ids.length;
         
-        // 💡 수량/조정액을 병합 개수(len)로 나누고 남은 나머지를 구함
         let baseQty = Math.floor(inputQty / len);
         let remQty = inputQty % len;
         
@@ -440,7 +442,6 @@ async function submitEditAccModal() {
                 production_date: document.getElementById('edit-acc-date').value, 
                 item_name: document.getElementById('edit-acc-item').value, 
                 acc_price: inputPrice,
-                // 첫 번째 줄(index 0)에만 나머지를 더해서 총합을 완벽하게 맞춤!
                 acc_qty: index === 0 ? baseQty + remQty : baseQty, 
                 acc_adj: index === 0 ? baseAdj + remAdj : baseAdj 
             });
