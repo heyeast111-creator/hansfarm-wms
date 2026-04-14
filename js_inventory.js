@@ -33,10 +33,9 @@ function switchOrderTab(tab) {
         if(tab === 'search') updateSummarySupplierDropdown();
         if(tab === 'safety') renderSafetyStock();
         
-        // 💡 발주조회 탭 클릭 시 동적 정렬 UI 생성 및 렌더링
         if(tab === 'history') { 
             updateOrderCartDropdowns(); 
-            initOrderSortUI(); 
+            if(typeof initOrderSortUI === 'function') initOrderSortUI(); 
             renderOrderList(); 
         }
     } catch(e) {}
@@ -580,16 +579,19 @@ function updateSummaryItemDropdown() {
     if(itemSelect) itemSelect.innerHTML = `<option value="">품목을 선택하세요</option>` + uniqueItems.map(name => `<option value="${name}">${name}</option>`).join('');
     calculateSummary();
 }
+
+// 💡 0개로 나오는 오류 해결 완료: [기존재고] 꼬리표 완벽 분리 계산
 function calculateSummary() {
     const itemName = document.getElementById('summary-item')?.value; const supplier = document.getElementById('summary-supplier')?.value;
     let breakdown = {}; let totalQty = 0; let totalPallet = 0;
     if(itemName) {
         globalOccupancy.forEach(item => {
-            let itemSup = item.remarks || "기본입고처";
-            if(item.item_name === itemName && (supplier === 'ALL' || itemSup === supplier)) {
-                if(!breakdown[itemSup]) breakdown[itemSup] = { qty: 0, pallet: 0 };
+            // 💡 여기서 [기존재고] 글자를 깔끔하게 떼어내고 비교합니다!
+            let cleanItemSup = String(item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim(); 
+            if(item.item_name === itemName && (supplier === 'ALL' || cleanItemSup === supplier)) {
+                if(!breakdown[cleanItemSup]) breakdown[cleanItemSup] = { qty: 0, pallet: 0 };
                 let dynP = getDynamicPalletCount(item);
-                breakdown[itemSup].qty += item.quantity; breakdown[itemSup].pallet += dynP;
+                breakdown[cleanItemSup].qty += item.quantity; breakdown[cleanItemSup].pallet += dynP;
                 totalQty += item.quantity; totalPallet += dynP;
             }
         });
@@ -600,10 +602,15 @@ function calculateSummary() {
     Object.keys(breakdown).forEach(sup => { breakdownHtml += `<div class="flex justify-between items-center bg-white p-3 rounded border border-slate-200"><span class="font-bold w-1/3 truncate">${sup}</span><span class="font-black text-indigo-600 w-1/3 text-right">${breakdown[sup].qty.toLocaleString()} EA</span><span class="font-bold text-rose-500 w-1/3 text-right">${breakdown[sup].pallet.toFixed(1)} P</span></div>`; });
     document.getElementById('summary-breakdown').innerHTML = Object.keys(breakdown).length > 0 ? breakdownHtml + '</div>' : '';
 }
+
 function findItemLocationFromSummary() {
     const itemName = document.getElementById('summary-item').value; const supplier = document.getElementById('summary-supplier').value;
     if(!itemName) return alert("품목을 선택하세요.");
-    let targets = globalOccupancy.filter(item => item.item_name === itemName && (supplier === 'ALL' || (item.remarks || "기본입고처") === supplier));
+    let targets = globalOccupancy.filter(item => {
+        // 💡 위치 찾기에도 꼬리표 떼어내기 적용
+        let cleanSup = String(item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
+        return item.item_name === itemName && (supplier === 'ALL' || cleanSup === supplier);
+    });
     if(targets.length === 0) return alert("재고가 없습니다.");
     globalSearchTargets = targets.map(t => t.location_id);
     let firstLoc = globalSearchTargets[0];
@@ -757,15 +764,11 @@ async function submitOrderCart() {
     }
 }
 
-// 💡 1. [신규] 정렬 UI를 동적으로 생성하는 함수
 function initOrderSortUI() {
     const container = document.getElementById('subview-history');
     if(!container) return;
-
-    // 이미 정렬 UI가 있다면 생성하지 않음
     if(document.getElementById('order-sort-select')) return;
 
-    // 화면 상단에 정렬 드롭다운 삽입
     let sortHtml = `
         <div class="flex justify-end items-center bg-slate-50 p-2 border-b border-slate-200">
             <span class="text-xs font-bold text-slate-500 mr-2">보기 방식:</span>
@@ -778,36 +781,25 @@ function initOrderSortUI() {
         </div>
     `;
     
-    // 테이블 상단에 삽입
     const tableEl = container.querySelector('table');
     if(tableEl && tableEl.parentElement) {
         tableEl.parentElement.insertAdjacentHTML('beforebegin', sortHtml);
     }
 }
 
-// 💡 2. [수정] 기본 정렬을 '입고예정일'로 바꾸고 드롭다운에 따라 정렬 반영
 function renderOrderList() {
     let orders = globalHistory.filter(h => h.action_type === '발주중');
-    
-    // 선택된 정렬 기준 가져오기 (없으면 기본값 적용)
     let sortType = document.getElementById('order-sort-select')?.value || 'expected_asc';
 
-    // 정렬 로직 적용
     orders.sort((a, b) => {
         if(sortType === 'expected_asc') {
             let dateA = a.production_date || '9999-12-31'; 
             let dateB = b.production_date || '9999-12-31';
             return dateA.localeCompare(dateB);
         } 
-        else if (sortType === 'created_desc') {
-            return new Date(b.created_at) - new Date(a.created_at);
-        }
-        else if (sortType === 'name_asc') {
-            return (a.item_name || '').localeCompare(b.item_name || '');
-        }
-        else if (sortType === 'qty_desc') {
-            return (b.quantity || 0) - (a.quantity || 0);
-        }
+        else if (sortType === 'created_desc') { return new Date(b.created_at) - new Date(a.created_at); }
+        else if (sortType === 'name_asc') { return (a.item_name || '').localeCompare(b.item_name || ''); }
+        else if (sortType === 'qty_desc') { return (b.quantity || 0) - (a.quantity || 0); }
     });
 
     let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
@@ -821,7 +813,7 @@ function renderOrderList() {
                 <button onclick="openEditOrderModal('${o.id}')" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">수정</button>
                 <button onclick="cancelOrder('${o.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">취소</button>
             </div>` : '';
-        return `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.quantity.toLocaleString()}EA (${o.pallet_count.toFixed(1)}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle w-36">${actionBtns}</td></tr>`;
+        return `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.quantity.toLocaleString()}EA (${parseFloat(o.pallet_count).toFixed(1)}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle w-36">${actionBtns}</td></tr>`;
     }).join('');
 }
 
@@ -974,8 +966,25 @@ function renderSafetyStock() {
     const thead = document.getElementById('safety-thead'); const tbody = document.getElementById('safety-list');
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     let aggregatedItems = {};
-    materialProducts.forEach(p => { let key = p.item_name; if (!aggregatedItems[key]) aggregatedItems[key] = { category: p.category || '미분류', item_name: p.item_name, suppliers: new Set(), total_qty: 0, total_pallet: 0, daily_usage: p.daily_usage || 0 }; if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier); if(p.daily_usage > aggregatedItems[key].daily_usage) aggregatedItems[key].daily_usage = p.daily_usage; });
-    globalOccupancy.forEach(item => { let key = item.item_name; if(aggregatedItems[key]) { aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0); aggregatedItems[key].total_pallet += getDynamicPalletCount(item); if (item.remarks && item.remarks !== '기본입고처') aggregatedItems[key].suppliers.add(item.remarks); } });
+    
+    materialProducts.forEach(p => { 
+        let key = p.item_name; 
+        if (!aggregatedItems[key]) aggregatedItems[key] = { category: p.category || '미분류', item_name: p.item_name, suppliers: new Set(), total_qty: 0, total_pallet: 0, daily_usage: p.daily_usage || 0 }; 
+        if (p.supplier) aggregatedItems[key].suppliers.add(p.supplier); 
+        if(p.daily_usage > aggregatedItems[key].daily_usage) aggregatedItems[key].daily_usage = p.daily_usage; 
+    });
+
+    globalOccupancy.forEach(item => { 
+        let key = item.item_name; 
+        if(aggregatedItems[key]) { 
+            aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0); 
+            aggregatedItems[key].total_pallet += getDynamicPalletCount(item); 
+            // 💡 [기존재고] 꼬리표 떼어내기 (안전재고 화면)
+            let cleanSup = String(item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
+            if (cleanSup && cleanSup !== '기본입고처') aggregatedItems[key].suppliers.add(cleanSup); 
+        } 
+    });
+    
     let monitoredList = Object.values(aggregatedItems); let html = '';
     
     let supSelect = document.getElementById('safe-filter-sup'); let catSelect = document.getElementById('safe-filter-cat');
