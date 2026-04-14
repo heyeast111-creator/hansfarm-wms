@@ -32,7 +32,13 @@ function switchOrderTab(tab) {
 
         if(tab === 'search') updateSummarySupplierDropdown();
         if(tab === 'safety') renderSafetyStock();
-        if(tab === 'history') { updateOrderCartDropdowns(); renderOrderList(); }
+        
+        // 💡 발주조회 탭 클릭 시 동적 정렬 UI 생성 및 렌더링
+        if(tab === 'history') { 
+            updateOrderCartDropdowns(); 
+            initOrderSortUI(); 
+            renderOrderList(); 
+        }
     } catch(e) {}
 }
 
@@ -697,7 +703,6 @@ function renderOrderCart() {
     tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
-// 💡 발주 등록 에러 방어 및 즉각 화면 반영 로직 완벽 적용
 async function submitOrderCart() {
     if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
     
@@ -707,7 +712,6 @@ async function submitOrderCart() {
         text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; 
     });
 
-    // 1. 임시 데이터를 만들어서 화면에 먼저 띄움 (무반응 방지)
     let tempOrders = orderCart.map(item => ({
         id: 'temp_' + Date.now() + Math.random(),
         action_type: '발주중',
@@ -724,7 +728,6 @@ async function submitOrderCart() {
     renderOrderList();
 
     try { 
-        // 2. 파이썬 서버로 데이터 쏘기
         let res = await fetch('/api/orders_create', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
@@ -732,13 +735,10 @@ async function submitOrderCart() {
         }); 
         
         let data = await res.json();
-        
-        // 3. 서버에서 DB 저장 실패 메시지가 날아오면 강제로 에러 발생시킴
         if (data.status !== 'success') {
             throw new Error(data.message || "알 수 없는 서버 에러");
         }
 
-        // 4. 카톡 복사는 차단당해도 앱이 뻗지 않도록 방어
         try {
             await navigator.clipboard.writeText(text);
             alert("발주 등록 및 카카오톡 텍스트 복사 완료!"); 
@@ -748,20 +748,71 @@ async function submitOrderCart() {
 
         orderCart = []; 
         toggleOrderCart(); 
-        await load(); // DB와 싱크 맞추기 위해 최종 새로고침
+        await load(); 
         
     } catch(e) {
-        // 에러 시 화면에 띄워뒀던 가짜 데이터 깔끔하게 삭제
         globalHistory = globalHistory.filter(h => !h.id.toString().startsWith('temp_'));
         renderOrderList();
-        alert("❌ 발주 데이터 저장 실패!\n원인: " + e.message + "\n(데이터베이스 형식이 맞지 않습니다. 파이썬 서버 배포가 완료되었는지 확인해주세요.)");
+        alert("❌ 발주 데이터 저장 실패!\n원인: " + e.message);
     }
 }
 
+// 💡 1. [신규] 정렬 UI를 동적으로 생성하는 함수
+function initOrderSortUI() {
+    const container = document.getElementById('subview-history');
+    if(!container) return;
+
+    // 이미 정렬 UI가 있다면 생성하지 않음
+    if(document.getElementById('order-sort-select')) return;
+
+    // 화면 상단에 정렬 드롭다운 삽입
+    let sortHtml = `
+        <div class="flex justify-end items-center bg-slate-50 p-2 border-b border-slate-200">
+            <span class="text-xs font-bold text-slate-500 mr-2">보기 방식:</span>
+            <select id="order-sort-select" onchange="renderOrderList()" class="border-2 border-slate-300 rounded px-3 py-1.5 text-sm font-black text-indigo-700 outline-none focus:border-indigo-500 cursor-pointer shadow-sm">
+                <option value="expected_asc" selected>📅 입고예정일 빠른 순 (기본)</option>
+                <option value="created_desc">🆕 최근 등록 발주 순</option>
+                <option value="name_asc">📝 품목명 가나다순</option>
+                <option value="qty_desc">📦 발주 수량 많은 순</option>
+            </select>
+        </div>
+    `;
+    
+    // 테이블 상단에 삽입
+    const tableEl = container.querySelector('table');
+    if(tableEl && tableEl.parentElement) {
+        tableEl.parentElement.insertAdjacentHTML('beforebegin', sortHtml);
+    }
+}
+
+// 💡 2. [수정] 기본 정렬을 '입고예정일'로 바꾸고 드롭다운에 따라 정렬 반영
 function renderOrderList() {
-    let orders = globalHistory.filter(h => h.action_type === '발주중').sort((a,b) => new Date(b.created_at) - new Date(a.created_at)); 
+    let orders = globalHistory.filter(h => h.action_type === '발주중');
+    
+    // 선택된 정렬 기준 가져오기 (없으면 기본값 적용)
+    let sortType = document.getElementById('order-sort-select')?.value || 'expected_asc';
+
+    // 정렬 로직 적용
+    orders.sort((a, b) => {
+        if(sortType === 'expected_asc') {
+            let dateA = a.production_date || '9999-12-31'; 
+            let dateB = b.production_date || '9999-12-31';
+            return dateA.localeCompare(dateB);
+        } 
+        else if (sortType === 'created_desc') {
+            return new Date(b.created_at) - new Date(a.created_at);
+        }
+        else if (sortType === 'name_asc') {
+            return (a.item_name || '').localeCompare(b.item_name || '');
+        }
+        else if (sortType === 'qty_desc') {
+            return (b.quantity || 0) - (a.quantity || 0);
+        }
+    });
+
     let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
-    if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400">진행 중 발주 없음</td></tr>`;
+    if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400">진행 중인 발주 내역이 없습니다.</td></tr>`;
+    
     tbody.innerHTML = orders.map(o => {
         let expDate = o.production_date || '미정';
         let actionBtns = loginMode !== 'viewer' ?
@@ -770,7 +821,7 @@ function renderOrderList() {
                 <button onclick="openEditOrderModal('${o.id}')" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">수정</button>
                 <button onclick="cancelOrder('${o.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">취소</button>
             </div>` : '';
-        return `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.quantity}EA (${o.pallet_count}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle w-36">${actionBtns}</td></tr>`;
+        return `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.quantity.toLocaleString()}EA (${o.pallet_count.toFixed(1)}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle w-36">${actionBtns}</td></tr>`;
     }).join('');
 }
 
