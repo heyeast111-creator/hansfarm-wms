@@ -22,6 +22,7 @@ function toggleAccDateInput() {
     else if(type === 'month' && monthInput) monthInput.classList.remove('hidden');
 }
 
+// 💡 정산회계 매입처 드롭다운 텅 빔 현상 픽스
 function populateAccDropdowns() {
     const supSelect = document.getElementById('acc-supplier');
     const itemSelect = document.getElementById('acc-item');
@@ -34,24 +35,30 @@ function populateAccDropdowns() {
     let items = new Set();
 
     globalHistory.forEach(h => {
-        if(h.action_type === '입고') {
-            let sup = (h.remarks || "기본입고처").replace('[기존재고]', '').trim();
-            let itm = (h.item_name || "").trim();
+        // [기존재고] 아이템을 걸러내는 대신, 드롭다운 추출 시에는 [기존재고] 글씨만 깔끔하게 제거!
+        if(h.action_type === '입고' && !(h.remarks && String(h.remarks).includes('[기존재고]'))) {
+            let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
+            let itm = String(h.item_name || "").trim();
+            
             if(sup) suppliers.add(sup);
             if(currentSup === 'ALL' || currentSup === sup) { if(itm) items.add(itm); }
         }
     });
 
     let supHtml = '<option value="ALL">전체 매입처</option>' + Array.from(suppliers).sort().map(s => `<option value="${s}">${s}</option>`).join('');
-    if (supSelect.innerHTML !== supHtml) { supSelect.innerHTML = supHtml; supSelect.value = Array.from(suppliers).includes(currentSup) ? currentSup : 'ALL'; }
+    supSelect.innerHTML = supHtml;
+    supSelect.value = Array.from(suppliers).includes(currentSup) ? currentSup : 'ALL';
 
     let itemHtml = '<option value="ALL">전체 품목</option>' + Array.from(items).sort().map(i => `<option value="${i}">${i}</option>`).join('');
-    if (itemSelect.innerHTML !== itemHtml) { itemSelect.innerHTML = itemHtml; itemSelect.value = Array.from(items).includes(currentItem) ? currentItem : 'ALL'; }
+    itemSelect.innerHTML = itemHtml;
+    itemSelect.value = Array.from(items).includes(currentItem) ? currentItem : 'ALL';
 }
 
-window.updateAccFilters = function(type) {
-    if(type === 'supplier') populateAccDropdowns(); 
-    renderAccounting();
+// 💡 렌더링 시 강제로 한 번 더 추출하도록 패치 (js_accounting.js 내부 아무 곳이나)
+const originalRenderAcc = window.renderAccounting;
+window.renderAccounting = async function() {
+    populateAccDropdowns();
+    if(originalRenderAcc) await originalRenderAcc();
 };
 
 async function emergencyResetAccQty() {
