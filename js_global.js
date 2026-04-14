@@ -72,17 +72,17 @@ async function load() {
 }
 
 function renderAll() {
-    try { renderMap(); if(selectedCellId) clickCell(selectedCellId); } catch(e){}
+    try { if(typeof renderMap === 'function') renderMap(); if(selectedCellId && typeof clickCell === 'function') clickCell(selectedCellId); } catch(e){}
     try { updateDashboard(); } catch(e){}
-    try { updateMapSearchCategoryDropdown(); } catch(e){}
-    try { updateSummarySupplierDropdown(); } catch(e){}
-    try { renderSafetyStock(); } catch(e){}
+    try { if(typeof updateMapSearchCategoryDropdown === 'function') updateMapSearchCategoryDropdown(); } catch(e){}
+    try { if(typeof updateSummarySupplierDropdown === 'function') updateSummarySupplierDropdown(); } catch(e){}
+    try { if(typeof renderSafetyStock === 'function') renderSafetyStock(); } catch(e){}
     try { if(typeof renderAccounting === 'function') renderAccounting(); } catch(e){} 
-    try { populateProductFilters('finished'); renderProductMaster('finished'); } catch(e){}
-    try { populateProductFilters('materials'); renderProductMaster('materials'); } catch(e){}
-    try { updateBomDropdowns(); renderBomMaster(); } catch(e){}
-    try { updateOrderCartDropdowns(); renderOrderList(); renderOrderCart(); } catch(e){}
-    try { populateWaitDropdowns(); } catch(e){}
+    try { if(typeof populateProductFilters === 'function') { populateProductFilters('finished'); renderProductMaster('finished'); } } catch(e){}
+    try { if(typeof populateProductFilters === 'function') { populateProductFilters('materials'); renderProductMaster('materials'); } } catch(e){}
+    try { if(typeof updateBomDropdowns === 'function') { updateBomDropdowns(); renderBomMaster(); } } catch(e){}
+    try { if(typeof updateOrderCartDropdowns === 'function') { updateOrderCartDropdowns(); renderOrderList(); renderOrderCart(); } } catch(e){}
+    try { if(typeof populateWaitDropdowns === 'function') populateWaitDropdowns(); } catch(e){}
 }
 
 // ==========================================
@@ -154,8 +154,8 @@ function showView(viewName) {
     });
     document.querySelectorAll('.nav-btn-mo.target-' + viewName).forEach(btn => { btn.classList.remove('bg-white'); btn.classList.add('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'shadow-inner'); });
     
-    if(viewName === 'products') { populateProductFilters('finished'); populateProductFilters('materials'); renderProductMaster('finished'); switchProductTab('fp'); } 
-    else if(viewName === 'order') { switchOrderTab(currentOrderTab); } 
+    if(viewName === 'products') { if(typeof populateProductFilters === 'function') { populateProductFilters('finished'); populateProductFilters('materials'); renderProductMaster('finished'); switchProductTab('fp'); } } 
+    else if(viewName === 'order') { if(typeof switchOrderTab === 'function') switchOrderTab(currentOrderTab); } 
     else if(viewName === 'dashboard') updateDashboard(); 
     else if(viewName === 'accounting') { if(typeof renderAccounting === 'function') renderAccounting(); } 
     else if(viewName === 'outbound') { if(typeof renderOutboundUI === 'function') renderOutboundUI(); } 
@@ -163,20 +163,11 @@ function showView(viewName) {
 
 function toggleRightPanel() { let rs = document.getElementById('right-sidebar'); if(!rs) return; isRightPanelVisible = !isRightPanelVisible; if(isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
 function clearInfo() { const panel = document.getElementById('info-panel'); if(panel) panel.innerHTML = `<div class="text-center text-slate-400 py-10 mt-10">도면에서 위치를 선택해주세요</div>`; }
-function closeInfoPanel() { let rs = document.getElementById('right-sidebar'); if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; } selectedCellId = null; movingItem = null; renderMap(); }
+function closeInfoPanel() { let rs = document.getElementById('right-sidebar'); if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; } selectedCellId = null; movingItem = null; if(typeof renderMap === 'function') renderMap(); }
 
 // ==========================================
 // 유틸리티 및 엑셀 다운로드
 // ==========================================
-function getDynamicPalletCount(itemObj) {
-    if(!itemObj) return 0;
-    let itemName = itemObj.item_name || ""; let supplier = itemObj.remarks || "기본입고처"; let quantity = itemObj.quantity || 0;
-    let targetSup = String(supplier).trim();
-    let pInfo = finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim() && String(p.supplier||"").trim() === targetSup) || finishedProductMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim()) || productMaster.find(p => String(p.item_name||"").trim() === String(itemName).trim());
-    if (pInfo && pInfo.pallet_ea > 0) return quantity / pInfo.pallet_ea;
-    return itemObj.pallet_count || 1;
-}
-
 function showHistoryModal(locId) {
     let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
     let titleEl = document.getElementById('history-modal-title'); if(titleEl) titleEl.innerText = `${locId} 전체 기록`;
@@ -336,7 +327,6 @@ function updateDashboard() {
     }
 }
 
-// 💡 [수정] 가용률(빈 공간) 직관적 표시 패치 완료
 function openWeeklyReportModal(start, end) {
     let modal = document.getElementById('weekly-report-modal');
     if(!modal) {
@@ -420,7 +410,6 @@ function openWeeklyReportModal(start, end) {
     let coldPct = coldTotal > 0 ? Math.min(100, Math.round((coldOcc / coldTotal) * 100)) : 0;
     let floorPct = floorTotal > 0 ? Math.min(100, Math.round((floorOcc / floorTotal) * 100)) : 0;
 
-    // 💡 [추가] 비어있는 공간의 비율 (가용률)
     let roomEmptyPct = Math.max(0, 100 - roomPct);
     let coldEmptyPct = Math.max(0, 100 - coldPct);
     let floorEmptyPct = Math.max(0, 100 - floorPct);
