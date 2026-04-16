@@ -579,14 +579,11 @@ function updateSummaryItemDropdown() {
     if(itemSelect) itemSelect.innerHTML = `<option value="">품목을 선택하세요</option>` + uniqueItems.map(name => `<option value="${name}">${name}</option>`).join('');
     calculateSummary();
 }
-
-// 💡 0개로 나오는 오류 해결 완료: [기존재고] 꼬리표 완벽 분리 계산
 function calculateSummary() {
     const itemName = document.getElementById('summary-item')?.value; const supplier = document.getElementById('summary-supplier')?.value;
     let breakdown = {}; let totalQty = 0; let totalPallet = 0;
     if(itemName) {
         globalOccupancy.forEach(item => {
-            // 💡 여기서 [기존재고] 글자를 깔끔하게 떼어내고 비교합니다!
             let cleanItemSup = String(item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim(); 
             if(item.item_name === itemName && (supplier === 'ALL' || cleanItemSup === supplier)) {
                 if(!breakdown[cleanItemSup]) breakdown[cleanItemSup] = { qty: 0, pallet: 0 };
@@ -602,12 +599,10 @@ function calculateSummary() {
     Object.keys(breakdown).forEach(sup => { breakdownHtml += `<div class="flex justify-between items-center bg-white p-3 rounded border border-slate-200"><span class="font-bold w-1/3 truncate">${sup}</span><span class="font-black text-indigo-600 w-1/3 text-right">${breakdown[sup].qty.toLocaleString()} EA</span><span class="font-bold text-rose-500 w-1/3 text-right">${breakdown[sup].pallet.toFixed(1)} P</span></div>`; });
     document.getElementById('summary-breakdown').innerHTML = Object.keys(breakdown).length > 0 ? breakdownHtml + '</div>' : '';
 }
-
 function findItemLocationFromSummary() {
     const itemName = document.getElementById('summary-item').value; const supplier = document.getElementById('summary-supplier').value;
     if(!itemName) return alert("품목을 선택하세요.");
     let targets = globalOccupancy.filter(item => {
-        // 💡 위치 찾기에도 꼬리표 떼어내기 적용
         let cleanSup = String(item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
         return item.item_name === itemName && (supplier === 'ALL' || cleanSup === supplier);
     });
@@ -764,57 +759,86 @@ async function submitOrderCart() {
     }
 }
 
+// 💡 1. [신규 패치] 발주 목록 정렬 UI 안전하게 그리기
 function initOrderSortUI() {
-    const container = document.getElementById('subview-history');
-    if(!container) return;
-    if(document.getElementById('order-sort-select')) return;
+    try {
+        const container = document.getElementById('subview-history');
+        if(!container) return;
+        if(document.getElementById('order-sort-select')) return;
 
-    let sortHtml = `
-        <div class="flex justify-end items-center bg-slate-50 p-2 border-b border-slate-200">
-            <span class="text-xs font-bold text-slate-500 mr-2">보기 방식:</span>
-            <select id="order-sort-select" onchange="renderOrderList()" class="border-2 border-slate-300 rounded px-3 py-1.5 text-sm font-black text-indigo-700 outline-none focus:border-indigo-500 cursor-pointer shadow-sm">
-                <option value="expected_asc" selected>📅 입고예정일 빠른 순 (기본)</option>
-                <option value="created_desc">🆕 최근 등록 발주 순</option>
-                <option value="name_asc">📝 품목명 가나다순</option>
-                <option value="qty_desc">📦 발주 수량 많은 순</option>
-            </select>
-        </div>
-    `;
-    
-    const tableEl = container.querySelector('table');
-    if(tableEl && tableEl.parentElement) {
-        tableEl.parentElement.insertAdjacentHTML('beforebegin', sortHtml);
+        let sortHtml = `
+            <div class="flex justify-end items-center bg-slate-50 p-2 border-b border-slate-200">
+                <span class="text-xs font-bold text-slate-500 mr-2">보기 방식:</span>
+                <select id="order-sort-select" onchange="renderOrderList()" class="border-2 border-slate-300 rounded px-3 py-1.5 text-sm font-black text-indigo-700 outline-none focus:border-indigo-500 cursor-pointer shadow-sm">
+                    <option value="expected_asc" selected>📅 입고예정일 빠른 순 (기본)</option>
+                    <option value="created_desc">🆕 최근 등록 발주 순</option>
+                    <option value="name_asc">📝 품목명 가나다순</option>
+                    <option value="qty_desc">📦 발주 수량 많은 순</option>
+                </select>
+            </div>
+        `;
+        
+        const tableEl = container.querySelector('table');
+        if(tableEl && tableEl.parentElement) {
+            tableEl.parentElement.insertAdjacentHTML('beforebegin', sortHtml);
+        } else {
+            container.insertAdjacentHTML('afterbegin', sortHtml);
+        }
+    } catch(e) {
+        console.error("UI 생성 에러 방어: ", e);
     }
 }
 
+// 💡 2. [완벽 에러 차단] 빈 날짜나 특수문자가 있어도 절대 뻗지 않는 렌더링
 function renderOrderList() {
-    let orders = globalHistory.filter(h => h.action_type === '발주중');
-    let sortType = document.getElementById('order-sort-select')?.value || 'expected_asc';
+    try {
+        let orders = globalHistory.filter(h => h.action_type === '발주중');
+        let sortType = document.getElementById('order-sort-select')?.value || 'expected_asc';
 
-    orders.sort((a, b) => {
-        if(sortType === 'expected_asc') {
-            let dateA = a.production_date || '9999-12-31'; 
-            let dateB = b.production_date || '9999-12-31';
-            return dateA.localeCompare(dateB);
-        } 
-        else if (sortType === 'created_desc') { return new Date(b.created_at) - new Date(a.created_at); }
-        else if (sortType === 'name_asc') { return (a.item_name || '').localeCompare(b.item_name || ''); }
-        else if (sortType === 'qty_desc') { return (b.quantity || 0) - (a.quantity || 0); }
-    });
+        // 정렬 에러 100% 방어
+        orders.sort((a, b) => {
+            if(sortType === 'expected_asc') {
+                let dateA = String(a.production_date || '9999-12-31'); 
+                let dateB = String(b.production_date || '9999-12-31');
+                return dateA.localeCompare(dateB);
+            } 
+            else if (sortType === 'created_desc') { 
+                return new Date(b.created_at || 0) - new Date(a.created_at || 0); 
+            }
+            else if (sortType === 'name_asc') { 
+                return String(a.item_name || '').localeCompare(String(b.item_name || '')); 
+            }
+            else if (sortType === 'qty_desc') { 
+                return (Number(b.quantity) || 0) - (Number(a.quantity) || 0); 
+            }
+        });
 
-    let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
-    if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400">진행 중인 발주 내역이 없습니다.</td></tr>`;
-    
-    tbody.innerHTML = orders.map(o => {
-        let expDate = o.production_date || '미정';
-        let actionBtns = loginMode !== 'viewer' ?
-            `<div class="flex justify-center space-x-1">
-                <button onclick="receiveOrder('${o.id}', '${o.item_name}', ${o.quantity}, ${o.pallet_count}, '${o.remarks}', '${o.category||''}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">도착</button>
-                <button onclick="openEditOrderModal('${o.id}')" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">수정</button>
-                <button onclick="cancelOrder('${o.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">취소</button>
-            </div>` : '';
-        return `<tr><td class="p-3 text-slate-500">${o.created_at.substring(0,10)}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${o.remarks||'기본'}</td><td class="p-3 font-black">${o.item_name}</td><td class="p-3 text-right text-indigo-600">${o.quantity.toLocaleString()}EA (${parseFloat(o.pallet_count).toFixed(1)}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle w-36">${actionBtns}</td></tr>`;
-    }).join('');
+        let tbody = document.getElementById('order-list-tbody'); if(!tbody) return;
+        if(orders.length === 0) return tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400">진행 중인 발주 내역이 없습니다.</td></tr>`;
+        
+        tbody.innerHTML = orders.map(o => {
+            let expDate = o.production_date || '미정';
+            let crDate = String(o.created_at || '').substring(0, 10);
+            
+            // 특수문자 따옴표(')로 인한 버튼 고장 방지
+            let safeItemName = String(o.item_name || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            let safeRemarks = String(o.remarks || '기본').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            let safeCat = String(o.category || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            
+            let qty = Number(o.quantity) || 0;
+            let pal = Number(o.pallet_count) || 0;
+
+            let actionBtns = loginMode !== 'viewer' ?
+                `<div class="flex justify-center space-x-1">
+                    <button onclick="receiveOrder('${o.id}', '${safeItemName}', ${qty}, ${pal}, '${safeRemarks}', '${safeCat}')" class="bg-emerald-500 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">도착</button>
+                    <button onclick="openEditOrderModal('${o.id}')" class="bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">수정</button>
+                    <button onclick="cancelOrder('${o.id}')" class="bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-1 rounded text-xs font-bold transition-colors shadow-sm">취소</button>
+                </div>` : '';
+            return `<tr><td class="p-3 text-slate-500">${crDate}</td><td class="p-3 font-bold text-blue-600">${expDate}</td><td class="p-3 font-black text-rose-600">${safeRemarks}</td><td class="p-3 font-black">${safeItemName}</td><td class="p-3 text-right text-indigo-600">${qty.toLocaleString()}EA (${pal.toFixed(1)}P)</td><td class="p-3 text-center"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-[10px] font-bold shadow-sm">발주중</span></td><td class="p-3 text-center align-middle w-36">${actionBtns}</td></tr>`;
+        }).join('');
+    } catch(e) {
+        console.error("렌더링 에러 방어 완료: ", e);
+    }
 }
 
 function openEditOrderModal(logId) {
@@ -979,7 +1003,6 @@ function renderSafetyStock() {
         if(aggregatedItems[key]) { 
             aggregatedItems[key].total_qty += (parseInt(item.quantity) || 0); 
             aggregatedItems[key].total_pallet += getDynamicPalletCount(item); 
-            // 💡 [기존재고] 꼬리표 떼어내기 (안전재고 화면)
             let cleanSup = String(item.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
             if (cleanSup && cleanSup !== '기본입고처') aggregatedItems[key].suppliers.add(cleanSup); 
         } 
