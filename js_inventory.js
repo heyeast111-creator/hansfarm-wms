@@ -332,8 +332,12 @@ async function clickCell(displayId, searchId) {
 
         selectedCellId = displayId; 
         renderMap(); 
-        let rs = document.getElementById('right-sidebar');
-        if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
+        
+        // 💡 [핵심 버그 수정] 발주 탭 등 다른 탭에 있을 때는 절대 우측 패널을 열지 않도록 차단!
+        if (currentOrderTab === 'inventory') {
+            let rs = document.getElementById('right-sidebar');
+            if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
+        }
         
         const panel = document.getElementById('info-panel'); 
         const floorName = searchId.startsWith('W-') ? '입고 대기장' : (currentZone === '현장' ? '생산현장' : '적재 구역'); 
@@ -705,21 +709,31 @@ function renderOrderCart() {
     tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
+// 💡 [핵심 버그 수정 1] 발주 등록 시 supplier 이름을 remarks 로 매핑하여 전송 (데이터 증발 방지)
 async function submitOrderCart() {
     if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
     
     let text = "[한스팜]발주요청서\n"; 
+    let payload = [];
+
     orderCart.forEach((item, i) => { 
-        item.production_date = item.expected_date; 
         text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; 
+        payload.push({
+            category: item.category,
+            item_name: item.item_name,
+            remarks: item.supplier, // 💡 서버가 인식할 수 있도록 supplier를 remarks로 변환하여 전송
+            pallet_count: item.pallet_count,
+            quantity: item.quantity,
+            production_date: item.expected_date
+        });
     });
 
-    let tempOrders = orderCart.map(item => ({
+    let tempOrders = payload.map(item => ({
         id: 'temp_' + Date.now() + Math.random(),
         action_type: '발주중',
         created_at: new Date().toISOString(),
-        production_date: item.expected_date,
-        remarks: item.supplier,
+        production_date: item.production_date,
+        remarks: item.remarks,
         item_name: item.item_name,
         quantity: item.quantity,
         pallet_count: item.pallet_count,
@@ -733,7 +747,7 @@ async function submitOrderCart() {
         let res = await fetch('/api/orders_create', { 
             method: 'POST', 
             headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify(orderCart) 
+            body: JSON.stringify(payload) 
         }); 
         
         let data = await res.json();
@@ -759,7 +773,6 @@ async function submitOrderCart() {
     }
 }
 
-// 💡 1. [신규 패치] 발주 목록 정렬 UI 안전하게 그리기
 function initOrderSortUI() {
     try {
         const container = document.getElementById('subview-history');
@@ -789,13 +802,11 @@ function initOrderSortUI() {
     }
 }
 
-// 💡 2. [완벽 에러 차단] 빈 날짜나 특수문자가 있어도 절대 뻗지 않는 렌더링
 function renderOrderList() {
     try {
         let orders = globalHistory.filter(h => h.action_type === '발주중');
         let sortType = document.getElementById('order-sort-select')?.value || 'expected_asc';
 
-        // 정렬 에러 100% 방어
         orders.sort((a, b) => {
             if(sortType === 'expected_asc') {
                 let dateA = String(a.production_date || '9999-12-31'); 
@@ -820,7 +831,6 @@ function renderOrderList() {
             let expDate = o.production_date || '미정';
             let crDate = String(o.created_at || '').substring(0, 10);
             
-            // 특수문자 따옴표(')로 인한 버튼 고장 방지
             let safeItemName = String(o.item_name || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
             let safeRemarks = String(o.remarks || '기본').replace(/'/g, "\\'").replace(/"/g, "&quot;");
             let safeCat = String(o.category || '').replace(/'/g, "\\'").replace(/"/g, "&quot;");
@@ -890,6 +900,7 @@ function closeEditOrderModal() {
     modal.classList.remove('flex');
 }
 
+// 💡 [핵심 버그 수정 2] 발주 내역 수정 시에도 supplier 이름을 remarks 로 매핑하여 전송
 async function submitEditOrder() {
     let logId = document.getElementById('edit-order-id').value;
     let sup = document.getElementById('edit-order-supplier').value;
@@ -912,7 +923,7 @@ async function submitEditOrder() {
         let updateData = [{
             category: cat,
             item_name: newItem,
-            supplier: sup,
+            remarks: sup, // 💡 서버가 인식할 수 있도록 supplier를 remarks로 변환하여 전송
             pallet_count: newPallet,
             quantity: newQty,
             production_date: newDate
