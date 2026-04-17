@@ -98,7 +98,7 @@ function getDynamicPalletCount(itemObj) {
 }
 
 function changeFloorCols(areaId, delta) {
-    if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 없습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 কাশী습니다.");
     let currentCols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
     let newCols = currentCols + delta;
 
@@ -333,7 +333,7 @@ async function clickCell(displayId, searchId) {
         selectedCellId = displayId; 
         renderMap(); 
         
-        // 💡 [핵심 버그 수정] 발주 탭 등 다른 탭에 있을 때는 절대 우측 패널을 열지 않도록 차단!
+        // 우측 패널 제어 (발주 탭 등에서는 열리지 않게 고정)
         if (currentOrderTab === 'inventory') {
             let rs = document.getElementById('right-sidebar');
             if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
@@ -709,51 +709,52 @@ function renderOrderCart() {
     tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
-// 💡 [핵심 버그 수정 1] 발주 등록 시 supplier 이름을 remarks 로 매핑하여 전송 (데이터 증발 방지)
+// 💡 [핵심 해결 1] 서버 우회 다이렉트 꽂기! (발주 카트 저장)
 async function submitOrderCart() {
     if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
     
     let text = "[한스팜]발주요청서\n"; 
-    let payload = [];
+    let dbPayloads = [];
 
     orderCart.forEach((item, i) => { 
         text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; 
-        payload.push({
-            category: item.category,
+        dbPayloads.push({
+            location_id: "[발주대기]", // 무조건 들어가는 더미 위치
+            action_type: "발주중",     // 무조건 발주중으로 강제 세팅
+            category: item.category || '미분류',
             item_name: item.item_name,
-            remarks: item.supplier, // 💡 서버가 인식할 수 있도록 supplier를 remarks로 변환하여 전송
-            pallet_count: item.pallet_count,
+            remarks: item.supplier,    // 정상적으로 매입처 삽입
             quantity: item.quantity,
-            production_date: item.expected_date
+            pallet_count: item.pallet_count,
+            production_date: item.expected_date,
+            payment_status: "미지급",
+            acc_status: "미확정"
         });
     });
 
-    let tempOrders = payload.map(item => ({
+    let tempOrders = dbPayloads.map(item => ({
         id: 'temp_' + Date.now() + Math.random(),
-        action_type: '발주중',
         created_at: new Date().toISOString(),
-        production_date: item.production_date,
-        remarks: item.remarks,
-        item_name: item.item_name,
-        quantity: item.quantity,
-        pallet_count: item.pallet_count,
-        category: item.category
+        ...item
     }));
     
     globalHistory = [...tempOrders, ...globalHistory];
     renderOrderList();
 
     try { 
-        let res = await fetch('/api/orders_create', { 
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'}, 
-            body: JSON.stringify(payload) 
-        }); 
-        
-        let data = await res.json();
-        if (data.status !== 'success') {
-            throw new Error(data.message || "알 수 없는 서버 에러");
-        }
+        // 💡 파이썬 서버(/api/orders_create)를 거치지 않고 DB로 바로 직행!!
+        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
+            method: 'POST',
+            headers: {
+                "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+                "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            },
+            body: JSON.stringify(dbPayloads)
+        });
+
+        if(!res.ok) throw new Error("데이터베이스 저장 실패 (Supabase Error)");
 
         try {
             await navigator.clipboard.writeText(text);
@@ -764,6 +765,9 @@ async function submitOrderCart() {
 
         orderCart = []; 
         toggleOrderCart(); 
+        
+        // 데이터가 DB에 완전히 꽂힐 시간을 0.3초 번 뒤에 새로고침!
+        await new Promise(resolve => setTimeout(resolve, 300));
         await load(); 
         
     } catch(e) {
@@ -900,7 +904,7 @@ function closeEditOrderModal() {
     modal.classList.remove('flex');
 }
 
-// 💡 [핵심 버그 수정 2] 발주 내역 수정 시에도 supplier 이름을 remarks 로 매핑하여 전송
+// 💡 [핵심 해결 2] 서버 우회 다이렉트 꽂기! (발주 내역 수정)
 async function submitEditOrder() {
     let logId = document.getElementById('edit-order-id').value;
     let sup = document.getElementById('edit-order-supplier').value;
@@ -920,21 +924,40 @@ async function submitEditOrder() {
     try {
         await fetch(`/api/history/${logId}`, { method: 'DELETE' }); 
         
-        let updateData = [{
-            category: cat,
+        let newPayload = [{
+            location_id: "[발주대기]",
+            action_type: "발주중",
+            category: cat || '미분류',
             item_name: newItem,
-            remarks: sup, // 💡 서버가 인식할 수 있도록 supplier를 remarks로 변환하여 전송
+            remarks: sup,
             pallet_count: newPallet,
             quantity: newQty,
-            production_date: newDate
+            production_date: newDate,
+            payment_status: "미지급",
+            acc_status: "미확정"
         }];
         
-        await fetch('/api/orders_create', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(updateData) }); 
+        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
+            method: 'POST',
+            headers: {
+                "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+                "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            },
+            body: JSON.stringify(newPayload)
+        });
+
+        if(!res.ok) throw new Error("수정 내역 저장 실패");
+
         alert("발주 내역이 성공적으로 수정되었습니다.");
         closeEditOrderModal();
+        
+        // 데이터가 DB에 완전히 꽂힐 시간을 0.3초 번 뒤에 새로고침!
+        await new Promise(resolve => setTimeout(resolve, 300));
         await load();
     } catch(e) {
-        alert("수정 중 오류가 발생했습니다.");
+        alert("수정 중 오류가 발생했습니다: " + e.message);
     }
 }
 
