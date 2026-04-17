@@ -98,7 +98,7 @@ function getDynamicPalletCount(itemObj) {
 }
 
 function changeFloorCols(areaId, delta) {
-    if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 কাশী습니다.");
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 수정할 수 없습니다.");
     let currentCols = parseInt(localStorage.getItem(areaId + '_cols')) || 10;
     let newCols = currentCols + delta;
 
@@ -333,7 +333,6 @@ async function clickCell(displayId, searchId) {
         selectedCellId = displayId; 
         renderMap(); 
         
-        // 우측 패널 제어 (발주 탭 등에서는 열리지 않게 고정)
         if (currentOrderTab === 'inventory') {
             let rs = document.getElementById('right-sidebar');
             if(rs) { rs.classList.remove('hidden'); rs.classList.add('flex'); isRightPanelVisible = true; }
@@ -510,7 +509,7 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
 
 async function closeInventory() {
     if(!isAdmin) return alert("관리자 권한 필요");
-    if(confirm("재고마감 처리하시겠습니까?")) { try { await fetch('/api/close_inventory', { method: 'POST' }); alert("마감 완료"); await load(); } catch(e){} }
+    if(confirm("재고마마감 처리하시겠습니까?")) { try { await fetch('/api/close_inventory', { method: 'POST' }); alert("마감 완료"); await load(); } catch(e){} }
 }
 
 function updateMapSearchCategoryDropdown() {
@@ -709,7 +708,6 @@ function renderOrderCart() {
     tbody.innerHTML = orderCart.map((item, idx) => `<tr><td class="p-2 font-bold text-blue-600">${item.expected_date.substring(5)}</td><td class="p-2">${item.supplier}</td><td class="p-2 font-black">${item.item_name}</td><td class="p-2 text-right">${item.pallet_count}P</td><td class="p-2 text-center"><button onclick="removeOrderCartItem(${idx})" class="text-rose-500 font-bold">삭제</button></td></tr>`).join('');
 }
 
-// 💡 [핵심 해결 1] 서버 우회 다이렉트 꽂기! (발주 카트 저장)
 async function submitOrderCart() {
     if(loginMode === 'viewer') return; if(orderCart.length === 0) return;
     
@@ -719,11 +717,11 @@ async function submitOrderCart() {
     orderCart.forEach((item, i) => { 
         text += `${i + 1}. ${item.item_name} - ${item.pallet_count} 파레트\n`; 
         dbPayloads.push({
-            location_id: "[발주대기]", // 무조건 들어가는 더미 위치
-            action_type: "발주중",     // 무조건 발주중으로 강제 세팅
+            location_id: "[발주대기]",
+            action_type: "발주중",     
             category: item.category || '미분류',
             item_name: item.item_name,
-            remarks: item.supplier,    // 정상적으로 매입처 삽입
+            remarks: item.supplier,    
             quantity: item.quantity,
             pallet_count: item.pallet_count,
             production_date: item.expected_date,
@@ -742,7 +740,6 @@ async function submitOrderCart() {
     renderOrderList();
 
     try { 
-        // 💡 파이썬 서버(/api/orders_create)를 거치지 않고 DB로 바로 직행!!
         const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
             method: 'POST',
             headers: {
@@ -766,7 +763,6 @@ async function submitOrderCart() {
         orderCart = []; 
         toggleOrderCart(); 
         
-        // 데이터가 DB에 완전히 꽂힐 시간을 0.3초 번 뒤에 새로고침!
         await new Promise(resolve => setTimeout(resolve, 300));
         await load(); 
         
@@ -904,7 +900,6 @@ function closeEditOrderModal() {
     modal.classList.remove('flex');
 }
 
-// 💡 [핵심 해결 2] 서버 우회 다이렉트 꽂기! (발주 내역 수정)
 async function submitEditOrder() {
     let logId = document.getElementById('edit-order-id').value;
     let sup = document.getElementById('edit-order-supplier').value;
@@ -953,7 +948,6 @@ async function submitEditOrder() {
         alert("발주 내역이 성공적으로 수정되었습니다.");
         closeEditOrderModal();
         
-        // 데이터가 DB에 완전히 꽂힐 시간을 0.3초 번 뒤에 새로고침!
         await new Promise(resolve => setTimeout(resolve, 300));
         await load();
     } catch(e) {
@@ -1065,3 +1059,20 @@ function renderSafetyStock() {
 }
 function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`수량:`, "1000"); const text = `[발주요청] 한스팜입니다. ${itemName} ${moq}EA 발주 부탁드립니다.`; navigator.clipboard.writeText(text).then(() => alert("복사완료")); }
 function toggleSafeMode() { const mode = document.getElementById('safe-mode').value; document.getElementById('target-pallet-container').classList.toggle('hidden', mode!=='pallet'); document.getElementById('target-days-container').classList.toggle('hidden', mode==='pallet'); renderSafetyStock(); }
+
+// 💡 [핵심 버그 픽스] 서버의 1000줄 제한을 돌파하는 강력한 다이렉트 동기화 패치
+const originalLoadInv = window.load;
+window.load = async function() {
+    if(originalLoadInv) await originalLoadInv();
+    try {
+        // 파이썬 서버의 1000줄 제한을 완전히 무시하고 최신 5000줄을 직접 쓸어옴!
+        let res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log?select=*&order=created_at.desc&limit=5000`, { 
+            headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu" } 
+        });
+        if(res.ok) {
+            globalHistory = await res.json();
+            if(currentOrderTab === 'history') renderOrderList();
+            if(typeof renderAccounting === 'function') renderAccounting();
+        }
+    } catch(e) {}
+};
