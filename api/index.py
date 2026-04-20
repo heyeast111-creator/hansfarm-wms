@@ -80,7 +80,11 @@ async def get_bom(): return await fetch_get("bom_master?select=*")
 @app.get("/api/inventory")
 async def get_inventory(): return await fetch_get("inventory_v2?select=*")
 @app.get("/api/history")
-async def get_history(): return await fetch_get("history_log?select=*")
+async def get_history():
+    async with httpx.AsyncClient() as client:
+        # 💡 limit=5000 을 강제로 붙여서 며칠 전 데이터가 짤리는 현상 완벽 차단!
+        res = await client.get(f"{SUPABASE_URL}/rest/v1/history_log?select=*&order=created_at.desc&limit=5000", headers=HEADERS)
+        return res.json()
 
 # ==== BOM 및 품목 마스터 ====
 @app.post("/api/bom")
