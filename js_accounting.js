@@ -1,11 +1,24 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (에러 100% 제거 및 완전체)
+// [정산/회계] 명세서 대조 및 확정 로직 (날짜 필터 자동갱신 완전체)
 // ==========================================
 
 let unconfirmedData = []; 
 let confirmedData = [];
 let accTableData = []; 
 let splitTargetItem = null;
+
+let taxFreeSuppliers = JSON.parse(localStorage.getItem('taxFreeSuppliers') || '[]');
+
+window.openTaxFreeManager = function() {
+    let sups = prompt("🛡️ 면세(부가세 0%) 적용을 받을 거래처 이름을 쉼표(,)로 구분해서 입력하세요.\n(이 목록에 있는 거래처는 부가세가 0원으로 계산됩니다.)\n\n예: 잎성,농협,영농조합", taxFreeSuppliers.join(', '));
+    if(sups !== null) {
+        let arr = sups.split(',').map(s => s.trim()).filter(Boolean);
+        localStorage.setItem('taxFreeSuppliers', JSON.stringify(arr));
+        taxFreeSuppliers = arr;
+        alert(`총 ${arr.length}개의 거래처가 면세 대상으로 설정되었습니다.`);
+        renderAccounting();
+    }
+}
 
 function toggleAccDateInput() {
     const type = document.getElementById('acc-type')?.value || 'date';
@@ -20,9 +33,11 @@ function toggleAccDateInput() {
     if(type === 'date' && dateInput) dateInput.classList.remove('hidden');
     else if(type === 'period' && periodWrapper) { periodWrapper.classList.remove('hidden'); periodWrapper.classList.add('flex'); }
     else if(type === 'month' && monthInput) monthInput.classList.remove('hidden');
+    
+    // 💡 [핵심 패치 1] 기준(일자/기간/월)을 바꿀 때마다 무조건 표를 다시 그리도록 강제 명령!
+    renderAccounting();
 }
 
-// 💡 매입처/품목명 드롭다운에 [기존재고] 꼬리표 완벽 분리
 function populateAccDropdowns() {
     const supSelect = document.getElementById('acc-supplier');
     const itemSelect = document.getElementById('acc-item');
@@ -36,7 +51,6 @@ function populateAccDropdowns() {
 
     globalHistory.forEach(h => {
         if(h.action_type === '입고') {
-            // [기존재고] 글자를 떼어내서 순수한 매입처 이름만 추출
             let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
             let itm = String(h.item_name || "").trim();
             
@@ -76,10 +90,18 @@ async function emergencyResetAccQty() {
     } catch(e) { alert("복구 중 에러 발생: " + e.message); }
 }
 
-// 💡 메인 렌더링 함수 (무한루프 제거 완료)
 window.renderAccounting = async function() {
     try {
-        populateAccDropdowns(); // 드롭다운 최신화
+        populateAccDropdowns(); 
+
+        // 💡 [핵심 패치 2] 사용자가 날짜 달력을 건드리는 순간 즉각 화면을 갱신하도록 '자동 센서' 부착!
+        ['acc-date', 'acc-period-start', 'acc-period-end', 'acc-month', 'acc-group'].forEach(id => {
+            let el = document.getElementById(id);
+            if (el && !el.hasAttribute('data-auto-refresh')) {
+                el.addEventListener('change', () => renderAccounting());
+                el.setAttribute('data-auto-refresh', 'true');
+            }
+        });
 
         let headerDiv = document.querySelector('#view-accounting .flex.space-x-2');
         if(headerDiv && !document.getElementById('emergency-reset-btn')) {
@@ -88,6 +110,14 @@ window.renderAccounting = async function() {
             btn.className = 'bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md text-sm transition-colors whitespace-nowrap';
             btn.innerText = '🚨 수량 오류 초기화';
             btn.onclick = emergencyResetAccQty;
+            headerDiv.prepend(btn);
+        }
+        if(headerDiv && !document.getElementById('tax-free-btn')) {
+            let btn = document.createElement('button');
+            btn.id = 'tax-free-btn';
+            btn.className = 'bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 px-4 rounded-lg shadow-md text-sm transition-colors whitespace-nowrap';
+            btn.innerText = '🛡️ 면세 거래처 설정';
+            btn.onclick = openTaxFreeManager;
             headerDiv.prepend(btn);
         }
         if(headerDiv && !document.getElementById('direct-input-btn')) {
@@ -118,12 +148,8 @@ window.renderAccounting = async function() {
             return true;
         });
 
-        if(supFilter !== 'ALL') { 
-            targetHistory = targetHistory.filter(h => String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim() === supFilter); 
-        }
-        if(itemFilter !== 'ALL') { 
-            targetHistory = targetHistory.filter(h => h.item_name === itemFilter); 
-        }
+        if(supFilter !== 'ALL') { targetHistory = targetHistory.filter(h => String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim() === supFilter); }
+        if(itemFilter !== 'ALL') { targetHistory = targetHistory.filter(h => h.item_name === itemFilter); }
 
         unconfirmedData = []; confirmedData = []; accTableData = [];
 
@@ -164,12 +190,15 @@ window.renderAccounting = async function() {
 
                 let pDate = h.production_date || h.created_at.substring(0, 10);
                 let key = pDate + '|' + h.item_name;
-                if(!summary[key]) summary[key] = { date: pDate, item_name: h.item_name, qty: 0, amount: 0 };
+                if(!summary[key]) summary[key] = { date: pDate, item_name: h.item_name, qty: 0, amount: 0, tax_amount: 0 };
                 
                 let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
                 let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
+                
+                let amount = (current_qty * price) + (h.acc_adj || 0);
                 summary[key].qty += current_qty;
-                summary[key].amount += (current_qty * price) + (h.acc_adj || 0);
+                summary[key].amount += amount;
+                if(!taxFreeSuppliers.includes(sup)) summary[key].tax_amount += amount; 
             });
             accTableData = Object.values(summary).sort((a,b) => a.date.localeCompare(b.date));
             renderSummaryTable('일자', '품목명', '수량', '합계금액', accTableData);
@@ -181,7 +210,7 @@ window.renderAccounting = async function() {
                 if (current_qty <= 0) return;
 
                 let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
-                if(!summary[sup]) summary[sup] = { name: sup, qty: 0, amount: 0 };
+                if(!summary[sup]) summary[sup] = { name: sup, qty: 0, amount: 0, is_tax_free: taxFreeSuppliers.includes(sup) };
                 let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
                 summary[sup].qty += current_qty;
                 summary[sup].amount += (current_qty * price) + (h.acc_adj || 0);
@@ -195,11 +224,14 @@ window.renderAccounting = async function() {
                 let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
                 if (current_qty <= 0) return;
 
-                if(!summary[h.item_name]) summary[h.item_name] = { name: h.item_name, qty: 0, amount: 0 };
+                if(!summary[h.item_name]) summary[h.item_name] = { name: h.item_name, qty: 0, amount: 0, tax_amount: 0 };
                 let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
                 let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
+                
+                let amount = (current_qty * price) + (h.acc_adj || 0);
                 summary[h.item_name].qty += current_qty;
-                summary[h.item_name].amount += (current_qty * price) + (h.acc_adj || 0);
+                summary[h.item_name].amount += amount;
+                if(!taxFreeSuppliers.includes(sup)) summary[h.item_name].tax_amount += amount;
             });
             accTableData = Object.values(summary).sort((a,b) => b.amount - a.amount);
             renderSummaryTable('품목명', '총 입고수량', '총 매입액(부가세별도)', null, accTableData);
@@ -216,14 +248,19 @@ function getUnitPrice(itemName, type, supplier) {
 }
 
 function updateAccountingSummary() {
-    let supTotal = 0; let unconfTotal = 0;
-    confirmedData.forEach(item => { supTotal += (item.qty * item.price) + item.adj; });
+    let supTotal = 0; let taxTotal = 0; let unconfTotal = 0;
+    
+    confirmedData.forEach(item => { 
+        let amount = (item.qty * item.price) + item.adj;
+        supTotal += amount; 
+        if(!taxFreeSuppliers.includes(item.supplier)) { taxTotal += Math.round(amount * 0.1); }
+    });
+    
     unconfirmedData.forEach(item => { unconfTotal += (item.qty * item.price) + item.adj; });
 
-    let tax = Math.round(supTotal * 0.1);
     document.getElementById('acc-supply').innerText = supTotal.toLocaleString() + ' 원';
-    document.getElementById('acc-tax').innerText = tax.toLocaleString() + ' 원';
-    document.getElementById('acc-total').innerText = (supTotal + tax).toLocaleString() + ' 원';
+    document.getElementById('acc-tax').innerText = taxTotal.toLocaleString() + ' 원';
+    document.getElementById('acc-total').innerText = (supTotal + taxTotal).toLocaleString() + ' 원';
     document.getElementById('acc-unconfirmed').innerText = unconfTotal.toLocaleString() + ' 원';
 }
 
@@ -241,7 +278,7 @@ function renderIndividualTable() {
     `;
 
     if(accTableData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다. 상단의 '기간별' 날짜를 다시 설정해보세요.</td></tr>`;
         return;
     }
 
@@ -258,19 +295,30 @@ function renderIndividualTable() {
         let total = (item.qty * item.price) + item.adj;
         let mergeInfo = item.ids.length > 1 ? `<span class="text-[9px] text-slate-400 ml-1">(${item.ids.length}건 병합)</span>` : '';
         let manualBadge = item.location_id === '[명세서수기입력]' ? `<span class="text-[9px] text-teal-600 bg-teal-50 border border-teal-200 px-1 rounded ml-1">수기입력</span>` : '';
+        let taxFreeBadge = taxFreeSuppliers.includes(item.supplier) ? `<span class="text-[9px] text-blue-600 bg-blue-50 border border-blue-200 px-1 rounded ml-1 font-black">면세(0%)</span>` : '';
 
         let actionBtns = isConf 
-            ? `<button onclick="cancelConfirmAccounting(${idx})" class="text-[10px] font-bold text-slate-400 hover:text-rose-500 underline">확정 취소 풀기</button>`
-            : `<div class="flex flex-col space-y-1 items-center"><button onclick="confirmSingleAccounting(${idx})" class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-3 py-1.5 rounded font-black shadow-sm w-full">확정</button><div class="flex space-x-1 w-full"><button onclick="openEditAccModal(${idx})" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-600 text-[10px] px-2 py-1 rounded font-bold">수정</button><button onclick="openSplitAccModal(${idx})" class="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] px-2 py-1 rounded font-bold">분할</button></div></div>`;
+            ? `<div class="flex flex-col space-y-1 items-center w-full">
+                 <button onclick="cancelConfirmAccounting(${idx})" class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] py-1.5 rounded font-bold shadow-sm mb-1">확정 취소</button>
+                 <button onclick="deleteAccountingItem(${idx})" class="w-full bg-rose-100 hover:bg-rose-200 text-rose-700 text-[10px] py-1 rounded font-bold shadow-sm">삭제</button>
+               </div>`
+            : `<div class="flex flex-col space-y-1 items-center">
+                 <button onclick="confirmSingleAccounting(${idx})" class="bg-blue-600 hover:bg-blue-700 text-white text-[10px] px-3 py-1.5 rounded font-black shadow-sm w-full mb-1">확정</button>
+                 <div class="flex space-x-1 w-full">
+                     <button onclick="openEditAccModal(${idx})" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-600 text-[10px] py-1 rounded font-bold shadow-sm">수정</button>
+                     <button onclick="openSplitAccModal(${idx})" class="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-700 text-[10px] py-1 rounded font-bold shadow-sm">분할</button>
+                     <button onclick="deleteAccountingItem(${idx})" class="flex-1 bg-rose-100 hover:bg-rose-200 text-rose-700 text-[10px] py-1 rounded font-bold shadow-sm">삭제</button>
+                 </div>
+               </div>`;
 
         html += `
             <tr class="border-b border-slate-100 ${isConf ? 'bg-slate-50 opacity-80' : 'hover:bg-indigo-50/30 transition-colors'}">
                 <td class="p-3 md:p-4 text-center">${statusBadge}</td><td class="p-3 md:p-4 text-[11px] md:text-sm font-bold text-slate-600">${item.date}</td>
-                <td class="p-3 md:p-4 text-[11px] md:text-sm font-black text-rose-500">${item.supplier}</td><td class="p-3 md:p-4 text-[11px] md:text-sm font-bold text-slate-700">${item.item_name} ${mergeInfo} ${manualBadge}</td>
+                <td class="p-3 md:p-4 text-[11px] md:text-sm font-black text-rose-500">${item.supplier}</td><td class="p-3 md:p-4 text-[11px] md:text-sm font-bold text-slate-700">${item.item_name} ${mergeInfo} ${manualBadge} ${taxFreeBadge}</td>
                 <td class="p-3 md:p-4 text-right text-[11px] md:text-sm font-black text-indigo-600">${item.qty.toLocaleString()}</td>
                 <td class="p-3 md:p-4 text-right text-[11px] md:text-sm font-bold text-emerald-600">${item.price.toLocaleString()}</td>
                 <td class="p-3 md:p-4 text-right text-[11px] md:text-sm font-bold ${item.adj !== 0 ? 'text-rose-600' : 'text-slate-400'}">${item.adj.toLocaleString()}</td>
-                <td class="p-3 md:p-4 text-right text-xs md:text-base font-black text-blue-700">${total.toLocaleString()}</td><td class="p-3 md:p-4 text-center align-middle w-24">${actionBtns}</td>
+                <td class="p-3 md:p-4 text-right text-xs md:text-base font-black text-blue-700">${total.toLocaleString()}</td><td class="p-3 md:p-4 text-center align-middle w-36">${actionBtns}</td>
             </tr>
         `;
     });
@@ -285,10 +333,40 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
 
     tbody.innerHTML = data.map(item => `
         <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-            <td class="p-3 md:p-4 text-sm font-bold text-slate-700">${item.date || item.name}</td><td class="p-3 md:p-4 text-sm font-bold text-slate-600">${item.item_name || item.qty.toLocaleString() + ' EA'}</td>
+            <td class="p-3 md:p-4 text-sm font-bold text-slate-700">${item.date || item.name} ${item.is_tax_free ? '<span class="text-[9px] text-blue-600 bg-blue-50 border border-blue-200 px-1 rounded ml-1 font-black">면세업체</span>' : ''}</td>
+            <td class="p-3 md:p-4 text-sm font-bold text-slate-600">${item.item_name || item.qty.toLocaleString() + ' EA'}</td>
             <td class="p-3 md:p-4 text-right text-sm font-black text-slate-800">${item.item_name ? item.qty.toLocaleString() + ' EA' : item.amount.toLocaleString() + ' 원'}</td>
             ${col4 ? `<td class="p-3 md:p-4 text-right font-black text-blue-700">${item.amount.toLocaleString()} 원</td>` : ''}
         </tr>`).join('');
+}
+
+async function deleteAccountingItem(idx) {
+    let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
+    let item = sortedData[idx]; 
+    if(!item) return;
+
+    let isManual = item.location_id === '[명세서수기입력]';
+    let msg = isManual 
+        ? `🚨 수기 입력 건 삭제\n\n[${item.item_name}] 내역을 완전히 영구 삭제하시겠습니까?` 
+        : `🚨 입고 내역 정산 숨김\n\n[${item.item_name}] 내역을 삭제(숨김)하시겠습니까?\n(※ 실제 창고의 재고 수량에는 영향을 주지 않고 정산 화면에서만 지워집니다.)`;
+
+    if(!confirm(msg)) return;
+
+    try {
+        if(isManual) {
+            for(let id of item.ids) {
+                await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log?id=eq.${id}`, {
+                    method: 'DELETE', 
+                    headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu` }
+                });
+            }
+        } else {
+            let updatePayload = item.ids.map(id => ({ id: id, acc_qty: 0 }));
+            await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
+        }
+        await load(); 
+        alert("✅ 삭제가 완료되었습니다.");
+    } catch(e) { alert("삭제 중 오류가 발생했습니다: " + e.message); }
 }
 
 window.openDirectInputModal = async function() {
@@ -414,7 +492,6 @@ function openEditAccModal(idx) {
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
 
-// 💡 [핵심 버그 픽스] 나머지(자투리) 수량을 첫 번째 행에 몰아넣어 총합 완벽 보장!
 async function submitEditAccModal() {
     const idx = document.getElementById('edit-acc-idx').value;
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
@@ -430,20 +507,13 @@ async function submitEditAccModal() {
         let updatePayload = [];
         let len = item.ids.length;
         
-        let baseQty = Math.floor(inputQty / len);
-        let remQty = inputQty % len;
-        
-        let baseAdj = Math.floor(inputAdj / len);
-        let remAdj = inputAdj % len;
+        let baseQty = Math.floor(inputQty / len); let remQty = inputQty % len;
+        let baseAdj = Math.floor(inputAdj / len); let remAdj = inputAdj % len;
 
         item.ids.forEach((id, index) => {
             updatePayload.push({
-                id: id, 
-                production_date: document.getElementById('edit-acc-date').value, 
-                item_name: document.getElementById('edit-acc-item').value, 
-                acc_price: inputPrice,
-                acc_qty: index === 0 ? baseQty + remQty : baseQty, 
-                acc_adj: index === 0 ? baseAdj + remAdj : baseAdj 
+                id: id, production_date: document.getElementById('edit-acc-date').value, item_name: document.getElementById('edit-acc-item').value, acc_price: inputPrice,
+                acc_qty: index === 0 ? baseQty + remQty : baseQty, acc_adj: index === 0 ? baseAdj + remAdj : baseAdj 
             });
         });
 
