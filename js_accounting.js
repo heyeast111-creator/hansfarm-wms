@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (초고속 실시간 UI 무적 패치판)
+// [정산/회계] 명세서 대조 및 확정 로직 (보안 차단 해결 및 정식 루트 복구판)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -284,7 +284,7 @@ function renderIndividualTable() {
     `;
 
     if(accTableData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다. 상단 달력 필터를 '월별'이나 '기간별'로 변경해보세요!</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다. 상단 달력 필터를 변경해보세요!</td></tr>`;
         return;
     }
 
@@ -346,7 +346,7 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
-// 💡 [실시간 UI 패치] 삭제 시 화면 즉시 반영 후 서버 저장
+// 💡 [수정 1] 삭제 시 정식 파이썬 API 루트(/api/history/{id}) 사용
 async function deleteAccountingItem(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; 
@@ -359,20 +359,16 @@ async function deleteAccountingItem(idx) {
 
     if(!confirm(msg)) return;
 
-    // 1. 화면 즉시 반영 (대기 시간 0초)
     let backupHistory = [...globalHistory];
-    if(isManual) {
-        globalHistory = globalHistory.filter(h => !item.ids.includes(h.id));
-    } else {
-        globalHistory.forEach(h => { if(item.ids.includes(h.id)) h.acc_qty = 0; });
-    }
+    if(isManual) { globalHistory = globalHistory.filter(h => !item.ids.includes(h.id)); } 
+    else { globalHistory.forEach(h => { if(item.ids.includes(h.id)) h.acc_qty = 0; }); }
     renderAccounting();
 
     try {
-        // 2. 서버 뒤에서 조용히 저장
         if(isManual) {
+            // 정식 API 사용 (CORS 에러 완벽 차단)
             for(let id of item.ids) {
-                await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log?id=eq.${id}`, { method: 'DELETE', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu` } });
+                await fetch(`/api/history/${id}`, { method: 'DELETE' });
             }
         } else {
             let updatePayload = item.ids.map(id => ({ id: id, acc_qty: 0 }));
@@ -447,10 +443,11 @@ window.updateDiPrice = function() {
 
 function closeDirectInputModal() { let modal = document.getElementById('direct-input-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
 
-// 💡 [실시간 UI 패치] 수기 입력 시 화면 즉시 반영!
+// 💡 [수정 2] 수기입력 시 파이썬 정식 API(/api/orders_create) 사용 (데이터 증발 및 에러 100% 방지)
 async function submitDirectInput() {
     const date = document.getElementById('di-date').value;
     const supplier = document.getElementById('di-supplier').value;
+    const cat = document.getElementById('di-cat').value;
     const item_name = document.getElementById('di-item').value;
     const qty = parseInt(document.getElementById('di-qty').value) || 0;
     const price = parseInt(document.getElementById('di-price').value) || 0;
@@ -459,28 +456,25 @@ async function submitDirectInput() {
 
     let tempId = 'temp_' + Date.now();
     let newPayload = {
-        id: tempId, location_id: "[명세서수기입력]", action_type: "입고", item_name: item_name, quantity: qty, acc_qty: qty, acc_price: price,
+        id: tempId, location_id: "[명세서수기입력]", action_type: "입고", category: cat, item_name: item_name, quantity: qty, acc_qty: qty, acc_price: price,
         acc_status: '미확정', pallet_count: 1, remarks: supplier, payment_status: "미지급", production_date: date, created_at: `${date}T00:00:00Z` 
     };
 
-    // 1. 화면 즉시 반영 (0초 대기)
     globalHistory.unshift(newPayload);
     renderAccounting();
     closeDirectInputModal();
 
     try {
-        // 2. 서버 통신은 뒤에서 조용히
-        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
-            method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" },
-            body: JSON.stringify([{
-                location_id: newPayload.location_id, action_type: newPayload.action_type, item_name: newPayload.item_name, quantity: newPayload.quantity, acc_qty: newPayload.acc_qty, acc_price: newPayload.acc_price,
-                acc_status: newPayload.acc_status, pallet_count: newPayload.pallet_count, remarks: newPayload.remarks, payment_status: newPayload.payment_status, production_date: newPayload.production_date, created_at: newPayload.created_at
-            }])
+        // 보안 차단(CORS) 없는 정식 터널 사용
+        const res = await fetch('/api/orders_create', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify([newPayload])
         });
-        if(!res.ok) throw new Error("수기 입력 데이터 생성 실패");
         
-        // 3. 서버 저장이 완전히 끝나면 뒤에서 데이터 리프레시
-        load(); 
+        let data = await res.json();
+        if(data.status !== 'success') throw new Error("서버 저장 실패");
+        
+        setTimeout(() => load(), 500); 
     } catch (e) { 
         globalHistory = globalHistory.filter(h => h.id !== tempId); renderAccounting();
         alert("오류 발생: " + e.message); 
@@ -521,7 +515,6 @@ function openEditAccModal(idx) {
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
 
-// 💡 [실시간 UI 패치] 수정 시 화면 즉시 반영
 async function submitEditAccModal() {
     const idx = document.getElementById('edit-acc-idx').value;
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
@@ -542,7 +535,6 @@ async function submitEditAccModal() {
         let baseQty = Math.floor(inputQty / len); let remQty = inputQty % len;
         let baseAdj = Math.floor(inputAdj / len); let remAdj = inputAdj % len;
 
-        // 1. 메모리 데이터 즉각 변경 및 화면 렌더링
         item.ids.forEach((id, index) => {
             let target = globalHistory.find(h => h.id === id);
             if(target) {
@@ -561,7 +553,6 @@ async function submitEditAccModal() {
         renderAccounting();
         closeEditAccModal();
 
-        // 2. 서버 저장
         const res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         if((await res.json()).status !== 'success') throw new Error("서버 저장 실패");
     } catch (e) { 
@@ -598,7 +589,7 @@ window.calcSplitRemain = function() {
     else { document.getElementById('split-out-qty').classList.remove('border-rose-500'); document.getElementById('split-error-msg').classList.add('hidden'); document.getElementById('split-remain-qty').innerText = (currentQty - outQty).toLocaleString(); }
 }
 
-// 💡 [실시간 UI 패치] 분할 시 화면 즉시 반영
+// 💡 [수정 3] 분할 시 파이썬 정식 API(/api/orders_create) 사용
 async function executeSplitAcc() {
     if(!splitTargetItem) return;
     let outQty = parseInt(document.getElementById('split-out-qty').value) || 0;
@@ -618,41 +609,44 @@ async function executeSplitAcc() {
             
             if (currentQty <= remainToDeduct) { 
                 updatePayload.push({ id: row.id, acc_qty: 0 }); 
-                row.acc_qty = 0; // 메모리 즉시 변경
+                row.acc_qty = 0; 
                 remainToDeduct -= currentQty; 
             } else { 
                 updatePayload.push({ id: row.id, acc_qty: currentQty - remainToDeduct }); 
-                row.acc_qty = currentQty - remainToDeduct; // 메모리 즉시 변경
+                row.acc_qty = currentQty - remainToDeduct; 
                 remainToDeduct = 0; 
             }
         }
         
-        let newPayload = { id: 'temp_' + Date.now(), location_id: originLog.location_id, action_type: originLog.action_type, item_name: originLog.item_name, quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price, acc_status: '미확정', pallet_count: originLog.pallet_count, remarks: originLog.remarks, payment_status: originLog.payment_status, production_date: originLog.production_date, created_at: originLog.created_at };
-        globalHistory.unshift(newPayload); // 새 항목 즉시 추가
+        let newPayload = { id: 'temp_' + Date.now(), location_id: originLog.location_id, action_type: originLog.action_type, category: originLog.category || '미분류', item_name: originLog.item_name, quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price, acc_status: '미확정', pallet_count: originLog.pallet_count, remarks: originLog.remarks, payment_status: originLog.payment_status, production_date: originLog.production_date, created_at: originLog.created_at };
+        globalHistory.unshift(newPayload); 
         
         renderAccounting();
         closeSplitAccModal();
 
-        // 뒤에서 서버 통신
         if(updatePayload.length > 0) await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, { method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" }, body: JSON.stringify([{...newPayload, id: undefined}]) });
-        if(!res.ok) throw new Error("새로운 행 분할 생성 실패");
+        
+        // 보안 차단 없는 정식 터널 사용
+        const res = await fetch('/api/orders_create', { 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify([newPayload]) 
+        });
+        
+        if((await res.json()).status !== 'success') throw new Error("새로운 행 분할 생성 실패");
 
-        load(); // 동기화
+        setTimeout(() => load(), 500); 
     } catch (e) { 
         globalHistory = backupHistory; renderAccounting();
         alert("분할 중 오류 발생: " + e.message); 
     }
 }
 
-// 💡 [실시간 UI 패치] 확정 시 화면 즉시 반영
 async function confirmSingleAccounting(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; if(!item) return;
     
     let backupHistory = JSON.parse(JSON.stringify(globalHistory));
     
-    // 메모리 즉시 변경 및 렌더링
     item.ids.forEach(id => { let h = globalHistory.find(x => x.id === id); if(h) h.acc_status = '확정'; });
     renderAccounting();
     
@@ -665,14 +659,12 @@ async function confirmSingleAccounting(idx) {
     }
 }
 
-// 💡 [실시간 UI 패치] 확정 취소 시 화면 즉시 반영
 async function cancelConfirmAccounting(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; if(!item) return;
     
     let backupHistory = JSON.parse(JSON.stringify(globalHistory));
 
-    // 메모리 즉시 변경 및 렌더링
     item.ids.forEach(id => { let h = globalHistory.find(x => x.id === id); if(h) h.acc_status = '미확정'; });
     renderAccounting();
 
@@ -691,7 +683,6 @@ async function batchConfirmAccounting() {
     
     let backupHistory = JSON.parse(JSON.stringify(globalHistory));
     
-    // 메모리 즉시 변경 및 렌더링
     unconfirmedData.forEach(item => { item.ids.forEach(id => { let h = globalHistory.find(x => x.id === id); if(h) h.acc_status = '확정'; }); });
     renderAccounting();
     
