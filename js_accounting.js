@@ -1,5 +1,5 @@
 // ==========================================
-// [정산/회계] 명세서 대조 및 확정 로직 (날짜 필터 자동갱신 완전체)
+// [정산/회계] 명세서 대조 및 확정 로직 (초고속 실시간 UI 무적 패치판)
 // ==========================================
 
 let unconfirmedData = []; 
@@ -34,7 +34,6 @@ function toggleAccDateInput() {
     else if(type === 'period' && periodWrapper) { periodWrapper.classList.remove('hidden'); periodWrapper.classList.add('flex'); }
     else if(type === 'month' && monthInput) monthInput.classList.remove('hidden');
     
-    // 💡 [핵심 패치 1] 기준(일자/기간/월)을 바꿀 때마다 무조건 표를 다시 그리도록 강제 명령!
     renderAccounting();
 }
 
@@ -53,7 +52,6 @@ function populateAccDropdowns() {
         if(h.action_type === '입고') {
             let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
             let itm = String(h.item_name || "").trim();
-            
             if(sup) suppliers.add(sup);
             if(currentSup === 'ALL' || currentSup === sup) { if(itm) items.add(itm); }
         }
@@ -94,7 +92,6 @@ window.renderAccounting = async function() {
     try {
         populateAccDropdowns(); 
 
-        // 💡 [핵심 패치 2] 사용자가 날짜 달력을 건드리는 순간 즉각 화면을 갱신하도록 '자동 센서' 부착!
         ['acc-date', 'acc-period-start', 'acc-period-end', 'acc-month', 'acc-group'].forEach(id => {
             let el = document.getElementById(id);
             if (el && !el.hasAttribute('data-auto-refresh')) {
@@ -156,26 +153,30 @@ window.renderAccounting = async function() {
         if (groupMode === 'individual') {
             let merged = {};
             targetHistory.forEach(h => {
-                let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
-                if (current_qty <= 0) return; 
+                try {
+                    let current_qty = Number(h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity) || 0;
+                    if (current_qty <= 0) return; 
 
-                let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
-                let pDate = h.production_date || (h.created_at ? h.created_at.substring(0, 10) : '');
-                let key = pDate + '|' + sup + '|' + h.item_name + '|' + (h.acc_status || '미확정');
-                
-                if(!merged[key]) {
-                    merged[key] = {
-                        ids: [h.id], date: pDate, supplier: sup, item_name: h.item_name,
-                        original_qty: h.quantity, qty: current_qty,
-                        price: h.acc_price || getUnitPrice(h.item_name, 'materials', sup), 
-                        adj: h.acc_adj || 0, status: h.acc_status || '미확정', location_id: h.location_id
-                    };
-                } else {
-                    merged[key].ids.push(h.id);
-                    merged[key].original_qty += h.quantity;
-                    merged[key].qty += current_qty; 
-                    merged[key].adj += (h.acc_adj || 0); 
-                }
+                    let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
+                    let pDate = String(h.production_date || (h.created_at ? h.created_at.substring(0, 10) : ''));
+                    let itemName = String(h.item_name || "알수없음");
+                    let status = String(h.acc_status || '미확정');
+                    let key = pDate + '|' + sup + '|' + itemName + '|' + status;
+                    
+                    if(!merged[key]) {
+                        merged[key] = {
+                            ids: [h.id], date: pDate, supplier: sup, item_name: itemName,
+                            original_qty: Number(h.quantity) || 0, qty: current_qty,
+                            price: Number(h.acc_price) || getUnitPrice(itemName, 'materials', sup), 
+                            adj: Number(h.acc_adj) || 0, status: status, location_id: h.location_id
+                        };
+                    } else {
+                        merged[key].ids.push(h.id);
+                        merged[key].original_qty += (Number(h.quantity) || 0);
+                        merged[key].qty += current_qty; 
+                        merged[key].adj += (Number(h.acc_adj) || 0); 
+                    }
+                } catch(err) { console.error("데이터 병합 에러 방어:", err); }
             });
 
             accTableData = Object.values(merged);
@@ -185,17 +186,19 @@ window.renderAccounting = async function() {
         } else if (groupMode === 'daily_item') {
             let summary = {};
             targetHistory.forEach(h => {
-                let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
+                let current_qty = Number(h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity) || 0;
                 if (current_qty <= 0) return;
 
-                let pDate = h.production_date || h.created_at.substring(0, 10);
-                let key = pDate + '|' + h.item_name;
-                if(!summary[key]) summary[key] = { date: pDate, item_name: h.item_name, qty: 0, amount: 0, tax_amount: 0 };
+                let pDate = String(h.production_date || (h.created_at ? h.created_at.substring(0, 10) : ''));
+                let itemName = String(h.item_name || "알수없음");
+                let key = pDate + '|' + itemName;
+                
+                if(!summary[key]) summary[key] = { date: pDate, item_name: itemName, qty: 0, amount: 0, tax_amount: 0 };
                 
                 let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
-                let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
+                let price = Number(h.acc_price) || getUnitPrice(itemName, 'materials', sup);
                 
-                let amount = (current_qty * price) + (h.acc_adj || 0);
+                let amount = (current_qty * price) + (Number(h.acc_adj) || 0);
                 summary[key].qty += current_qty;
                 summary[key].amount += amount;
                 if(!taxFreeSuppliers.includes(sup)) summary[key].tax_amount += amount; 
@@ -206,14 +209,16 @@ window.renderAccounting = async function() {
         } else if (groupMode === 'supplier') {
             let summary = {};
             targetHistory.forEach(h => {
-                let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
+                let current_qty = Number(h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity) || 0;
                 if (current_qty <= 0) return;
 
                 let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
                 if(!summary[sup]) summary[sup] = { name: sup, qty: 0, amount: 0, is_tax_free: taxFreeSuppliers.includes(sup) };
-                let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
+                let itemName = String(h.item_name || "알수없음");
+                let price = Number(h.acc_price) || getUnitPrice(itemName, 'materials', sup);
+                
                 summary[sup].qty += current_qty;
-                summary[sup].amount += (current_qty * price) + (h.acc_adj || 0);
+                summary[sup].amount += (current_qty * price) + (Number(h.acc_adj) || 0);
             });
             accTableData = Object.values(summary).sort((a,b) => b.amount - a.amount);
             renderSummaryTable('매입처', '총 입고수량', '총 매입액(부가세별도)', null, accTableData);
@@ -221,17 +226,18 @@ window.renderAccounting = async function() {
         } else if (groupMode === 'item') {
             let summary = {};
             targetHistory.forEach(h => {
-                let current_qty = h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity;
+                let current_qty = Number(h.acc_qty !== undefined && h.acc_qty !== null ? h.acc_qty : h.quantity) || 0;
                 if (current_qty <= 0) return;
 
-                if(!summary[h.item_name]) summary[h.item_name] = { name: h.item_name, qty: 0, amount: 0, tax_amount: 0 };
+                let itemName = String(h.item_name || "알수없음");
+                if(!summary[itemName]) summary[itemName] = { name: itemName, qty: 0, amount: 0, tax_amount: 0 };
                 let sup = String(h.remarks || "기본입고처").replace(/\[기존재고\]/g, '').trim();
-                let price = h.acc_price || getUnitPrice(h.item_name, 'materials', sup);
+                let price = Number(h.acc_price) || getUnitPrice(itemName, 'materials', sup);
                 
-                let amount = (current_qty * price) + (h.acc_adj || 0);
-                summary[h.item_name].qty += current_qty;
-                summary[h.item_name].amount += amount;
-                if(!taxFreeSuppliers.includes(sup)) summary[h.item_name].tax_amount += amount;
+                let amount = (current_qty * price) + (Number(h.acc_adj) || 0);
+                summary[itemName].qty += current_qty;
+                summary[itemName].amount += amount;
+                if(!taxFreeSuppliers.includes(sup)) summary[itemName].tax_amount += amount;
             });
             accTableData = Object.values(summary).sort((a,b) => b.amount - a.amount);
             renderSummaryTable('품목명', '총 입고수량', '총 매입액(부가세별도)', null, accTableData);
@@ -278,7 +284,7 @@ function renderIndividualTable() {
     `;
 
     if(accTableData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다. 상단의 '기간별' 날짜를 다시 설정해보세요.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="p-10 text-center text-slate-400 font-bold">해당 기간의 데이터가 없습니다. 상단 달력 필터를 '월별'이나 '기간별'로 변경해보세요!</td></tr>`;
         return;
     }
 
@@ -340,6 +346,7 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
+// 💡 [실시간 UI 패치] 삭제 시 화면 즉시 반영 후 서버 저장
 async function deleteAccountingItem(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; 
@@ -352,21 +359,29 @@ async function deleteAccountingItem(idx) {
 
     if(!confirm(msg)) return;
 
+    // 1. 화면 즉시 반영 (대기 시간 0초)
+    let backupHistory = [...globalHistory];
+    if(isManual) {
+        globalHistory = globalHistory.filter(h => !item.ids.includes(h.id));
+    } else {
+        globalHistory.forEach(h => { if(item.ids.includes(h.id)) h.acc_qty = 0; });
+    }
+    renderAccounting();
+
     try {
+        // 2. 서버 뒤에서 조용히 저장
         if(isManual) {
             for(let id of item.ids) {
-                await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log?id=eq.${id}`, {
-                    method: 'DELETE', 
-                    headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu` }
-                });
+                await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log?id=eq.${id}`, { method: 'DELETE', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu` } });
             }
         } else {
             let updatePayload = item.ids.map(id => ({ id: id, acc_qty: 0 }));
             await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         }
-        await load(); 
-        alert("✅ 삭제가 완료되었습니다.");
-    } catch(e) { alert("삭제 중 오류가 발생했습니다: " + e.message); }
+    } catch(e) { 
+        globalHistory = backupHistory; renderAccounting();
+        alert("삭제 중 오류가 발생했습니다: " + e.message); 
+    }
 }
 
 window.openDirectInputModal = async function() {
@@ -432,6 +447,7 @@ window.updateDiPrice = function() {
 
 function closeDirectInputModal() { let modal = document.getElementById('direct-input-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
 
+// 💡 [실시간 UI 패치] 수기 입력 시 화면 즉시 반영!
 async function submitDirectInput() {
     const date = document.getElementById('di-date').value;
     const supplier = document.getElementById('di-supplier').value;
@@ -441,21 +457,34 @@ async function submitDirectInput() {
 
     if(!date || !supplier || !item_name || qty <= 0) return alert("입력값을 확인해주세요.");
 
+    let tempId = 'temp_' + Date.now();
+    let newPayload = {
+        id: tempId, location_id: "[명세서수기입력]", action_type: "입고", item_name: item_name, quantity: qty, acc_qty: qty, acc_price: price,
+        acc_status: '미확정', pallet_count: 1, remarks: supplier, payment_status: "미지급", production_date: date, created_at: `${date}T00:00:00Z` 
+    };
+
+    // 1. 화면 즉시 반영 (0초 대기)
+    globalHistory.unshift(newPayload);
+    renderAccounting();
+    closeDirectInputModal();
+
     try {
-        let newPayload = {
-            location_id: "[명세서수기입력]", action_type: "입고", item_name: item_name, quantity: qty, acc_qty: qty, acc_price: price,
-            acc_status: '미확정', pallet_count: 1, remarks: supplier, payment_status: "미지급", production_date: date, created_at: `${date}T00:00:00Z` 
-        };
+        // 2. 서버 통신은 뒤에서 조용히
         const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
             method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" },
-            body: JSON.stringify([newPayload])
+            body: JSON.stringify([{
+                location_id: newPayload.location_id, action_type: newPayload.action_type, item_name: newPayload.item_name, quantity: newPayload.quantity, acc_qty: newPayload.acc_qty, acc_price: newPayload.acc_price,
+                acc_status: newPayload.acc_status, pallet_count: newPayload.pallet_count, remarks: newPayload.remarks, payment_status: newPayload.payment_status, production_date: newPayload.production_date, created_at: newPayload.created_at
+            }])
         });
         if(!res.ok) throw new Error("수기 입력 데이터 생성 실패");
         
-        closeDirectInputModal();
-        await load(); 
-        alert("✅ 장부에 수기 입력이 실시간으로 완료되었습니다!"); 
-    } catch (e) { alert("오류 발생: " + e.message); }
+        // 3. 서버 저장이 완전히 끝나면 뒤에서 데이터 리프레시
+        load(); 
+    } catch (e) { 
+        globalHistory = globalHistory.filter(h => h.id !== tempId); renderAccounting();
+        alert("오류 발생: " + e.message); 
+    }
 }
 
 function updateEditAccCategoryDropdown(selectedCategory) {
@@ -492,6 +521,7 @@ function openEditAccModal(idx) {
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
 
+// 💡 [실시간 UI 패치] 수정 시 화면 즉시 반영
 async function submitEditAccModal() {
     const idx = document.getElementById('edit-acc-idx').value;
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
@@ -503,6 +533,8 @@ async function submitEditAccModal() {
 
     if(isNaN(inputQty) || inputQty <= 0) return alert("수량을 1개 이상 정확히 입력해주세요.");
 
+    let backupHistory = JSON.parse(JSON.stringify(globalHistory));
+
     try {
         let updatePayload = [];
         let len = item.ids.length;
@@ -510,16 +542,32 @@ async function submitEditAccModal() {
         let baseQty = Math.floor(inputQty / len); let remQty = inputQty % len;
         let baseAdj = Math.floor(inputAdj / len); let remAdj = inputAdj % len;
 
+        // 1. 메모리 데이터 즉각 변경 및 화면 렌더링
         item.ids.forEach((id, index) => {
+            let target = globalHistory.find(h => h.id === id);
+            if(target) {
+                target.production_date = document.getElementById('edit-acc-date').value;
+                target.item_name = document.getElementById('edit-acc-item').value;
+                target.acc_price = inputPrice;
+                target.acc_qty = index === 0 ? baseQty + remQty : baseQty;
+                target.acc_adj = index === 0 ? baseAdj + remAdj : baseAdj;
+            }
             updatePayload.push({
-                id: id, production_date: document.getElementById('edit-acc-date').value, item_name: document.getElementById('edit-acc-item').value, acc_price: inputPrice,
-                acc_qty: index === 0 ? baseQty + remQty : baseQty, acc_adj: index === 0 ? baseAdj + remAdj : baseAdj 
+                id: id, production_date: target.production_date, item_name: target.item_name, acc_price: target.acc_price,
+                acc_qty: target.acc_qty, acc_adj: target.acc_adj 
             });
         });
+        
+        renderAccounting();
+        closeEditAccModal();
 
+        // 2. 서버 저장
         const res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { closeEditAccModal(); await load(); alert("✅ 수정 내용이 정확한 수량으로 적용되었습니다."); } else { alert("수정 실패"); }
-    } catch (e) { alert("오류 발생: " + e.message); }
+        if((await res.json()).status !== 'success') throw new Error("서버 저장 실패");
+    } catch (e) { 
+        globalHistory = backupHistory; renderAccounting();
+        alert("오류 발생: " + e.message); 
+    }
 }
 
 function openSplitAccModal(idx) {
@@ -550,10 +598,13 @@ window.calcSplitRemain = function() {
     else { document.getElementById('split-out-qty').classList.remove('border-rose-500'); document.getElementById('split-error-msg').classList.add('hidden'); document.getElementById('split-remain-qty').innerText = (currentQty - outQty).toLocaleString(); }
 }
 
+// 💡 [실시간 UI 패치] 분할 시 화면 즉시 반영
 async function executeSplitAcc() {
     if(!splitTargetItem) return;
     let outQty = parseInt(document.getElementById('split-out-qty').value) || 0;
     if(outQty <= 0 || outQty >= splitTargetItem.qty) return alert("분할 수량이 올바르지 않습니다.");
+
+    let backupHistory = JSON.parse(JSON.stringify(globalHistory));
 
     try {
         let remainToDeduct = outQty; let updatePayload = [];
@@ -564,48 +615,95 @@ async function executeSplitAcc() {
             if(!originLog) originLog = row; 
             let currentQty = row.acc_qty !== undefined && row.acc_qty !== null ? row.acc_qty : row.quantity;
             if (remainToDeduct <= 0) continue;
-            if (currentQty <= remainToDeduct) { updatePayload.push({ id: row.id, acc_qty: 0 }); remainToDeduct -= currentQty; } 
-            else { updatePayload.push({ id: row.id, acc_qty: currentQty - remainToDeduct }); remainToDeduct = 0; }
+            
+            if (currentQty <= remainToDeduct) { 
+                updatePayload.push({ id: row.id, acc_qty: 0 }); 
+                row.acc_qty = 0; // 메모리 즉시 변경
+                remainToDeduct -= currentQty; 
+            } else { 
+                updatePayload.push({ id: row.id, acc_qty: currentQty - remainToDeduct }); 
+                row.acc_qty = currentQty - remainToDeduct; // 메모리 즉시 변경
+                remainToDeduct = 0; 
+            }
         }
-        if(updatePayload.length > 0) await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
+        
+        let newPayload = { id: 'temp_' + Date.now(), location_id: originLog.location_id, action_type: originLog.action_type, item_name: originLog.item_name, quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price, acc_status: '미확정', pallet_count: originLog.pallet_count, remarks: originLog.remarks, payment_status: originLog.payment_status, production_date: originLog.production_date, created_at: originLog.created_at };
+        globalHistory.unshift(newPayload); // 새 항목 즉시 추가
+        
+        renderAccounting();
+        closeSplitAccModal();
 
-        let newPayload = { location_id: originLog.location_id, action_type: originLog.action_type, item_name: originLog.item_name, quantity: outQty, acc_qty: outQty, acc_price: splitTargetItem.price, acc_status: '미확정', pallet_count: originLog.pallet_count, remarks: originLog.remarks, payment_status: originLog.payment_status, production_date: originLog.production_date, created_at: originLog.created_at };
-        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, { method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" }, body: JSON.stringify([newPayload]) });
+        // 뒤에서 서버 통신
+        if(updatePayload.length > 0) await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
+        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, { method: 'POST', headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": `Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu`, "Content-Type": "application/json", "Prefer": "return=representation" }, body: JSON.stringify([{...newPayload, id: undefined}]) });
         if(!res.ok) throw new Error("새로운 행 분할 생성 실패");
 
-        closeSplitAccModal(); await load(); alert("✅ 분할이 완료되었습니다."); 
-    } catch (e) { alert("분할 중 오류 발생: " + e.message); }
+        load(); // 동기화
+    } catch (e) { 
+        globalHistory = backupHistory; renderAccounting();
+        alert("분할 중 오류 발생: " + e.message); 
+    }
 }
 
+// 💡 [실시간 UI 패치] 확정 시 화면 즉시 반영
 async function confirmSingleAccounting(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; if(!item) return;
+    
+    let backupHistory = JSON.parse(JSON.stringify(globalHistory));
+    
+    // 메모리 즉시 변경 및 렌더링
+    item.ids.forEach(id => { let h = globalHistory.find(x => x.id === id); if(h) h.acc_status = '확정'; });
+    renderAccounting();
+    
     try {
         let updatePayload = item.ids.map(id => ({ id: id, acc_status: '확정', acc_price: item.price }));
         await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        await load();
-    } catch (e) { alert("확정 오류: " + e.message); }
+    } catch (e) { 
+        globalHistory = backupHistory; renderAccounting();
+        alert("확정 오류: " + e.message); 
+    }
 }
 
+// 💡 [실시간 UI 패치] 확정 취소 시 화면 즉시 반영
 async function cancelConfirmAccounting(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; if(!item) return;
+    
+    let backupHistory = JSON.parse(JSON.stringify(globalHistory));
+
+    // 메모리 즉시 변경 및 렌더링
+    item.ids.forEach(id => { let h = globalHistory.find(x => x.id === id); if(h) h.acc_status = '미확정'; });
+    renderAccounting();
+
     try {
         let updatePayload = item.ids.map(id => ({ id: id, acc_status: '미확정' }));
         await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        await load();
-    } catch (e) { alert("확정 취소 오류: " + e.message); }
+    } catch (e) { 
+        globalHistory = backupHistory; renderAccounting();
+        alert("확정 취소 오류: " + e.message); 
+    }
 }
 
 async function batchConfirmAccounting() {
     if(unconfirmedData.length === 0) return alert("현재 조회된 조건에서 확정할 미확정 항목이 없습니다.");
     if(!confirm(`조회된 ${unconfirmedData.length}건의 항목을 일괄 확정하시겠습니까?`)) return;
+    
+    let backupHistory = JSON.parse(JSON.stringify(globalHistory));
+    
+    // 메모리 즉시 변경 및 렌더링
+    unconfirmedData.forEach(item => { item.ids.forEach(id => { let h = globalHistory.find(x => x.id === id); if(h) h.acc_status = '확정'; }); });
+    renderAccounting();
+    
     try {
         let updatePayload = [];
         unconfirmedData.forEach(item => { item.ids.forEach(id => { updatePayload.push({ id: id, acc_status: '확정', acc_price: item.price }); }); });
         let res = await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
-        if((await res.json()).status === 'success') { await load(); alert("✅ 일괄 확정 완료!"); } else { alert("일괄 확정 실패"); }
-    } catch (e) { alert("일괄 확정 중 오류: " + e.message); }
+        if((await res.json()).status !== 'success') throw new Error("서버 응답 오류");
+    } catch (e) { 
+        globalHistory = backupHistory; renderAccounting();
+        alert("일괄 확정 중 오류: " + e.message); 
+    }
 }
 
 function exportAccountingExcel() {
