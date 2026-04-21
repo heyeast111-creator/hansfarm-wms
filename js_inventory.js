@@ -1076,3 +1076,123 @@ window.load = async function() {
         }
     } catch(e) {}
 };
+// ==========================================
+// 🚨 [부활] 엑셀 일괄 입고 (importExcel) 로직
+// ==========================================
+async function importExcel(event) {
+    if(loginMode === 'viewer') {
+        alert("뷰어 모드에서는 사용할 수 없습니다.");
+        event.target.value = '';
+        return;
+    }
+
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
+
+        let payloads = [];
+        let errorCount = 0;
+
+        // 대기장(W-01 ~ W-30) 중 비어있는 곳 찾기
+        let getEmptyWaitLocation = () => {
+            for(let i=1; i<=30; i++) {
+                let wId = `W-${i.toString().padStart(2, '0')}`;
+                if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) {
+                    return wId;
+                }
+            }
+            return null;
+        };
+
+        for (let row of jsonData) {
+            let itemName = String(row["품목명"] || "").trim();
+            let qty = parseInt(row["수량(EA)"]);
+            let pDate = String(row["산란일/입고일"] || "").trim();
+            let remarks = String(row["입고처/비고"] || "").trim();
+
+            if (!itemName || isNaN(qty) || qty <= 0) { errorCount++; continue; }
+
+            let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === remarks) || 
+                        productMaster.find(p => p.item_name === itemName && p.supplier === remarks) ||
+                        productMaster.find(p => p.item_name === itemName); // 입고처 매칭 안되면 이름만으로 검색
+            
+            let cat = pInfo ? (pInfo.category || "미분류") : "미분류";
+            let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
+
+            let remaining = qty;
+            while(remaining > 0) {
+                let chunk = remaining > pEa ? pEa : remaining;
+                let emptyW = getEmptyWaitLocation();
+                
+                if(!emptyW) {
+                    alert(`🚨 대기장(W-01~W-30) 공간이 부족하여 엑셀 데이터 중 일부만 업로드되었습니다.\n(대기장을 비운 후 다시 시도해주세요)`);
+                    break;
+                }
+                
+                payloads.push({
+                    location_id: emptyW,
+                    category: cat,
+                    item_name: itemName,
+                    quantity: chunk,
+                    pallet_count: chunk / pEa,
+                    production_date: pDate || new Date().toISOString().split('T')[0],
+                    remarks: remarks || "기본입고처"
+                });
+                remaining -= chunk;
+            }
+            if(remaining > 0) break; // 대기장 꽉 차서 빠져나옴
+        }
+
+        if (payloads.length === 0) {
+            alert(`업로드할 수 있는 유효한 데이터가 없습니다.\n(오류 데이터: ${errorCount}건)`);
+            event.target.value = '';
+            return;
+        }
+
+        if (!confirm(`총 ${payloads.length} 파레트(박스) 분량의 데이터를 대기장으로 일괄 입고하시겠습니까?\n(입력 오류 배제: ${errorCount}건)`)) {
+            event.target.value = '';
+            return;
+        }
+
+        // 파이썬 서버 거치지 않고 DB 다이렉트 꽂기 (에러 방지)
+        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
+            method: 'POST',
+            headers: {
+                "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+                "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation"
+            },
+            body: JSON.stringify(payloads.map(p => ({
+                id: 'temp_' + Date.now() + Math.random(),
+                action_type: '입고',
+                acc_qty: p.quantity,
+                acc_price: pInfo ? (pInfo.unit_price || 0) : 0,
+                acc_status: '미확정',
+                payment_status: '미지급',
+                created_at: new Date().toISOString(),
+                ...p
+            })))
+        });
+
+        if(!res.ok) throw new Error("데이터베이스 업로드 실패");
+
+        alert("✅ 엑셀 데이터가 대기장으로 성공적으로 입고되었습니다!");
+        event.target.value = ''; // input file 초기화
+        
+        setTimeout(() => load(), 500);
+
+    } catch (error) {
+        console.error(error);
+        alert("엑셀 업로드 중 오류가 발생했습니다: " + error.message);
+        event.target.value = '';
+    }
+}
