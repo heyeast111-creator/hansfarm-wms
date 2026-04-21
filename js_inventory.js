@@ -1077,10 +1077,7 @@ window.load = async function() {
     } catch(e) {}
 };
 // ==========================================
-// 🚨 [부활] 엑셀 일괄 입고 (importExcel) 로직
-// ==========================================
-// ==========================================
-// 🚨 [초강력 부활] 엑셀 일괄 입고 (importExcel) 로직 - 열 이름 자동 인식 패치
+// 🚨 [초강력 부활 2탄] 엑셀 일괄 입고 - '지정 위치' 직접 꽂기 지원
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1104,7 +1101,6 @@ async function importExcel(event) {
         let payloads = [];
         let errorCount = 0;
 
-        // 대기장(W-01 ~ W-30) 중 비어있는 곳 찾기
         let getEmptyWaitLocation = () => {
             for(let i=1; i<=30; i++) {
                 let wId = `W-${i.toString().padStart(2, '0')}`;
@@ -1116,67 +1112,84 @@ async function importExcel(event) {
         };
 
         for (let row of jsonData) {
-            // 💡 [핵심 패치] 엑셀 열(Column) 이름이 조금씩 달라도 다 찰떡같이 인식하도록 수정!
             let keys = Object.keys(row);
             
-            // 비슷한 단어만 포함되어 있어도 해당 열의 데이터를 가져옵니다.
-            let keyName = keys.find(k => k.includes("품목") || k.includes("상품") || k.includes("제품") || k.includes("품명"));
-            let keyQty = keys.find(k => k.includes("수량") || k.includes("EA") || k.includes("주문수"));
-            let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
-            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("발주처") || k.includes("비고") || k.includes("거래처") || k.includes("공급"));
+            // 💡 1. 엑셀에 적힌 '위치' 가져오기 (C-E-09 등)
+            let keyLoc = keys.find(k => k === "위치" || k.includes("렉") || k.includes("구역"));
+            let loc = keyLoc ? String(row[keyLoc] || "").trim() : "";
 
+            let keyName = keys.find(k => k.includes("품목") || k.includes("상품") || k.includes("제품") || k.includes("품명"));
             let itemName = keyName ? String(row[keyName] || "").trim() : "";
-            // 수량에 콤마(,)가 섞여 있어도 숫자로 변환
-            let qty = keyQty ? parseInt(String(row[keyQty]).replace(/,/g, '')) : NaN;
+            
+            // 💡 2. 수량 찾기 (실사양식을 위해 '실사수량'이 있으면 최우선 적용, 없으면 '전산수량' 또는 '수량')
+            let qtyStr = row["실사수량(EA)"] || row["실사수량"] || row["수량(EA)"] || row["전산수량(EA)"] || row[keys.find(k => k.includes("수량") || k.includes("EA"))];
+            let qty = parseInt(String(qtyStr).replace(/,/g, ''));
+
+            let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
             let pDate = keyDate ? String(row[keyDate] || "").trim() : "";
+
+            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("발주처") || k.includes("비고") || k.includes("거래처") || k.includes("공급"));
             let remarks = keySup ? String(row[keySup] || "").trim() : "";
 
-            // 품목명이나 수량이 비정상적이면 에러 카운트 증가 후 패스
-            if (!itemName || isNaN(qty) || qty <= 0) { errorCount++; continue; }
+            if (!itemName || itemName === "[비어있음]" || isNaN(qty) || qty <= 0) { errorCount++; continue; }
 
             let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === remarks) || 
                         productMaster.find(p => p.item_name === itemName && p.supplier === remarks) ||
-                        productMaster.find(p => p.item_name === itemName); // 입고처 매칭 안되면 이름만으로도 검색
+                        productMaster.find(p => p.item_name === itemName); 
             
             let cat = pInfo ? (pInfo.category || "미분류") : "미분류";
             let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
 
-            let remaining = qty;
-            while(remaining > 0) {
-                let chunk = remaining > pEa ? pEa : remaining;
-                let emptyW = getEmptyWaitLocation();
-                
-                if(!emptyW) {
-                    alert(`🚨 대기장(W-01~W-30) 공간이 부족하여 엑셀 데이터 중 일부만 업로드되었습니다.\n(대기장을 비운 후 다시 시도해주세요)`);
-                    break;
-                }
-                
+            // 💡 [핵심 패치] 위치가 명시되어 있으면, 쪼개지 않고 그 위치로 한 번에 다이렉트 꽂기!
+            if (loc) {
                 payloads.push({
-                    location_id: emptyW,
+                    location_id: loc,
                     category: cat,
                     item_name: itemName,
-                    quantity: chunk,
-                    pallet_count: chunk / pEa,
+                    quantity: qty,
+                    pallet_count: qty / pEa,
                     production_date: pDate || new Date().toISOString().split('T')[0],
                     remarks: remarks || "기본입고처"
                 });
-                remaining -= chunk;
+            } else {
+                // 엑셀에 위치가 없으면 기존처럼 대기장(W)으로 쪼개서 넣기
+                let remaining = qty;
+                while(remaining > 0) {
+                    let chunk = remaining > pEa ? pEa : remaining;
+                    let emptyW = getEmptyWaitLocation();
+                    
+                    if(!emptyW) {
+                        alert(`🚨 지정된 위치가 없어 대기장(W)으로 자동 배정 중 공간이 부족하여 멈췄습니다.`);
+                        break;
+                    }
+                    
+                    payloads.push({
+                        location_id: emptyW,
+                        category: cat,
+                        item_name: itemName,
+                        quantity: chunk,
+                        pallet_count: chunk / pEa,
+                        production_date: pDate || new Date().toISOString().split('T')[0],
+                        remarks: remarks || "기본입고처"
+                    });
+                    remaining -= chunk;
+                }
+                if(remaining > 0) break;
             }
-            if(remaining > 0) break; // 대기장 꽉 차서 빠져나왔으면 남은 데이터 무시
         }
 
         if (payloads.length === 0) {
-            alert(`업로드할 수 있는 유효한 데이터가 없습니다.\n(오류 데이터: ${errorCount}건)\n\n※ 엑셀 상단 제목(헤더)에 '품목', '상품', '수량' 등의 단어가 포함되어 있는지 확인해주세요!`);
+            alert(`업로드할 수 있는 유효한 데이터가 없습니다.\n(수량이 0이거나 품목명이 없는 데이터 무시됨: ${errorCount}건)`);
             event.target.value = '';
             return;
         }
 
-        if (!confirm(`총 ${payloads.length} 파레트(박스) 분량의 데이터를 대기장으로 일괄 입고하시겠습니까?\n(입력 오류 및 무시됨: ${errorCount}건)`)) {
+        // 🚨 주의 알림 추가
+        if (!confirm(`총 ${payloads.length}건의 데이터를 지정된 위치로 입고 처리하시겠습니까?\n(빈 렉/오류 무시됨: ${errorCount}건)\n\n⚠️ 주의: 이 기능은 '추가 입고'입니다. 이미 같은 자리에 재고가 있다면 덮어쓰기가 아니라 '수량이 중복(합산)'되니 주의해주세요!`)) {
             event.target.value = '';
             return;
         }
 
-        // 파이썬 서버 거치지 않고 DB 다이렉트 꽂기 (에러 원천 방지)
         const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
             method: 'POST',
             headers: {
@@ -1199,10 +1212,10 @@ async function importExcel(event) {
 
         if(!res.ok) throw new Error("데이터베이스 업로드 실패");
 
-        alert("✅ 엑셀 데이터가 대기장으로 성공적으로 입고되었습니다!");
-        event.target.value = ''; // input file 초기화
+        alert("✅ 엑셀 데이터 입고가 성공적으로 완료되었습니다!");
+        event.target.value = ''; 
         
-        setTimeout(() => load(), 500); // 0.5초 뒤 완벽 동기화
+        setTimeout(() => load(), 500); 
 
     } catch (error) {
         console.error(error);
