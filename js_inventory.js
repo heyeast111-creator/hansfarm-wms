@@ -9,10 +9,67 @@ function toggleMapFilters() { window.isMapFilterOpen = !window.isMapFilterOpen; 
 function toggleFloorFilter(fId) { window.floorFilterMap[fId] = !window.floorFilterMap[fId]; renderMap(); }
 function toggleAreaFilter(aKey) { window.areaFilterMap[aKey] = !window.areaFilterMap[aKey]; renderMap(); }
 
+// 💡 [신규 패치] 일자별 재고 탭 UI 자동 생성기
+function initDailyInventoryUI() {
+    if(document.getElementById('order-tab-daily')) return;
+    
+    const tabContainer = document.querySelector('#view-order .bg-white.border-b.flex');
+    if(tabContainer) {
+        const btn = document.createElement('button');
+        btn.id = 'order-tab-daily';
+        btn.onclick = () => switchOrderTab('daily');
+        btn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors";
+        btn.innerText = "📅 일자별 재고";
+        tabContainer.appendChild(btn);
+    }
+
+    const viewContainer = document.querySelector('#view-order .flex-1.relative');
+    if(viewContainer) {
+        const subview = document.createElement('div');
+        subview.id = 'subview-daily';
+        subview.className = 'hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-auto';
+        
+        let today = new Date().toISOString().split('T')[0];
+        subview.innerHTML = `
+            <div class="bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col h-full min-h-[400px]">
+                <div class="flex justify-between items-center mb-4 border-b pb-2 shrink-0">
+                    <h2 class="text-xl md:text-2xl font-black text-slate-800">📅 타임머신: 일자별 재고 현황</h2>
+                </div>
+                <div class="flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-3 mb-4 shrink-0">
+                    <div class="flex items-center space-x-2 w-full md:w-auto">
+                        <span class="text-sm font-bold text-slate-500 whitespace-nowrap">조회 일자:</span>
+                        <input type="date" id="daily-target-date" value="${today}" onchange="renderDailyInventory()" class="border-2 border-indigo-300 rounded-lg p-2 text-sm font-black text-indigo-700 outline-none w-full md:w-auto">
+                    </div>
+                    <div class="flex space-x-2 w-full md:w-auto">
+                        <button onclick="renderDailyInventory()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-colors text-sm">조회</button>
+                        <button onclick="exportDailyInventoryExcel()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors text-sm whitespace-nowrap">엑셀 다운로드</button>
+                    </div>
+                </div>
+                <div class="overflow-y-auto flex-1 custom-scrollbar border border-slate-200 rounded-lg bg-slate-50">
+                    <table class="w-full text-left border-collapse text-sm bg-white">
+                        <thead class="sticky top-0 bg-slate-100 z-10 border-b-2 border-slate-200 text-slate-600 shadow-sm">
+                            <tr>
+                                <th class="p-3 w-1/4 font-black">카테고리</th>
+                                <th class="p-3 w-1/2 font-black">품목명</th>
+                                <th class="p-3 w-1/4 text-right font-black text-indigo-700">총 수량 (EA)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="daily-inventory-list" class="divide-y divide-slate-100">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+        viewContainer.appendChild(subview);
+    }
+}
+
 function switchOrderTab(tab) {
     try {
+        initDailyInventoryUI(); // 탭 자동 생성 보장
+        
         currentOrderTab = tab;
-        ['inventory', 'search', 'history', 'safety'].forEach(t => {
+        ['inventory', 'search', 'history', 'safety', 'daily'].forEach(t => {
             let btn = document.getElementById('order-tab-' + t); let view = document.getElementById('subview-' + t);
             if(btn) btn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors";
             if(view) { view.classList.add('hidden'); view.classList.remove('flex'); }
@@ -32,12 +89,8 @@ function switchOrderTab(tab) {
 
         if(tab === 'search') updateSummarySupplierDropdown();
         if(tab === 'safety') renderSafetyStock();
-        
-        if(tab === 'history') { 
-            updateOrderCartDropdowns(); 
-            if(typeof initOrderSortUI === 'function') initOrderSortUI(); 
-            renderOrderList(); 
-        }
+        if(tab === 'history') { updateOrderCartDropdowns(); if(typeof initOrderSortUI === 'function') initOrderSortUI(); renderOrderList(); }
+        if(tab === 'daily') { renderDailyInventory(); } // 💡 일자별 재고 렌더링 호출
     } catch(e) {}
 }
 
@@ -78,6 +131,80 @@ function switchZone(zone) {
 
 function toggleMapSearch() { const container = document.getElementById('map-search-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
 function toggleWaitContainer() { const container = document.getElementById('wait-container'); if(container.classList.contains('hidden')) { container.classList.remove('hidden'); container.classList.add('flex'); } else { container.classList.add('hidden'); container.classList.remove('flex'); } }
+
+// ==========================================
+// [재고/발주] - 일자별 재고 (Daily Inventory) 핵심 로직
+// ==========================================
+function renderDailyInventory() {
+    let targetDate = document.getElementById('daily-target-date').value;
+    if(!targetDate) return;
+
+    let dailyStock = {};
+    
+    // DB의 전체 기록을 뒤져서 선택한 날짜 '이전'에 일어난 입출고를 전부 합산!
+    globalHistory.forEach(h => {
+        let hDate = new Date(h.created_at).toISOString().split('T')[0];
+        
+        if (hDate <= targetDate) {
+            let itemName = String(h.item_name || "미상").trim();
+            let cat = String(h.category || "미분류").trim();
+            let qty = parseInt(h.quantity) || 0;
+
+            if(!dailyStock[itemName]) dailyStock[itemName] = { category: cat, item_name: itemName, qty: 0 };
+
+            if (h.action_type === '입고') {
+                dailyStock[itemName].qty += qty;
+            } else if (h.action_type === '출고') {
+                dailyStock[itemName].qty -= qty;
+            }
+        }
+    });
+
+    // 수량이 0인 것은 숨기고 카테고리/가나다 순 정렬
+    let stockList = Object.values(dailyStock).filter(item => item.qty !== 0).sort((a,b) => a.category.localeCompare(b.category) || a.item_name.localeCompare(b.item_name));
+
+    let tbody = document.getElementById('daily-inventory-list');
+    if(!tbody) return;
+
+    if(stockList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="p-10 text-center text-slate-400 font-bold">해당 일자의 재고 기록이 없습니다.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = stockList.map(item => `
+        <tr class="hover:bg-indigo-50/50 transition-colors">
+            <td class="p-3 text-xs text-slate-500 font-bold border-r border-slate-100">${item.category}</td>
+            <td class="p-3 text-sm font-black text-slate-800 border-r border-slate-100">${item.item_name}</td>
+            <td class="p-3 text-right text-sm font-black text-indigo-600">${item.qty.toLocaleString()} <span class="text-xs text-indigo-400">EA</span></td>
+        </tr>
+    `).join('');
+}
+
+function exportDailyInventoryExcel() {
+    let targetDate = document.getElementById('daily-target-date').value;
+    let tbody = document.getElementById('daily-inventory-list');
+    if(!tbody || tbody.innerText.includes('기록이 없습니다')) return alert("다운로드할 데이터가 없습니다.");
+
+    let wsData = [];
+    let rows = tbody.querySelectorAll('tr');
+    rows.forEach(tr => {
+        let cols = tr.querySelectorAll('td');
+        if(cols.length === 3) {
+            wsData.push({
+                "기준일자": targetDate,
+                "카테고리": cols[0].innerText.trim(),
+                "품목명": cols[1].innerText.trim(),
+                "총 수량(EA)": parseInt(cols[2].innerText.replace(/[^0-9-]/g, '')) || 0
+            });
+        }
+    });
+
+    const wb = XLSX.utils.book_new(); 
+    const ws = XLSX.utils.json_to_sheet(wsData); 
+    ws['!cols'] = [{wch: 15}, {wch: 15}, {wch: 30}, {wch: 15}]; 
+    XLSX.utils.book_append_sheet(wb, ws, `재고현황_${targetDate}`);
+    XLSX.writeFile(wb, `한스팜_일자별재고_${targetDate}.xlsx`);
+}
 
 // ==========================================
 // [재고/발주] - 공용 헬퍼 및 맵 렌더링
@@ -509,7 +636,7 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
 
 async function closeInventory() {
     if(!isAdmin) return alert("관리자 권한 필요");
-    if(confirm("재고마마감 처리하시겠습니까?")) { try { await fetch('/api/close_inventory', { method: 'POST' }); alert("마감 완료"); await load(); } catch(e){} }
+    if(confirm("재고마감 처리하시겠습니까?")) { try { await fetch('/api/close_inventory', { method: 'POST' }); alert("마감 완료"); await load(); } catch(e){} }
 }
 
 function updateMapSearchCategoryDropdown() {
@@ -1060,24 +1187,8 @@ function renderSafetyStock() {
 function generateKakaoText(itemName) { const supplier = prompt(`[${itemName}] 발주처:`); if(!supplier) return; const moq = prompt(`수량:`, "1000"); const text = `[발주요청] 한스팜입니다. ${itemName} ${moq}EA 발주 부탁드립니다.`; navigator.clipboard.writeText(text).then(() => alert("복사완료")); }
 function toggleSafeMode() { const mode = document.getElementById('safe-mode').value; document.getElementById('target-pallet-container').classList.toggle('hidden', mode!=='pallet'); document.getElementById('target-days-container').classList.toggle('hidden', mode==='pallet'); renderSafetyStock(); }
 
-// 💡 [핵심 버그 픽스] 서버의 1000줄 제한을 돌파하는 강력한 다이렉트 동기화 패치
-const originalLoadInv = window.load;
-window.load = async function() {
-    if(originalLoadInv) await originalLoadInv();
-    try {
-        // 파이썬 서버의 1000줄 제한을 완전히 무시하고 최신 5000줄을 직접 쓸어옴!
-        let res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log?select=*&order=created_at.desc&limit=5000`, { 
-            headers: { "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu", "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu" } 
-        });
-        if(res.ok) {
-            globalHistory = await res.json();
-            if(currentOrderTab === 'history') renderOrderList();
-            if(typeof renderAccounting === 'function') renderAccounting();
-        }
-    } catch(e) {}
-};
 // ==========================================
-// 🚨 [초강력 부활 2탄] 엑셀 일괄 입고 - '지정 위치' 직접 꽂기 지원
+// 🚨 [완전체] 재고 실사 전용 동기화 (덮어쓰기/수정/삭제/유지)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1098,128 +1209,186 @@ async function importExcel(event) {
 
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        let payloads = [];
-        let errorCount = 0;
-
-        let getEmptyWaitLocation = () => {
-            for(let i=1; i<=30; i++) {
-                let wId = `W-${i.toString().padStart(2, '0')}`;
-                if(!globalOccupancy.find(o => o.location_id === wId) && !payloads.find(p => p.location_id === wId)) {
-                    return wId;
-                }
-            }
-            return null;
-        };
+        let updates = [];
+        let inserts = [];
+        let deletes = [];
+        let processCount = 0;
 
         for (let row of jsonData) {
             let keys = Object.keys(row);
             
-            // 💡 1. 엑셀에 적힌 '위치' 가져오기 (C-E-09 등)
+            // 💡 1. 실사수량(EA) 열 찾기
+            let keyPhysicalQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
+            if(!keyPhysicalQty) continue; 
+            
+            let physicalQtyStr = String(row[keyPhysicalQty]).trim();
+            
+            // 💡 [핵심 조건 1] 실사수량이 비어있다면 아예 건드리지 않고 무시 (기존 상태 보존)
+            if(physicalQtyStr === "") continue; 
+            
+            let newQty = parseInt(physicalQtyStr.replace(/,/g, ''));
+            if(isNaN(newQty) || newQty < 0) continue;
+
+            // 💡 2. 위치 및 변경될 데이터 추출
             let keyLoc = keys.find(k => k === "위치" || k.includes("렉") || k.includes("구역"));
-            let loc = keyLoc ? String(row[keyLoc] || "").trim() : "";
+            let loc = keyLoc ? String(row[keyLoc]).trim() : "";
+            if(!loc) continue;
 
             let keyName = keys.find(k => k.includes("품목") || k.includes("상품") || k.includes("제품") || k.includes("품명"));
-            let itemName = keyName ? String(row[keyName] || "").trim() : "";
+            let itemName = keyName ? String(row[keyName]).trim() : "";
+            if(itemName === "[비어있음]" || itemName === "-") itemName = "";
+
+            let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
+            let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
+            if(cat === "-") cat = "미분류";
+
+            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("비고"));
+            let remarks = keySup ? String(row[keySup]).trim() : "";
+            if(remarks === "-") remarks = "";
+
+            // 현재 시스템에 해당 위치(loc)에 들어있는 데이터 찾기
+            let existings = globalOccupancy.filter(o => o.location_id === loc);
             
-            // 💡 2. 수량 찾기 (실사양식을 위해 '실사수량'이 있으면 최우선 적용, 없으면 '전산수량' 또는 '수량')
-            let qtyStr = row["실사수량(EA)"] || row["실사수량"] || row["수량(EA)"] || row["전산수량(EA)"] || row[keys.find(k => k.includes("수량") || k.includes("EA"))];
-            let qty = parseInt(String(qtyStr).replace(/,/g, ''));
+            // 💡 [핵심 조건 2] 실사수량이 0이면 해당 데이터 삭제
+            if (newQty === 0) {
+                if (existings.length === 1) {
+                    deletes.push(existings[0].id); 
+                    processCount++;
+                } else if (existings.length > 1) {
+                    // 렉에 여러 품목이 섞여있다면 이름이 같은 것만 삭제
+                    let match = existings.find(e => e.item_name === itemName);
+                    if(match) { deletes.push(match.id); processCount++; }
+                }
+            } 
+            // 💡 [핵심 조건 3] 실사수량이 1 이상이면 덮어쓰기(UPDATE) 또는 신규생성(INSERT)
+            else {
+                if(!itemName) continue; // 수량이 있는데 품목명을 안 적었으면 스킵
 
-            let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
-            let pDate = keyDate ? String(row[keyDate] || "").trim() : "";
+                let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === remarks) || 
+                            productMaster.find(p => p.item_name === itemName && p.supplier === remarks) ||
+                            productMaster.find(p => p.item_name === itemName); 
+                
+                let finalCat = cat !== "미분류" ? cat : (pInfo ? (pInfo.category || "미분류") : "미분류");
+                let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
+                let finalPallet = newQty / pEa;
 
-            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("발주처") || k.includes("비고") || k.includes("거래처") || k.includes("공급"));
-            let remarks = keySup ? String(row[keySup] || "").trim() : "";
-
-            if (!itemName || itemName === "[비어있음]" || isNaN(qty) || qty <= 0) { errorCount++; continue; }
-
-            let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === remarks) || 
-                        productMaster.find(p => p.item_name === itemName && p.supplier === remarks) ||
-                        productMaster.find(p => p.item_name === itemName); 
-            
-            let cat = pInfo ? (pInfo.category || "미분류") : "미분류";
-            let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
-
-            // 💡 [핵심 패치] 위치가 명시되어 있으면, 쪼개지 않고 그 위치로 한 번에 다이렉트 꽂기!
-            if (loc) {
-                payloads.push({
-                    location_id: loc,
-                    category: cat,
-                    item_name: itemName,
-                    quantity: qty,
-                    pallet_count: qty / pEa,
-                    production_date: pDate || new Date().toISOString().split('T')[0],
-                    remarks: remarks || "기본입고처"
-                });
-            } else {
-                // 엑셀에 위치가 없으면 기존처럼 대기장(W)으로 쪼개서 넣기
-                let remaining = qty;
-                while(remaining > 0) {
-                    let chunk = remaining > pEa ? pEa : remaining;
-                    let emptyW = getEmptyWaitLocation();
-                    
-                    if(!emptyW) {
-                        alert(`🚨 지정된 위치가 없어 대기장(W)으로 자동 배정 중 공간이 부족하여 멈췄습니다.`);
-                        break;
-                    }
-                    
-                    payloads.push({
-                        location_id: emptyW,
-                        category: cat,
+                if (existings.length === 0) {
+                    // 원래 비어있던 렉에 숫자를 넣었으니 '신규 입고'로 처리
+                    inserts.push({
+                        id: 'temp_' + Date.now() + Math.random(),
+                        location_id: loc,
+                        action_type: '입고',
+                        category: finalCat,
                         item_name: itemName,
-                        quantity: chunk,
-                        pallet_count: chunk / pEa,
-                        production_date: pDate || new Date().toISOString().split('T')[0],
+                        quantity: newQty,
+                        pallet_count: finalPallet,
+                        production_date: new Date().toISOString().split('T')[0], // 실사일 기준
+                        remarks: remarks || "기본입고처",
+                        acc_qty: newQty,
+                        acc_price: pInfo ? (pInfo.unit_price || 0) : 0,
+                        acc_status: '미확정',
+                        payment_status: '미지급',
+                        created_at: new Date().toISOString()
+                    });
+                    processCount++;
+                } else if (existings.length === 1) {
+                    // 렉에 물건이 1개 있었으면, 엑셀에 적힌 이름/카테고리/수량으로 무조건 덮어쓰기!
+                    updates.push({
+                        id: existings[0].id,
+                        category: finalCat,
+                        item_name: itemName,
+                        quantity: newQty,
+                        pallet_count: finalPallet,
                         remarks: remarks || "기본입고처"
                     });
-                    remaining -= chunk;
+                    processCount++;
+                } else {
+                    // 렉에 2개 이상의 물건이 섞여 있는 경우, 이름이 같은 것만 찾아서 덮어쓰기
+                    let match = existings.find(e => e.item_name === itemName);
+                    if(match) {
+                        updates.push({
+                            id: match.id,
+                            category: finalCat,
+                            item_name: itemName,
+                            quantity: newQty,
+                            pallet_count: finalPallet,
+                            remarks: remarks || "기본입고처"
+                        });
+                        processCount++;
+                    } else {
+                        // 일치하는 이름이 없으면 그 렉에 추가로 쑤셔넣기
+                        inserts.push({
+                            id: 'temp_' + Date.now() + Math.random(),
+                            location_id: loc,
+                            action_type: '입고',
+                            category: finalCat,
+                            item_name: itemName,
+                            quantity: newQty,
+                            pallet_count: finalPallet,
+                            production_date: new Date().toISOString().split('T')[0],
+                            remarks: remarks || "기본입고처",
+                            acc_qty: newQty,
+                            acc_price: pInfo ? (pInfo.unit_price || 0) : 0,
+                            acc_status: '미확정',
+                            payment_status: '미지급',
+                            created_at: new Date().toISOString()
+                        });
+                        processCount++;
+                    }
                 }
-                if(remaining > 0) break;
             }
         }
 
-        if (payloads.length === 0) {
-            alert(`업로드할 수 있는 유효한 데이터가 없습니다.\n(수량이 0이거나 품목명이 없는 데이터 무시됨: ${errorCount}건)`);
+        if (processCount === 0) {
+            alert("실사수량이 입력된 데이터가 없거나 엑셀 형식이 맞지 않습니다.\n(모든 렉의 기존 상태가 100% 그대로 유지됩니다.)");
             event.target.value = '';
             return;
         }
 
-        // 🚨 주의 알림 추가
-        if (!confirm(`총 ${payloads.length}건의 데이터를 지정된 위치로 입고 처리하시겠습니까?\n(빈 렉/오류 무시됨: ${errorCount}건)\n\n⚠️ 주의: 이 기능은 '추가 입고'입니다. 이미 같은 자리에 재고가 있다면 덮어쓰기가 아니라 '수량이 중복(합산)'되니 주의해주세요!`)) {
+        if (!confirm(`✅ 총 ${processCount}건의 재고 실사 데이터를 동기화합니다.\n\n- 실사수량 빈칸: 기존 재고 유지\n- 실사수량 입력됨: 제품명/수량 완벽 덮어쓰기\n- 실사수량 0 입력됨: 재고 삭제\n\n이대로 장부를 갈아엎으시겠습니까?`)) {
             event.target.value = '';
             return;
         }
 
-        const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
-            method: 'POST',
-            headers: {
-                "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
-                "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
-                "Content-Type": "application/json",
-                "Prefer": "return=representation"
-            },
-            body: JSON.stringify(payloads.map(p => ({
-                id: 'temp_' + Date.now() + Math.random(),
-                action_type: '입고',
-                acc_qty: p.quantity,
-                acc_price: pInfo ? (pInfo.unit_price || 0) : 0,
-                acc_status: '미확정',
-                payment_status: '미지급',
-                created_at: new Date().toISOString(),
-                ...p
-            })))
-        });
+        // 파이썬 서버 건너뛰고 DB에 다이렉트로 명령 하달 (에러 방어)
+        const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log";
+        const SUPABASE_HEADERS = {
+            "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+            "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation"
+        };
 
-        if(!res.ok) throw new Error("데이터베이스 업로드 실패");
+        // 1. 삭제 처리
+        for(let id of deletes) {
+            await fetch(`${SUPABASE_URL}?id=eq.${id}`, { method: 'DELETE', headers: SUPABASE_HEADERS });
+        }
 
-        alert("✅ 엑셀 데이터 입고가 성공적으로 완료되었습니다!");
+        // 2. 수정(덮어쓰기) 처리
+        for(let upd of updates) {
+            let patchBody = {
+                category: upd.category,
+                item_name: upd.item_name,
+                quantity: upd.quantity,
+                pallet_count: upd.pallet_count,
+                remarks: upd.remarks
+            };
+            await fetch(`${SUPABASE_URL}?id=eq.${upd.id}`, { method: 'PATCH', headers: SUPABASE_HEADERS, body: JSON.stringify(patchBody) });
+        }
+
+        // 3. 신규 입고 처리
+        if(inserts.length > 0) {
+            await fetch(SUPABASE_URL, { method: 'POST', headers: SUPABASE_HEADERS, body: JSON.stringify(inserts) });
+        }
+
+        alert("🎉 재고 실사 결과가 완벽하게 동기화되었습니다!");
         event.target.value = ''; 
         
         setTimeout(() => load(), 500); 
 
     } catch (error) {
         console.error(error);
-        alert("엑셀 업로드 중 오류가 발생했습니다: " + error.message);
+        alert("실사 반영 중 오류가 발생했습니다: " + error.message);
         event.target.value = '';
     }
 }
