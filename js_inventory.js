@@ -1079,6 +1079,9 @@ window.load = async function() {
 // ==========================================
 // 🚨 [부활] 엑셀 일괄 입고 (importExcel) 로직
 // ==========================================
+// ==========================================
+// 🚨 [초강력 부활] 엑셀 일괄 입고 (importExcel) 로직 - 열 이름 자동 인식 패치
+// ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
         alert("뷰어 모드에서는 사용할 수 없습니다.");
@@ -1113,16 +1116,27 @@ async function importExcel(event) {
         };
 
         for (let row of jsonData) {
-            let itemName = String(row["품목명"] || "").trim();
-            let qty = parseInt(row["수량(EA)"]);
-            let pDate = String(row["산란일/입고일"] || "").trim();
-            let remarks = String(row["입고처/비고"] || "").trim();
+            // 💡 [핵심 패치] 엑셀 열(Column) 이름이 조금씩 달라도 다 찰떡같이 인식하도록 수정!
+            let keys = Object.keys(row);
+            
+            // 비슷한 단어만 포함되어 있어도 해당 열의 데이터를 가져옵니다.
+            let keyName = keys.find(k => k.includes("품목") || k.includes("상품") || k.includes("제품") || k.includes("품명"));
+            let keyQty = keys.find(k => k.includes("수량") || k.includes("EA") || k.includes("주문수"));
+            let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
+            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("발주처") || k.includes("비고") || k.includes("거래처") || k.includes("공급"));
 
+            let itemName = keyName ? String(row[keyName] || "").trim() : "";
+            // 수량에 콤마(,)가 섞여 있어도 숫자로 변환
+            let qty = keyQty ? parseInt(String(row[keyQty]).replace(/,/g, '')) : NaN;
+            let pDate = keyDate ? String(row[keyDate] || "").trim() : "";
+            let remarks = keySup ? String(row[keySup] || "").trim() : "";
+
+            // 품목명이나 수량이 비정상적이면 에러 카운트 증가 후 패스
             if (!itemName || isNaN(qty) || qty <= 0) { errorCount++; continue; }
 
             let pInfo = finishedProductMaster.find(p => p.item_name === itemName && p.supplier === remarks) || 
                         productMaster.find(p => p.item_name === itemName && p.supplier === remarks) ||
-                        productMaster.find(p => p.item_name === itemName); // 입고처 매칭 안되면 이름만으로 검색
+                        productMaster.find(p => p.item_name === itemName); // 입고처 매칭 안되면 이름만으로도 검색
             
             let cat = pInfo ? (pInfo.category || "미분류") : "미분류";
             let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
@@ -1148,21 +1162,21 @@ async function importExcel(event) {
                 });
                 remaining -= chunk;
             }
-            if(remaining > 0) break; // 대기장 꽉 차서 빠져나옴
+            if(remaining > 0) break; // 대기장 꽉 차서 빠져나왔으면 남은 데이터 무시
         }
 
         if (payloads.length === 0) {
-            alert(`업로드할 수 있는 유효한 데이터가 없습니다.\n(오류 데이터: ${errorCount}건)`);
+            alert(`업로드할 수 있는 유효한 데이터가 없습니다.\n(오류 데이터: ${errorCount}건)\n\n※ 엑셀 상단 제목(헤더)에 '품목', '상품', '수량' 등의 단어가 포함되어 있는지 확인해주세요!`);
             event.target.value = '';
             return;
         }
 
-        if (!confirm(`총 ${payloads.length} 파레트(박스) 분량의 데이터를 대기장으로 일괄 입고하시겠습니까?\n(입력 오류 배제: ${errorCount}건)`)) {
+        if (!confirm(`총 ${payloads.length} 파레트(박스) 분량의 데이터를 대기장으로 일괄 입고하시겠습니까?\n(입력 오류 및 무시됨: ${errorCount}건)`)) {
             event.target.value = '';
             return;
         }
 
-        // 파이썬 서버 거치지 않고 DB 다이렉트 꽂기 (에러 방지)
+        // 파이썬 서버 거치지 않고 DB 다이렉트 꽂기 (에러 원천 방지)
         const res = await fetch(`https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log`, {
             method: 'POST',
             headers: {
@@ -1188,7 +1202,7 @@ async function importExcel(event) {
         alert("✅ 엑셀 데이터가 대기장으로 성공적으로 입고되었습니다!");
         event.target.value = ''; // input file 초기화
         
-        setTimeout(() => load(), 500);
+        setTimeout(() => load(), 500); // 0.5초 뒤 완벽 동기화
 
     } catch (error) {
         console.error(error);
