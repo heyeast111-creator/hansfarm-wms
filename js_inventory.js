@@ -732,83 +732,144 @@ function toggleSafeMode() { const mode = document.getElementById('safe-mode').va
 async function closeInventory() { if(!isAdmin) return alert("관리자 권한 필요"); if(confirm("재고마감 처리하시겠습니까?")) { await fetch('/api/close_inventory', { method: 'POST' }); alert("마감 완료"); await load(); } }
 
 // ==========================================
-// 💡 [초강력 무적] 엑셀 덮어쓰기 (실사 전용)
+// 🚨 [초강력 무적] 엑셀 덮어쓰기 (실사 전용 완벽 개편판)
 // ==========================================
 async function importExcel(event) {
-    if(loginMode === 'viewer') return alert("뷰어 모드 불가");
-    const file = event.target.files[0]; if(!file) return;
+    if(loginMode === 'viewer') {
+        alert("뷰어 모드에서는 사용할 수 없습니다.");
+        event.target.value = '';
+        return;
+    }
+
+    const file = event.target.files[0];
+    if (!file) return;
 
     try {
-        const data = await file.arrayBuffer(); const workbook = XLSX.read(data);
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
         const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {defval:""});
-        if (jsonData.length === 0) return alert("엑셀 데이터 없음");
+        
+        if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        let deletePayloads = []; let insertPayloads = []; let processCount = 0;
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 싹 지워지고 완전히 덮어씌워집니다.\n(비어있는 렉에 새로 넣는 것도 포함)\n\n진행하시겠습니까?")) {
+            event.target.value = '';
+            return;
+        }
+
+        let deletePayloads = []; 
+        let insertPayloads = []; 
+        let processCount = 0;
 
         for (let row of jsonData) {
             let keys = Object.keys(row);
-            let keyPhysicalQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
-            if(!keyPhysicalQty) continue; 
-            let physicalQtyStr = String(row[keyPhysicalQty]).trim();
-            if(physicalQtyStr === "") continue; // 빈칸 무시 (기존 유지)
             
-            let newQty = parseInt(physicalQtyStr.replace(/,/g, ''));
-            if(isNaN(newQty) || newQty < 0) continue;
-
+            // 1. 위치(렉) 정보 확인
             let keyLoc = keys.find(k => k === "위치" || k.includes("렉") || k.includes("구역"));
             let loc = keyLoc ? String(row[keyLoc]).trim() : "";
             if(!loc) continue;
 
-            // 1. 해당 렉 기존 데이터 전부 싹 삭제 대상에 추가
-            let currentItems = globalOccupancy.filter(o => o.location_id === loc);
-            currentItems.forEach(item => deletePayloads.push({ invId: item.id, locId: loc, itemName: item.item_name }));
+            // 2. 엑셀상의 품목명
+            let keyName = keys.find(k => k.includes("품목") || k.includes("상품") || k.includes("제품") || k.includes("품명"));
+            let newItemName = keyName ? String(row[keyName]).trim() : "";
+            if(newItemName === "[비어있음]" || newItemName === "-") newItemName = "";
 
-            // 2. 새 수량이 있으면 덮어쓰기 삽입 대상에 추가
-            if (newQty > 0) {
-                let keyName = keys.find(k => k.includes("품목") || k.includes("상품"));
-                let itemName = keyName ? String(row[keyName]).trim() : "";
-                if(itemName === "[비어있음]" || itemName === "-" || !itemName) continue;
+            // 3. 전산수량(EA) 추출
+            let keySysQty = keys.find(k => k === "전산수량(EA)" || k === "전산수량" || k.includes("전산"));
+            let sysQtyStr = keySysQty ? String(row[keySysQty]).trim() : "0";
+            let sysQty = parseInt(sysQtyStr.replace(/,/g, '')) || 0;
 
+            // 4. 실사수량(EA) 추출
+            let keyPhysQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
+            let physQtyStr = keyPhysQty ? String(row[keyPhysQty]).trim() : "";
+
+            // 💡 [유지 조건 1] 실사수량 칸이 아예 비어있으면 건드리지 않음
+            if(physQtyStr === "") continue;
+
+            let physQty = parseInt(physQtyStr.replace(/,/g, ''));
+            if(isNaN(physQty) || physQty < 0) continue;
+
+            // 현재 렉에 있는 기존 데이터 가져오기
+            let existings = globalOccupancy.filter(o => o.location_id === loc);
+            // 만약 기존 렉에 물건이 있다면 대표 품목명 하나 추출 (여러 개가 섞여 있어도 어차피 덮어쓰기 대상)
+            let oldItemName = existings.length > 0 ? existings[0].item_name : "";
+
+            // 💡 [유지 조건 2] 품목명도 똑같고, 전산수량과 실사수량도 동일하면 건드리지 않음
+            if (newItemName === oldItemName && physQty === sysQty) {
+                continue; 
+            }
+
+            // 💡 [덮어쓰기 조건] 품목명이 다르거나, 실사수량이 다르면 무조건 갈아엎음
+            
+            // a. 해당 렉의 기존 데이터는 무조건 싹 다 지우기 목록에 추가
+            existings.forEach(item => {
+                deletePayloads.push({ invId: item.id, locId: loc, itemName: item.item_name });
+            });
+
+            // b. 실사수량이 0보다 크고 품목명이 있으면 새 데이터 추가 (0이면 그냥 비워진 채로 남음)
+            if (physQty > 0 && newItemName !== "") {
                 let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
                 let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
                 let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("비고"));
                 let remarks = keySup ? String(row[keySup]).trim() : "기본입고처";
-                
-                let pInfo = finishedProductMaster.find(p => p.item_name === itemName) || productMaster.find(p => p.item_name === itemName);
+                let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
+                let pDate = keyDate ? String(row[keyDate]).trim() : new Date().toISOString().split('T')[0];
+
+                let pInfo = finishedProductMaster.find(p => p.item_name === newItemName) || productMaster.find(p => p.item_name === newItemName);
                 let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
 
                 insertPayloads.push({
                     id: 'temp_' + Date.now() + Math.random(),
-                    location_id: loc, category: cat === "-" ? "미분류" : cat,
-                    item_name: itemName, quantity: newQty, pallet_count: newQty / pEa,
-                    production_date: new Date().toISOString().split('T')[0], remarks: remarks === "-" ? "기본입고처" : remarks
+                    location_id: loc,
+                    category: cat === "-" ? "미분류" : cat,
+                    item_name: newItemName,
+                    quantity: physQty,
+                    pallet_count: physQty / pEa,
+                    production_date: pDate,
+                    remarks: remarks === "-" ? "기본입고처" : remarks
                 });
             }
             processCount++;
         }
 
-        if (processCount === 0) return alert("실사수량이 입력된 데이터가 없습니다.");
-        if (!confirm(`⚠️ 총 ${processCount}개 렉의 데이터를 엑셀 내용으로 완전히 덮어쓰기(동기화) 합니다.\n진행하시겠습니까?`)) { event.target.value=''; return; }
+        if (processCount === 0) {
+            alert("반영할 변동 사항이 없습니다.\n(실사수량이 모두 비어있거나 전산수량과 100% 일치합니다.)");
+            event.target.value = '';
+            return;
+        }
 
-        // [화면 즉각 반영 로직]
-        let backupOccupancy = JSON.parse(JSON.stringify(globalOccupancy));
+        // 💡 [화면 즉각 반영 로직] (서버 통신 대기 없이 렉맵부터 갈아엎음)
         let locsToClear = [...new Set(deletePayloads.map(d => d.locId))];
-        insertPayloads.forEach(ins => locsToClear.push(ins.location_id));
+        insertPayloads.forEach(ins => locsToClear.push(ins.location_id)); // 새로 채워지는 렉도 일단 목록에 추가
+        
         globalOccupancy = globalOccupancy.filter(o => !locsToClear.includes(o.location_id));
         insertPayloads.forEach(ins => globalOccupancy.push(ins));
         
         renderMap();
         if(typeof updateDashboard === 'function') updateDashboard();
-        alert("🎉 실사 결과가 렉맵에 즉시 반영되었습니다!\n(서버 동기화 백그라운드 진행 중)");
+        
+        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 렉맵에 즉시 반영되었습니다!\n(서버 동기화가 백그라운드에서 진행됩니다.)`);
         event.target.value = '';
 
+        // 💡 [서버 동기화 로직] (에러 방어용으로 정식 API 호출)
         (async () => {
             try {
-                for(let d of deletePayloads) await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) });
-                for(let ins of insertPayloads) await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(ins) });
-                load();
-            } catch(err) { console.error("서버 저장 오류:", err); }
+                // 기존 데이터 삭제
+                for(let d of deletePayloads) {
+                    await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) });
+                }
+                // 새 실사 데이터 입력
+                for(let ins of insertPayloads) {
+                    await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(ins) });
+                }
+                load(); // 동기화 완료 후 재확인
+            } catch(err) {
+                console.error("서버 동기화 오류:", err);
+            }
         })();
 
-    } catch (error) { alert("엑셀 처리 오류: " + error.message); event.target.value = ''; }
+    } catch (error) {
+        console.error(error);
+        alert("엑셀 파일 해독 중 오류가 발생했습니다: " + error.message);
+        event.target.value = '';
+    }
 }
