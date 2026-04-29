@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [초고속 무적] 엑셀 일괄 덮어쓰기 (무한 로딩 원천 차단 병렬 처리)
+// 🚨 [초강력 안전] 엑셀 일괄 덮어쓰기 (서버 통신 꼬임 완벽 차단)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,29 +1371,27 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(완료창이 뜰 때까지 잠시만 기다려주세요!)\n\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 수정됩니다.\n(완료창이 뜰 때까지 절대 화면을 끄지 마세요!)\n\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
-        // 💡 화면 덮는 로딩창 (문구 수정)
+        // 💡 화면 덮는 로딩창
         let loader = document.createElement('div');
         loader.id = 'bulk-loader';
         loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-80 flex flex-col items-center justify-center z-[9999]';
         loader.innerHTML = `
             <div class="text-7xl animate-spin mb-6">⏳</div>
-            <div class="text-white font-black text-3xl mb-3">초고속 서버 동기화 중... (최대 3~5초 소요)</div>
-            <div class="text-emerald-400 font-bold text-lg">데이터가 날아가지 않도록 잠시만 대기해 주세요!</div>
+            <div class="text-white font-black text-3xl mb-3">실사 데이터 안전 동기화 중...</div>
+            <div class="text-emerald-400 font-bold text-lg">데이터 꼬임을 막기 위해 순서대로 안전하게 전송 중입니다. 잠시 대기해주세요!</div>
         `;
         document.body.appendChild(loader);
 
-        let deletePayloads = []; 
-        let insertPayloads = []; 
         let processCount = 0;
+        let taskQueue = [];
 
         for (let row of jsonData) {
             let keys = Object.keys(row);
-            
             let keyLoc = keys.find(k => k === "위치" || k.includes("렉") || k.includes("구역"));
             let loc = keyLoc ? String(row[keyLoc]).trim() : "";
             if(!loc) continue;
@@ -1403,8 +1401,7 @@ async function importExcel(event) {
             if(newItemName === "[비어있음]" || newItemName === "-") newItemName = "";
 
             let keySysQty = keys.find(k => k === "전산수량(EA)" || k === "전산수량" || k.includes("전산"));
-            let sysQtyStr = keySysQty ? String(row[keySysQty]).trim() : "0";
-            let sysQty = parseInt(sysQtyStr.replace(/,/g, '')) || 0;
+            let sysQty = parseInt(String(row[keySysQty]).replace(/,/g, '')) || 0;
 
             let keyPhysQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
             let physQtyStr = keyPhysQty ? String(row[keyPhysQty]).trim() : "";
@@ -1417,83 +1414,75 @@ async function importExcel(event) {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
+            // 변동 없으면 무시
             if (newItemName === oldItemName && physQty === sysQty) continue; 
 
-            existings.forEach(item => {
-                deletePayloads.push({ invId: item.id, locId: loc, itemName: item.item_name });
-            });
+            let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
+            let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
+            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("비고"));
+            let remarks = keySup ? String(row[keySup]).trim() : "기본입고처";
+            let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
+            let pDate = keyDate ? String(row[keyDate]).trim() : new Date().toISOString().split('T')[0];
 
-            if (physQty > 0) {
-                let finalItemName = newItemName !== "" ? newItemName : "품목명누락_실사";
-                let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
-                let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
-                let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("비고"));
-                let remarks = keySup ? String(row[keySup]).trim() : "기본입고처";
-                let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
-                let pDate = keyDate ? String(row[keyDate]).trim() : new Date().toISOString().split('T')[0];
+            let pInfo = finishedProductMaster.find(p => p.item_name === newItemName) || productMaster.find(p => p.item_name === newItemName);
+            let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
 
-                let pInfo = finishedProductMaster.find(p => p.item_name === finalItemName) || productMaster.find(p => p.item_name === finalItemName);
-                let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
-
-                insertPayloads.push({
-                    location_id: loc,
-                    category: cat === "-" ? "미분류" : cat,
-                    item_name: finalItemName,
-                    quantity: physQty,
-                    pallet_count: physQty / pEa,
-                    production_date: pDate,
-                    remarks: remarks === "-" ? "기본입고처" : remarks
+            // 💡 [핵심] 품목명이 같으면 삭제/생성(Inbound) 대신 안전하게 수량만 변경(Update)
+            if (newItemName === oldItemName && existings.length === 1) {
+                taskQueue.push(async () => {
+                    await fetch('/api/inventory_edit', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ inventory_id: existings[0].id, location_id: loc, item_name: oldItemName, action: 'UPDATE_QTY', new_quantity: physQty, pallet_count: physQty/pEa })
+                    });
                 });
+            } 
+            // 품목명이 다르거나 비어있던 렉이면 기존 거 싹 지우고 새로 입고 (순차 실행으로 꼬임 방지)
+            else {
+                existings.forEach(e => {
+                    taskQueue.push(async () => {
+                        await fetch('/api/inventory_edit', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ inventory_id: e.id, location_id: loc, item_name: e.item_name, action: 'DELETE' })
+                        });
+                    });
+                });
+
+                if (physQty > 0 && newItemName !== "") {
+                    taskQueue.push(async () => {
+                        await fetch('/api/inbound', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ location_id: loc, category: cat === "-" ? "미분류" : cat, item_name: newItemName, quantity: physQty, pallet_count: physQty/pEa, production_date: pDate, remarks: remarks === "-" ? "기본입고처" : remarks })
+                        });
+                    });
+                }
             }
             processCount++;
         }
 
         if (processCount === 0) {
             document.body.removeChild(loader);
-            alert("반영할 변동 사항이 없습니다.\n(실사수량이 모두 비어있거나 전산수량과 100% 일치합니다.)");
+            alert("반영할 변동 사항이 없습니다.");
             event.target.value = '';
             return;
         }
 
-        // 💡 [핵심 해결] 거북이처럼 한 줄씩 통신하던 방식을 버리고, 
-        // Promise.all을 사용해 모든 삭제/생성 명령을 "동시에 묶어서 한방에" 쏴버립니다!
-        try {
-            // 1. 모든 삭제 요청 동시 다발 발사!
-            await Promise.all(deletePayloads.map(d => 
-                fetch('/api/inventory_edit', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) 
-                })
-            ));
-
-            // 2. 모든 입고 요청 동시 다발 발사!
-            await Promise.all(insertPayloads.map(ins => 
-                fetch('/api/inbound', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify(ins) 
-                })
-            ));
-
-            // 3. 서버에 저장이 완료되면 가장 최신 데이터를 불러와서 화면에 반영!
-            await load(); 
-
-            // 로딩창 제거
-            document.body.removeChild(loader);
-            event.target.value = '';
-            alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 초고속으로 동기화 완료되었습니다!`);
-
-        } catch(apiError) {
-            console.error("서버 병렬 통신 지연:", apiError);
-            throw new Error("서버와의 병렬 통신 중 지연이 발생했습니다.");
+        // 💡 [무적 방어] 큐에 담긴 API 요청을 "순서대로 하나씩 차근차근" 실행하여 DB 꼬임을 완벽 차단!
+        for (let task of taskQueue) {
+            await task();
         }
+
+        // 모든 저장이 완벽히 끝난 후 데이터 다시 불러오기
+        await load(); 
+
+        document.body.removeChild(loader);
+        event.target.value = '';
+        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 오류 없이 안전하게 저장되었습니다!`);
 
     } catch (error) {
         console.error(error);
         let loader = document.getElementById('bulk-loader');
         if(loader) document.body.removeChild(loader);
-        alert("엑셀 처리 중 오류가 발생했습니다: " + error.message);
+        alert("처리 중 오류가 발생했습니다: " + error.message);
         event.target.value = '';
     }
 }
