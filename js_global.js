@@ -1,5 +1,5 @@
 // ==========================================
-// 전역 변수 (Global Variables)
+// 전역 변수 (Global Variables) - 절대 삭제 금지
 // ==========================================
 let globalOccupancy = []; 
 let productMaster = []; 
@@ -21,17 +21,17 @@ let bomCart = [];
 let expandedBomRows = {}; 
 let isRightPanelVisible = false; 
 
-// J부터 A까지 역순 배열 유지
+// 💡 렉맵 렌더링의 핵심 뼈대 (J-A 역순 유지)
 const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12 }, { gap: true }, { id: 'H', cols: 12 }, { aisle: true }, { id: 'G', cols: 12 }, { gap: true }, { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 10 } ];
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
 
 // ==========================================
-// 로그인 및 초기 로딩 (5000줄 뚫린 버전)
+// 초기 로딩 (보안 에러 원천 차단 - 100% 안전한 로딩)
 // ==========================================
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') { loginMode = 'viewer'; alert("뷰어 모드로 접속되었습니다."); } 
-    else if (pw === '00700') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
+    else if (pw === '11111') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
     else { alert("비밀번호가 틀렸습니다."); return; }
     
     document.getElementById('login-screen').style.display = 'none';
@@ -44,22 +44,26 @@ function siteLogin() {
 async function load() {
     try {
         const ts = new Date().getTime(); 
-        const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu";
-
+        
+        // 🚨 [핵심 수정] 에러를 유발하던 외부 직통 링크 삭제! 파이썬 서버 API만 사용하여 튕김 원천 차단
         const [occRes, prodRes, fpRes, bomRes, histRes] = await Promise.all([ 
-            fetch('/api/inventory?t=' + ts), fetch('/api/products?t=' + ts), fetch('/api/finished_products?t=' + ts), fetch('/api/bom?t=' + ts),
-            fetch(`${SUPABASE_URL}/rest/v1/history_log?select=*&order=created_at.desc&limit=5000`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } })
+            fetch('/api/inventory?t=' + ts), 
+            fetch('/api/products?t=' + ts), 
+            fetch('/api/finished_products?t=' + ts), 
+            fetch('/api/bom?t=' + ts),
+            fetch('/api/history?t=' + ts) // <- 파이썬 정식 API로 변경!
         ]);
         
-        globalOccupancy = await occRes.json() || [];
-        productMaster = await prodRes.json() || [];
-        finishedProductMaster = await fpRes.json() || [];
-        bomMaster = await bomRes.json() || [];
-        globalHistory = await histRes.json() || [];
+        let occData = await occRes.json(); globalOccupancy = Array.isArray(occData) ? occData : [];
+        let prodData = await prodRes.json(); productMaster = Array.isArray(prodData) ? prodData : [];
+        let fpData = await fpRes.json(); finishedProductMaster = Array.isArray(fpData) ? fpData : [];
+        let bData = await bomRes.json(); bomMaster = Array.isArray(bData) ? bData : [];
+        let histData = await histRes.json(); globalHistory = Array.isArray(histData) ? histData : [];
         
         renderAll(); 
-    } catch (e) { console.error("로딩 에러:", e); }
+    } catch (e) { 
+        console.error("데이터 로드 실패:", e); 
+    }
 }
 
 function renderAll() {
@@ -70,7 +74,7 @@ function renderAll() {
     try { if(typeof renderSafetyStock === 'function') renderSafetyStock(); } catch(e){}
     try { if(typeof renderAccounting === 'function') renderAccounting(); } catch(e){} 
     try { if(typeof populateWaitDropdowns === 'function') populateWaitDropdowns(); } catch(e){}
-    try { if(typeof initDailyInventoryUI === 'function') initDailyInventoryUI(); } catch(e){}
+    try { if(typeof renderDailyInventory === 'function') renderDailyInventory(); } catch(e){}
 }
 
 function adminLogin() {
@@ -100,6 +104,9 @@ function showView(viewName) {
     else if(viewName === 'outbound') { if(typeof renderOutboundUI === 'function') renderOutboundUI(); } 
 }
 
+// ==========================================
+// 대시보드 및 데이터 엑셀 출력 (유지)
+// ==========================================
 function updateDashboard() {
     try {
         if (!document.getElementById('dash-room-percent')) return;
@@ -123,19 +130,19 @@ function updateDashboard() {
         document.getElementById('dash-room-donut').style.background = `conic-gradient(#f97316 ${roomPct}%, #e2e8f0 0%)`;
         let drTotal = document.getElementById('dash-room-total'); if(drTotal) drTotal.innerText = roomTotal;
         let drOcc = document.getElementById('dash-room-occ'); if(drOcc) drOcc.innerText = roomOcc;
-        let drEmp = document.getElementById('dash-room-empty'); if(drEmp) drEmp.innerText = (roomTotal - roomOcc);
+        let drEmp = document.getElementById('dash-room-empty'); if(drEmp) drEmp.innerText = Math.max(0, roomTotal - roomOcc);
 
         document.getElementById('dash-cold-percent').innerText = coldPct + '%';
         document.getElementById('dash-cold-donut').style.background = `conic-gradient(#6366f1 ${coldPct}%, #e2e8f0 0%)`;
         let dcTotal = document.getElementById('dash-cold-total'); if(dcTotal) dcTotal.innerText = coldTotal;
         let dcOcc = document.getElementById('dash-cold-occ'); if(dcOcc) dcOcc.innerText = coldOcc;
-        let dcEmp = document.getElementById('dash-cold-empty'); if(dcEmp) dcEmp.innerText = (coldTotal - coldOcc);
+        let dcEmp = document.getElementById('dash-cold-empty'); if(dcEmp) dcEmp.innerText = Math.max(0, coldTotal - coldOcc);
 
         document.getElementById('dash-floor-percent').innerText = floorPct + '%';
         document.getElementById('dash-floor-donut').style.background = `conic-gradient(#10b981 ${floorPct}%, #e2e8f0 0%)`;
         let dfTotal = document.getElementById('dash-floor-total'); if(dfTotal) dfTotal.innerText = floorTotal;
         let dfOcc = document.getElementById('dash-floor-occ'); if(dfOcc) dfOcc.innerText = floorOcc;
-        let dfEmp = document.getElementById('dash-floor-empty'); if(dfEmp) dfEmp.innerText = (floorTotal - floorOcc);
+        let dfEmp = document.getElementById('dash-floor-empty'); if(dfEmp) dfEmp.innerText = Math.max(0, floorTotal - floorOcc);
 
         if(isAdmin) {
             let pnl = document.getElementById('admin-finance-panel'); if(pnl) pnl.classList.remove('hidden');
@@ -146,7 +153,7 @@ function updateDashboard() {
             });
             let dt = document.getElementById('dash-val-total'); if(dt) dt.innerText = totalAssetValue.toLocaleString() + ' 원';
         }
-    } catch (e) {}
+    } catch (e) { console.error("대시보드 에러:", e); }
 }
 
 function getAllLocationIds() {
@@ -165,27 +172,34 @@ function exportPhysicalCountExcel() {
         const allLocs = getAllLocationIds();
         const occMap = {};
         globalOccupancy.forEach(item => { if(!occMap[item.location_id]) occMap[item.location_id] = []; occMap[item.location_id].push(item); });
-        let wsData = [];
-        allLocs.forEach(locId => {
+        
+        let wsData = allLocs.map(locId => {
             const items = occMap[locId];
-            if (items && items.length > 0) { items.forEach(item => { wsData.push({ "위치": locId, "카테고리": item.category || "", "품목명": item.item_name || "", "입고처": item.remarks || "기본입고처", "전산수량(EA)": item.quantity, "실사수량(EA)": "", "차이": "", "비고": "" }); }); } 
-            else { wsData.push({ "위치": locId, "카테고리": "-", "품목명": "[비어있음]", "입고처": "-", "전산수량(EA)": 0, "실사수량(EA)": "", "차이": "", "비고": "" }); }
-        });
+            if (items && items.length > 0) {
+                return items.map(item => ({ "위치": locId, "카테고리": item.category || "", "품목명": item.item_name || "", "입고처": item.remarks || "기본입고처", "전산수량(EA)": item.quantity, "실사수량(EA)": "", "차이": "", "비고": "" }));
+            }
+            return { "위치": locId, "카테고리": "-", "품목명": "[비어있음]", "입고처": "-", "전산수량(EA)": 0, "실사수량(EA)": "", "차이": "", "비고": "" };
+        }).flat();
+
         const wb = XLSX.utils.book_new(); const ws = XLSX.utils.json_to_sheet(wsData);
         ws['!cols'] = [{wch: 15}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 10}, {wch: 20}];
-        XLSX.utils.book_append_sheet(wb, ws, "재고실사양식(전체)"); XLSX.writeFile(wb, `한스팜_전체렉실사양식_${new Date().toISOString().split('T')[0]}.xlsx`);
-    } catch (e) { alert("오류"); }
+        XLSX.utils.book_append_sheet(wb, ws, "재고실사양식(전체)"); 
+        XLSX.writeFile(wb, `한스팜_전체렉실사양식_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (e) { alert("엑셀 추출 오류가 발생했습니다."); }
 }
+
 function exportAllHistoryExcel() {
     try {
+        if(globalHistory.length === 0) return alert("데이터가 없습니다.");
         let sorted = [...globalHistory].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-        let wsData = sorted.map(h => ({ "일시": new Date(h.created_at).toLocaleString(), "위치": h.location_id, "작업": h.action_type, "품목명": h.item_name, "수량": h.quantity, "비고": h.remarks }));
-        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "히스토리"); XLSX.writeFile(wb, `히스토리_${new Date().toISOString().split('T')[0]}.xlsx`);
-    } catch(e) { alert("오류"); }
+        let wsData = sorted.map(h => ({ "일시": new Date(h.created_at).toLocaleString(), "위치": h.location_id, "작업": h.action_type, "카테고리": h.category, "품목명": h.item_name, "수량(EA)": h.quantity, "비고": h.remarks }));
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "히스토리"); 
+        XLSX.writeFile(wb, `한스팜_히스토리_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch(e) { alert("오류 발생"); }
 }
 
 function showHistoryModal(locId) {
-    let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50);
     let titleEl = document.getElementById('history-modal-title'); if(titleEl) titleEl.innerText = `${locId} 전체 기록`;
     let html = '';
     locHistory.forEach(h => {
@@ -195,6 +209,7 @@ function showHistoryModal(locId) {
     let contentEl = document.getElementById('history-modal-content'); if(contentEl) contentEl.innerHTML = html || '<div class="text-center text-slate-400">기록 없음</div>';
     let modalEl = document.getElementById('history-modal'); if(modalEl) { modalEl.classList.remove('hidden'); modalEl.classList.add('flex'); }
 }
+
 function closeHistoryModal() { let modalEl = document.getElementById('history-modal'); if(modalEl) { modalEl.classList.add('hidden'); modalEl.classList.remove('flex'); } }
 function toggleRightPanel() { let rs = document.getElementById('right-sidebar'); if(!rs) return; isRightPanelVisible = !isRightPanelVisible; if(isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
 function closeInfoPanel() { let rs = document.getElementById('right-sidebar'); if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; } selectedCellId = null; movingItem = null; renderMap(); }
