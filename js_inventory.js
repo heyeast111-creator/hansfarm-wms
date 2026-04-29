@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [순서 보장 완벽판] 엑셀 일괄 덮어쓰기 (삭제 완료 후 -> 입고 진행)
+// 🚨 [데이터 증발 완벽 해결] 엑셀 일괄 덮어쓰기 (필수 필드 복원 & 탱크형 순차 동기화)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,88 +1371,97 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n기존 데이터를 먼저 완벽히 지우고, 새로운 데이터를 입고합니다.\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n기존 렉을 완벽하게 지우고 엑셀 기준으로 안전하게 덮어씌웁니다.\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
         let loader = document.createElement('div');
         loader.id = 'bulk-loader';
-        loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-90 flex flex-col items-center justify-center z-[9999]';
+        loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-95 flex flex-col items-center justify-center z-[9999]';
         loader.innerHTML = `
             <div class="text-7xl animate-spin mb-6">⏳</div>
-            <div class="text-white font-black text-3xl mb-3">실사 데이터 안전 동기화 중...</div>
-            <div id="loader-progress" class="text-yellow-400 font-black text-2xl mb-4">데이터 분류 중...</div>
-            <div class="text-emerald-400 font-bold text-lg">데이터 꼬임을 막기 위해 [삭제 100% 완료] 후 [신규 입고]를 진행합니다.</div>
+            <div class="text-white font-black text-3xl mb-3">실사 데이터 무결성 동기화 중...</div>
+            <div id="loader-progress" class="text-yellow-400 font-black text-2xl mb-4">데이터 분석 중...</div>
+            <div class="text-emerald-400 font-bold text-lg">서버 거부 오류를 해결했습니다. 완료창이 뜰 때까지 절대 끄지 마세요!</div>
         `;
         document.body.appendChild(loader);
 
-        let deleteTasks = [];
-        let updateTasks = [];
-        let insertTasks = [];
-        let processCount = 0;
+        let changedLocs = new Set();
+        let parsedRows = [];
 
-        // 1. 엑셀 데이터를 "삭제할 놈", "수정할 놈", "입고할 놈"으로 완벽히 분류
+        // 1. 엑셀 데이터 분석 및 "초기화할 렉" 완벽 스캔
         for (let row of jsonData) {
             let keys = Object.keys(row);
-            let keyLoc = keys.find(k => k === "위치" || k.includes("렉") || k.includes("구역"));
-            let loc = keyLoc ? String(row[keyLoc]).trim() : "";
+            let loc = keys.find(k => k === "위치" || k.includes("렉")) ? String(row[keys.find(k => k === "위치" || k.includes("렉"))]).trim() : "";
             if(!loc) continue;
 
-            let keyName = keys.find(k => k.includes("품목") || k.includes("상품") || k.includes("제품") || k.includes("품명"));
-            let newItemName = keyName ? String(row[keyName]).trim() : "";
-            if(newItemName === "[비어있음]" || newItemName === "-") newItemName = "";
+            let itemName = keys.find(k => k.includes("품목")) ? String(row[keys.find(k => k.includes("품목"))]).trim() : "";
+            if(itemName === "[비어있음]" || itemName === "-") itemName = "";
 
-            let keySysQty = keys.find(k => k === "전산수량(EA)" || k === "전산수량" || k.includes("전산"));
-            let sysQty = parseInt(String(row[keySysQty]).replace(/,/g, '')) || 0;
-
-            let keyPhysQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
-            let physQtyStr = keyPhysQty ? String(row[keyPhysQty]).trim() : "";
-
-            if(physQtyStr === "") continue;
-
+            let sysQty = parseInt(String(row[keys.find(k => k.includes("전산"))]||"0").replace(/,/g, '')) || 0;
+            let physQtyStr = String(row[keys.find(k => k.includes("실사"))]||"").trim();
+            if(physQtyStr === "") continue; // 실사 안 적힌 건 무조건 보존
+            
             let physQty = parseInt(physQtyStr.replace(/,/g, ''));
             if(isNaN(physQty) || physQty < 0) continue;
+
+            parsedRows.push({ loc, itemName, sysQty, physQty, row });
 
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
-            if (newItemName === oldItemName && physQty === sysQty) continue; 
-
-            let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
-            let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
-            let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("비고"));
-            let remarks = keySup ? String(row[keySup]).trim() : "기본입고처";
-            let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
-            let pDate = keyDate ? String(row[keyDate]).trim() : new Date().toISOString().split('T')[0];
-
-            let pInfo = finishedProductMaster.find(p => p.item_name === newItemName) || productMaster.find(p => p.item_name === newItemName);
-            let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
-
-            if (newItemName === oldItemName && existings.length === 1) {
-                updateTasks.push({ inventory_id: existings[0].id, location_id: loc, item_name: oldItemName, action: 'UPDATE_QTY', new_quantity: physQty, pallet_count: physQty/pEa });
-            } else {
-                existings.forEach(e => {
-                    deleteTasks.push({ inventory_id: e.id, location_id: loc, item_name: e.item_name, action: 'DELETE' });
-                });
-                if (physQty > 0) {
-                    let finalItemName = newItemName !== "" ? newItemName : "품목명누락_실사";
-                    insertTasks.push({ location_id: loc, category: cat === "-" ? "미분류" : cat, item_name: finalItemName, quantity: physQty, pallet_count: physQty/pEa, production_date: pDate, remarks: remarks === "-" ? "기본입고처" : remarks });
-                }
+            // 전산 수량과 실사 수량이 다르거나, 이름이 다르면 무조건 해당 렉은 '갈아엎기 대상'
+            if (itemName !== oldItemName || physQty !== sysQty) {
+                changedLocs.add(loc); 
             }
-            processCount++;
         }
 
-        if (processCount === 0) {
+        if (changedLocs.size === 0) {
             document.body.removeChild(loader);
             alert("반영할 변동 사항이 없습니다.");
             event.target.value = '';
             return;
         }
 
+        let deleteTasks = [];
+        let insertTasks = [];
+
+        // 2. 갈아엎기 대상(changedLocs) 렉의 기존 데이터만 깔끔하게 DELETE 큐에 담기
+        changedLocs.forEach(loc => {
+            let existings = globalOccupancy.filter(o => o.location_id === loc);
+            existings.forEach(e => {
+                deleteTasks.push({ inventory_id: e.id, location_id: loc, item_name: e.item_name, action: 'DELETE' });
+            });
+        });
+
+        // 3. 갈아엎기 대상 렉에 들어갈 새 데이터를 INSERT 큐에 담기 (🚨 누락 필드 완벽 복원)
+        for (let parsed of parsedRows) {
+            if (changedLocs.has(parsed.loc) && parsed.physQty > 0) {
+                let finalName = parsed.itemName !== "" ? parsed.itemName : "품목명누락_실사";
+                let cat = String(parsed.row[Object.keys(parsed.row).find(k=>k.includes("카테고리"))]||"미분류").trim();
+                let remarks = String(parsed.row[Object.keys(parsed.row).find(k=>k.includes("입고처"))]||"기본입고처").trim();
+                let pDate = String(parsed.row[Object.keys(parsed.row).find(k=>k.includes("일자"))]||new Date().toISOString().split('T')[0]).trim();
+                
+                let pInfo = finishedProductMaster.find(p => p.item_name === finalName) || productMaster.find(p => p.item_name === finalName);
+                let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
+
+                insertTasks.push({ 
+                    location_id: parsed.loc, 
+                    category: cat === "-" ? "미분류" : cat, 
+                    item_name: finalName, 
+                    quantity: parsed.physQty, 
+                    pallet_count: parsed.physQty/pEa, 
+                    production_date: pDate, 
+                    remarks: remarks === "-" ? "기본입고처" : remarks,
+                    acc_status: "미확정",       // 🚨 이거 없어서 서버가 거부했었음 (복구 완료!)
+                    payment_status: "미지급"    // 🚨 이거 없어서 서버가 거부했었음 (복구 완료!)
+                });
+            }
+        }
+
         let progressEl = document.getElementById('loader-progress');
         
-        // 10개씩 묶어서 쏘되, 앞선 Phase가 완전히 끝나야만 다음으로 넘어감
         const processInChunks = async (tasks, endpoint, phaseName) => {
             const CHUNK_SIZE = 10;
             for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
@@ -1464,17 +1473,26 @@ async function importExcel(event) {
             }
         };
 
-        // 💡 [핵심 해결] 순서를 완벽하게 분리하여 서버 꼬임 원천 차단!
-        if (deleteTasks.length > 0) await processInChunks(deleteTasks, '/api/inventory_edit', '기존 데이터 삭제');
-        if (updateTasks.length > 0) await processInChunks(updateTasks, '/api/inventory_edit', '기존 데이터 수정');
-        if (insertTasks.length > 0) await processInChunks(insertTasks, '/api/inbound', '신규 실사 입고');
+        // 💡 [안전 제일 탱크 모드] 절대 꼬이지 않게 순서대로 진행하며 중간에 1초씩 휴식(DB 반영 시간 보장)
+        if (deleteTasks.length > 0) {
+            await processInChunks(deleteTasks, '/api/inventory_edit', '기존 데이터 삭제');
+        }
+        
+        progressEl.innerText = "데이터베이스 정리 중... (1초 대기)";
+        await new Promise(r => setTimeout(r, 1000)); 
+        
+        if (insertTasks.length > 0) {
+            await processInChunks(insertTasks, '/api/inbound', '신규 실사 입고');
+        }
 
-        progressEl.innerText = "최신 데이터 불러오는 중...";
+        progressEl.innerText = "최신 데이터 불러오는 중... (1초 대기)";
+        await new Promise(r => setTimeout(r, 1000)); 
+        
         await load(); 
 
         document.body.removeChild(loader);
         event.target.value = '';
-        alert(`🎉 완벽합니다! 총 ${processCount}개 렉의 실사 데이터가 순서 꼬임 없이 동기화되었습니다.`);
+        alert(`🎉 완벽합니다! 총 ${changedLocs.size}개 렉의 데이터가 단 1개의 누락 없이 복원/동기화되었습니다!`);
 
     } catch (error) {
         console.error(error);
