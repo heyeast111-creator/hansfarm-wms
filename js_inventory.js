@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [초강력 무적] 엑셀 일괄 덮어쓰기 (전체화면 로딩창 + 통신 방어막)
+// 🚨 [초고속 무적] 엑셀 일괄 덮어쓰기 (무한 로딩 원천 차단 병렬 처리)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,19 +1371,19 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(완료창이 뜰 때까지 절대 화면을 끄지 마세요!)\n\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(완료창이 뜰 때까지 잠시만 기다려주세요!)\n\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
-        // 💡 [무적 방어막] 화면 전체를 덮는 로딩창 생성 (조작 및 끊김 원천 차단)
+        // 💡 화면 덮는 로딩창 (문구 수정)
         let loader = document.createElement('div');
         loader.id = 'bulk-loader';
         loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-80 flex flex-col items-center justify-center z-[9999]';
         loader.innerHTML = `
             <div class="text-7xl animate-spin mb-6">⏳</div>
-            <div class="text-white font-black text-3xl mb-3">실사 데이터 서버 동기화 중...</div>
-            <div class="text-emerald-400 font-bold text-lg">데이터가 날아가지 않도록 절대 화면을 끄거나 새로고침하지 마세요!</div>
+            <div class="text-white font-black text-3xl mb-3">초고속 서버 동기화 중... (최대 3~5초 소요)</div>
+            <div class="text-emerald-400 font-bold text-lg">데이터가 날아가지 않도록 잠시만 대기해 주세요!</div>
         `;
         document.body.appendChild(loader);
 
@@ -1409,7 +1409,6 @@ async function importExcel(event) {
             let keyPhysQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
             let physQtyStr = keyPhysQty ? String(row[keyPhysQty]).trim() : "";
 
-            // 실사수량이 빈칸이면 무조건 건너뜀 (기존 보존)
             if(physQtyStr === "") continue;
 
             let physQty = parseInt(physQtyStr.replace(/,/g, ''));
@@ -1418,15 +1417,12 @@ async function importExcel(event) {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
-            // 수량과 이름이 모두 같으면 건너뜀
             if (newItemName === oldItemName && physQty === sysQty) continue; 
 
-            // 💡 다르면 무조건 덮어쓰기 프로세스 시작
             existings.forEach(item => {
                 deletePayloads.push({ invId: item.id, locId: loc, itemName: item.item_name });
             });
 
-            // 실사수량이 0보다 크면 새 데이터 삽입 (이름이 없으면 '품목명누락_실사'로라도 강제 삽입하여 유실 방어)
             if (physQty > 0) {
                 let finalItemName = newItemName !== "" ? newItemName : "품목명누락_실사";
                 let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
@@ -1459,31 +1455,39 @@ async function importExcel(event) {
             return;
         }
 
-        // 💡 [핵심] 꼼수 제거! 
-        // 사용자가 화면을 끄지 못하도록 로딩창을 띄운 상태에서 정직하게 Await 통신 진행
-        for(let d of deletePayloads) {
-            await fetch('/api/inventory_edit', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) 
-            });
-        }
-        
-        for(let ins of insertPayloads) {
-            await fetch('/api/inbound', { 
-                method: 'POST', 
-                headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify(ins) 
-            });
-        }
+        // 💡 [핵심 해결] 거북이처럼 한 줄씩 통신하던 방식을 버리고, 
+        // Promise.all을 사용해 모든 삭제/생성 명령을 "동시에 묶어서 한방에" 쏴버립니다!
+        try {
+            // 1. 모든 삭제 요청 동시 다발 발사!
+            await Promise.all(deletePayloads.map(d => 
+                fetch('/api/inventory_edit', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) 
+                })
+            ));
 
-        // 통신이 완전히 끝난 후 DB에서 최신 데이터 강제 불러오기
-        await load(); 
+            // 2. 모든 입고 요청 동시 다발 발사!
+            await Promise.all(insertPayloads.map(ins => 
+                fetch('/api/inbound', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(ins) 
+                })
+            ));
 
-        // 모든 저장이 완벽하게 끝나면 방어막 해제
-        document.body.removeChild(loader);
-        event.target.value = '';
-        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 서버에 100% 저장되었습니다!`);
+            // 3. 서버에 저장이 완료되면 가장 최신 데이터를 불러와서 화면에 반영!
+            await load(); 
+
+            // 로딩창 제거
+            document.body.removeChild(loader);
+            event.target.value = '';
+            alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 초고속으로 동기화 완료되었습니다!`);
+
+        } catch(apiError) {
+            console.error("서버 병렬 통신 지연:", apiError);
+            throw new Error("서버와의 병렬 통신 중 지연이 발생했습니다.");
+        }
 
     } catch (error) {
         console.error(error);
