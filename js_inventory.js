@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [초강력 안전] 엑셀 일괄 덮어쓰기 (서버 통신 꼬임 완벽 차단)
+// 🚨 [순서 보장 완벽판] 엑셀 일괄 덮어쓰기 (삭제 완료 후 -> 입고 진행)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,25 +1371,28 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 수정됩니다.\n(완료창이 뜰 때까지 절대 화면을 끄지 마세요!)\n\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n기존 데이터를 먼저 완벽히 지우고, 새로운 데이터를 입고합니다.\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
-        // 💡 화면 덮는 로딩창
         let loader = document.createElement('div');
         loader.id = 'bulk-loader';
-        loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-80 flex flex-col items-center justify-center z-[9999]';
+        loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-90 flex flex-col items-center justify-center z-[9999]';
         loader.innerHTML = `
             <div class="text-7xl animate-spin mb-6">⏳</div>
             <div class="text-white font-black text-3xl mb-3">실사 데이터 안전 동기화 중...</div>
-            <div class="text-emerald-400 font-bold text-lg">데이터 꼬임을 막기 위해 순서대로 안전하게 전송 중입니다. 잠시 대기해주세요!</div>
+            <div id="loader-progress" class="text-yellow-400 font-black text-2xl mb-4">데이터 분류 중...</div>
+            <div class="text-emerald-400 font-bold text-lg">데이터 꼬임을 막기 위해 [삭제 100% 완료] 후 [신규 입고]를 진행합니다.</div>
         `;
         document.body.appendChild(loader);
 
+        let deleteTasks = [];
+        let updateTasks = [];
+        let insertTasks = [];
         let processCount = 0;
-        let taskQueue = [];
 
+        // 1. 엑셀 데이터를 "삭제할 놈", "수정할 놈", "입고할 놈"으로 완벽히 분류
         for (let row of jsonData) {
             let keys = Object.keys(row);
             let keyLoc = keys.find(k => k === "위치" || k.includes("렉") || k.includes("구역"));
@@ -1414,7 +1417,6 @@ async function importExcel(event) {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
-            // 변동 없으면 무시
             if (newItemName === oldItemName && physQty === sysQty) continue; 
 
             let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
@@ -1427,33 +1429,15 @@ async function importExcel(event) {
             let pInfo = finishedProductMaster.find(p => p.item_name === newItemName) || productMaster.find(p => p.item_name === newItemName);
             let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
 
-            // 💡 [핵심] 품목명이 같으면 삭제/생성(Inbound) 대신 안전하게 수량만 변경(Update)
             if (newItemName === oldItemName && existings.length === 1) {
-                taskQueue.push(async () => {
-                    await fetch('/api/inventory_edit', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({ inventory_id: existings[0].id, location_id: loc, item_name: oldItemName, action: 'UPDATE_QTY', new_quantity: physQty, pallet_count: physQty/pEa })
-                    });
-                });
-            } 
-            // 품목명이 다르거나 비어있던 렉이면 기존 거 싹 지우고 새로 입고 (순차 실행으로 꼬임 방지)
-            else {
+                updateTasks.push({ inventory_id: existings[0].id, location_id: loc, item_name: oldItemName, action: 'UPDATE_QTY', new_quantity: physQty, pallet_count: physQty/pEa });
+            } else {
                 existings.forEach(e => {
-                    taskQueue.push(async () => {
-                        await fetch('/api/inventory_edit', {
-                            method: 'POST', headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ inventory_id: e.id, location_id: loc, item_name: e.item_name, action: 'DELETE' })
-                        });
-                    });
+                    deleteTasks.push({ inventory_id: e.id, location_id: loc, item_name: e.item_name, action: 'DELETE' });
                 });
-
-                if (physQty > 0 && newItemName !== "") {
-                    taskQueue.push(async () => {
-                        await fetch('/api/inbound', {
-                            method: 'POST', headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({ location_id: loc, category: cat === "-" ? "미분류" : cat, item_name: newItemName, quantity: physQty, pallet_count: physQty/pEa, production_date: pDate, remarks: remarks === "-" ? "기본입고처" : remarks })
-                        });
-                    });
+                if (physQty > 0) {
+                    let finalItemName = newItemName !== "" ? newItemName : "품목명누락_실사";
+                    insertTasks.push({ location_id: loc, category: cat === "-" ? "미분류" : cat, item_name: finalItemName, quantity: physQty, pallet_count: physQty/pEa, production_date: pDate, remarks: remarks === "-" ? "기본입고처" : remarks });
                 }
             }
             processCount++;
@@ -1466,23 +1450,37 @@ async function importExcel(event) {
             return;
         }
 
-        // 💡 [무적 방어] 큐에 담긴 API 요청을 "순서대로 하나씩 차근차근" 실행하여 DB 꼬임을 완벽 차단!
-        for (let task of taskQueue) {
-            await task();
-        }
+        let progressEl = document.getElementById('loader-progress');
+        
+        // 10개씩 묶어서 쏘되, 앞선 Phase가 완전히 끝나야만 다음으로 넘어감
+        const processInChunks = async (tasks, endpoint, phaseName) => {
+            const CHUNK_SIZE = 10;
+            for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
+                const chunk = tasks.slice(i, i + CHUNK_SIZE);
+                await Promise.all(chunk.map(task => 
+                    fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(task) })
+                ));
+                progressEl.innerText = `[${phaseName}] ${Math.min(i + CHUNK_SIZE, tasks.length)} / ${tasks.length} 완료`;
+            }
+        };
 
-        // 모든 저장이 완벽히 끝난 후 데이터 다시 불러오기
+        // 💡 [핵심 해결] 순서를 완벽하게 분리하여 서버 꼬임 원천 차단!
+        if (deleteTasks.length > 0) await processInChunks(deleteTasks, '/api/inventory_edit', '기존 데이터 삭제');
+        if (updateTasks.length > 0) await processInChunks(updateTasks, '/api/inventory_edit', '기존 데이터 수정');
+        if (insertTasks.length > 0) await processInChunks(insertTasks, '/api/inbound', '신규 실사 입고');
+
+        progressEl.innerText = "최신 데이터 불러오는 중...";
         await load(); 
 
         document.body.removeChild(loader);
         event.target.value = '';
-        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 오류 없이 안전하게 저장되었습니다!`);
+        alert(`🎉 완벽합니다! 총 ${processCount}개 렉의 실사 데이터가 순서 꼬임 없이 동기화되었습니다.`);
 
     } catch (error) {
         console.error(error);
         let loader = document.getElementById('bulk-loader');
         if(loader) document.body.removeChild(loader);
-        alert("처리 중 오류가 발생했습니다: " + error.message);
+        alert("처리 중 서버 오류가 발생했습니다: " + error.message);
         event.target.value = '';
     }
 }
