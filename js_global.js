@@ -26,7 +26,7 @@ const layoutRoom = [ { id: 'J', cols: 10 }, { aisle: true }, { id: 'I', cols: 12
 const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10 }, { gap: true }, { id: 'D', cols: 10 }, { aisle: true }, { id: 'C', cols: 10 }, { gap: true }, { id: 'B', cols: 10 }, { aisle: true }, { id: 'A', cols: 12 } ];
 
 // ==========================================
-// 초기 로딩 (강철 파싱 방어막 적용 - 절대 화면이 멈추지 않음)
+// 초기 로딩 (잡다한 로직 폐기, 가장 완벽했던 순정 상태 복원)
 // ==========================================
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
@@ -47,7 +47,7 @@ async function load() {
         const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co";
         const SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu";
 
-        // 🚨 가장 안전했던 기존 Supabase 직접 연결(5000줄 제한)로 원복!
+        // 🚨 서버에서 주는 데이터를 의심 없이 그대로 받아오는 가장 순정적이고 확실한 로직
         const [occRes, prodRes, fpRes, bomRes, histRes] = await Promise.all([ 
             fetch('/api/inventory?t=' + ts), 
             fetch('/api/products?t=' + ts), 
@@ -56,28 +56,24 @@ async function load() {
             fetch(`${SUPABASE_URL}/rest/v1/history_log?select=*&order=created_at.desc&limit=5000`, { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` } })
         ]);
         
-        // 🚨 [핵심 수정] 서버에서 어떤 그지같은 형태(HTML 에러 등)로 데이터를 던져도 절대 안 터지는 무적 파싱 함수
-        const safeParse = async (res) => {
-            try {
-                const data = await res.json();
-                if (Array.isArray(data)) return data;
-                if (data && Array.isArray(data.data)) return data.data; // 서버가 딕셔너리로 감싸서 보낼 경우 대비
-                return [];
-            } catch(e) { return []; }
-        };
+        // JSON 파싱
+        globalOccupancy = await occRes.json();
+        productMaster = await prodRes.json();
+        finishedProductMaster = await fpRes.json();
+        bomMaster = await bomRes.json();
+        globalHistory = await histRes.json();
 
-        globalOccupancy = await safeParse(occRes);
-        productMaster = await safeParse(prodRes);
-        finishedProductMaster = await safeParse(fpRes);
-        bomMaster = await safeParse(bomRes);
-        globalHistory = await safeParse(histRes);
-        
-    } catch (e) { 
-        console.error("데이터 로드 통신 지연:", e); 
-        // 에러가 나더라도 기존 메모리(캐시)에 있는 데이터를 유지합니다.
-    } finally {
-        // 🚨 서버가 터지든 말든 화면은 무조건 번쩍하고 그리도록 강제 명령!
+        // 🚨 방어 코드: 서버가 배열(Array)이 아닌 형태로 줄 경우 강제 변환
+        if(!Array.isArray(globalOccupancy)) globalOccupancy = globalOccupancy.data || [];
+        if(!Array.isArray(productMaster)) productMaster = productMaster.data || [];
+        if(!Array.isArray(finishedProductMaster)) finishedProductMaster = finishedProductMaster.data || [];
+        if(!Array.isArray(bomMaster)) bomMaster = bomMaster.data || [];
+        if(!Array.isArray(globalHistory)) globalHistory = globalHistory.data || [];
+
         renderAll(); 
+    } catch (e) { 
+        console.error("데이터 로드 실패:", e); 
+        alert("서버에서 데이터를 불러오지 못했습니다. 파이썬 서버가 켜져 있는지 확인해주세요.");
     }
 }
 
@@ -89,7 +85,7 @@ function renderAll() {
     try { if(typeof renderSafetyStock === 'function') renderSafetyStock(); } catch(e){}
     try { if(typeof renderAccounting === 'function') renderAccounting(); } catch(e){} 
     try { if(typeof populateWaitDropdowns === 'function') populateWaitDropdowns(); } catch(e){}
-    try { if(typeof initDailyInventoryUI === 'function') initDailyInventoryUI(); } catch(e){}
+    try { if(typeof renderDailyInventory === 'function') renderDailyInventory(); } catch(e){}
 }
 
 function adminLogin() {
@@ -120,7 +116,7 @@ function showView(viewName) {
 }
 
 // ==========================================
-// 대시보드 및 데이터 엑셀 출력
+// 대시보드 및 데이터 엑셀 출력 (유지)
 // ==========================================
 function updateDashboard() {
     try {
