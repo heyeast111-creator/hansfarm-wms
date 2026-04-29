@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [초강력 무적] 엑셀 일괄 덮어쓰기 (전체화면 로딩창 + 묶음 저장)
+// 🚨 [초강력 무적] 엑셀 일괄 덮어쓰기 (전체화면 로딩창 + 통신 방어막)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,23 +1371,23 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(⚠️ 완료 알림창이 뜰 때까지 절대 화면을 끄지 마세요!)\n\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(완료창이 뜰 때까지 절대 화면을 끄지 마세요!)\n\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
-        // 💡 [핵심 패치] 화면 전체를 덮는 거대한 로딩 방어막 생성!
+        // 💡 [무적 방어막] 화면 전체를 덮는 로딩창 생성 (조작 및 끊김 원천 차단)
         let loader = document.createElement('div');
         loader.id = 'bulk-loader';
         loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-80 flex flex-col items-center justify-center z-[9999]';
         loader.innerHTML = `
             <div class="text-7xl animate-spin mb-6">⏳</div>
-            <div class="text-white font-black text-3xl mb-3">서버에 묶음 저장 중입니다...</div>
-            <div class="text-emerald-400 font-bold text-lg">완료 알림창이 뜰 때까지 화면을 끄거나 새로고침하지 마세요!</div>
+            <div class="text-white font-black text-3xl mb-3">실사 데이터 서버 동기화 중...</div>
+            <div class="text-emerald-400 font-bold text-lg">데이터가 날아가지 않도록 절대 화면을 끄거나 새로고침하지 마세요!</div>
         `;
         document.body.appendChild(loader);
 
-        let deleteIds = []; 
+        let deletePayloads = []; 
         let insertPayloads = []; 
         let processCount = 0;
 
@@ -1409,6 +1409,7 @@ async function importExcel(event) {
             let keyPhysQty = keys.find(k => k === "실사수량(EA)" || k === "실사수량" || k.includes("실사"));
             let physQtyStr = keyPhysQty ? String(row[keyPhysQty]).trim() : "";
 
+            // 실사수량이 빈칸이면 무조건 건너뜀 (기존 보존)
             if(physQtyStr === "") continue;
 
             let physQty = parseInt(physQtyStr.replace(/,/g, ''));
@@ -1417,11 +1418,17 @@ async function importExcel(event) {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
+            // 수량과 이름이 모두 같으면 건너뜀
             if (newItemName === oldItemName && physQty === sysQty) continue; 
 
-            existings.forEach(item => deleteIds.push(item.id));
+            // 💡 다르면 무조건 덮어쓰기 프로세스 시작
+            existings.forEach(item => {
+                deletePayloads.push({ invId: item.id, locId: loc, itemName: item.item_name });
+            });
 
-            if (physQty > 0 && newItemName !== "") {
+            // 실사수량이 0보다 크면 새 데이터 삽입 (이름이 없으면 '품목명누락_실사'로라도 강제 삽입하여 유실 방어)
+            if (physQty > 0) {
+                let finalItemName = newItemName !== "" ? newItemName : "품목명누락_실사";
                 let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
                 let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
                 let keySup = keys.find(k => k.includes("입고처") || k.includes("매입처") || k.includes("비고"));
@@ -1429,20 +1436,17 @@ async function importExcel(event) {
                 let keyDate = keys.find(k => k.includes("일자") || k.includes("날짜") || k.includes("일") || k.includes("산란") || k.includes("입고"));
                 let pDate = keyDate ? String(row[keyDate]).trim() : new Date().toISOString().split('T')[0];
 
-                let pInfo = finishedProductMaster.find(p => p.item_name === newItemName) || productMaster.find(p => p.item_name === newItemName);
+                let pInfo = finishedProductMaster.find(p => p.item_name === finalItemName) || productMaster.find(p => p.item_name === finalItemName);
                 let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
 
                 insertPayloads.push({
                     location_id: loc,
-                    action_type: '입고',
                     category: cat === "-" ? "미분류" : cat,
-                    item_name: newItemName,
+                    item_name: finalItemName,
                     quantity: physQty,
                     pallet_count: physQty / pEa,
                     production_date: pDate,
-                    remarks: remarks === "-" ? "기본입고처" : remarks,
-                    acc_status: '미확정',
-                    payment_status: '미지급'
+                    remarks: remarks === "-" ? "기본입고처" : remarks
                 });
             }
             processCount++;
@@ -1455,50 +1459,36 @@ async function importExcel(event) {
             return;
         }
 
-        const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log";
-        const SUPABASE_HEADERS = {
-            "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
-            "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
-            "Content-Type": "application/json"
-        };
-
-        // 1. 일괄 삭제 통신
-        if (deleteIds.length > 0) {
-            for(let i=0; i<deleteIds.length; i+=100) {
-                let chunk = deleteIds.slice(i, i+100);
-                await fetch(`${SUPABASE_URL}?id=in.(${chunk.join(',')})`, { 
-                    method: 'DELETE', 
-                    headers: SUPABASE_HEADERS 
-                });
-            }
+        // 💡 [핵심] 꼼수 제거! 
+        // 사용자가 화면을 끄지 못하도록 로딩창을 띄운 상태에서 정직하게 Await 통신 진행
+        for(let d of deletePayloads) {
+            await fetch('/api/inventory_edit', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) 
+            });
+        }
+        
+        for(let ins of insertPayloads) {
+            await fetch('/api/inbound', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(ins) 
+            });
         }
 
-        // 2. 일괄 삽입 통신 (한방에 꽂아 넣음)
-        if (insertPayloads.length > 0) {
-            for(let i=0; i<insertPayloads.length; i+=500) {
-                let chunk = insertPayloads.slice(i, i+500);
-                await fetch(SUPABASE_URL, { 
-                    method: 'POST', 
-                    headers: { ...SUPABASE_HEADERS, "Prefer": "return=minimal" }, 
-                    body: JSON.stringify(chunk) 
-                });
-            }
-        }
+        // 통신이 완전히 끝난 후 DB에서 최신 데이터 강제 불러오기
+        await load(); 
 
-        // 작업 성공 시 로딩 방어막 해제
+        // 모든 저장이 완벽하게 끝나면 방어막 해제
         document.body.removeChild(loader);
         event.target.value = '';
-
-        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 서버에 100% 저장되었습니다!\n이제 최신 화면을 불러옵니다.`);
-        
-        await load(); // DB에서 최신 데이터 강제 다시 불러오기
+        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 서버에 100% 저장되었습니다!`);
 
     } catch (error) {
         console.error(error);
-        // 에러 발생 시에도 방어막 해제
         let loader = document.getElementById('bulk-loader');
         if(loader) document.body.removeChild(loader);
-        
         alert("엑셀 처리 중 오류가 발생했습니다: " + error.message);
         event.target.value = '';
     }
