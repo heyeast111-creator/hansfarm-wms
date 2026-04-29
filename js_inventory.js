@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [초강력 무적] 엑셀 일괄 덮어쓰기 (새로고침 끊김 방지 패치)
+// 🚨 [초강력 무적] 엑셀 일괄 덮어쓰기 (전체화면 로딩창 + 묶음 저장)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,17 +1371,21 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(⚠️ 완료 알림창이 뜰 때까지 절대 새로고침 하지 마세요!)\n\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(⚠️ 완료 알림창이 뜰 때까지 절대 화면을 끄지 마세요!)\n\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
-        // 💡 작업 중 튕김 방지를 위한 UI 잠금 (로딩 표시)
-        document.body.style.cursor = 'wait';
-        const btn = document.getElementById('excel-upload').previousElementSibling;
-        const originText = btn.innerText;
-        btn.innerText = "⏳ 서버 묶음 저장 중...";
-        btn.style.backgroundColor = "#fbbf24"; 
+        // 💡 [핵심 패치] 화면 전체를 덮는 거대한 로딩 방어막 생성!
+        let loader = document.createElement('div');
+        loader.id = 'bulk-loader';
+        loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-80 flex flex-col items-center justify-center z-[9999]';
+        loader.innerHTML = `
+            <div class="text-7xl animate-spin mb-6">⏳</div>
+            <div class="text-white font-black text-3xl mb-3">서버에 묶음 저장 중입니다...</div>
+            <div class="text-emerald-400 font-bold text-lg">완료 알림창이 뜰 때까지 화면을 끄거나 새로고침하지 마세요!</div>
+        `;
+        document.body.appendChild(loader);
 
         let deleteIds = []; 
         let insertPayloads = []; 
@@ -1415,10 +1419,8 @@ async function importExcel(event) {
 
             if (newItemName === oldItemName && physQty === sysQty) continue; 
 
-            // 기존 데이터 ID 수집 (나중에 한방에 삭제)
             existings.forEach(item => deleteIds.push(item.id));
 
-            // 새 데이터 묶음 생성 (나중에 한방에 삽입)
             if (physQty > 0 && newItemName !== "") {
                 let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
                 let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
@@ -1447,15 +1449,12 @@ async function importExcel(event) {
         }
 
         if (processCount === 0) {
-            document.body.style.cursor = 'default';
-            btn.innerText = originText;
-            btn.style.backgroundColor = "";
+            document.body.removeChild(loader);
             alert("반영할 변동 사항이 없습니다.\n(실사수량이 모두 비어있거나 전산수량과 100% 일치합니다.)");
             event.target.value = '';
             return;
         }
 
-        // 💡 [핵심] 수백 개를 단 0.1초 만에 일괄 전송 (Bulk API) - 새로고침으로 인한 중간 끊김 원천 차단!
         const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log";
         const SUPABASE_HEADERS = {
             "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
@@ -1486,24 +1485,21 @@ async function importExcel(event) {
             }
         }
 
-        // 저장 완벽 종료 후 상태 원복
-        document.body.style.cursor = 'default';
-        btn.innerText = originText;
-        btn.style.backgroundColor = "";
+        // 작업 성공 시 로딩 방어막 해제
+        document.body.removeChild(loader);
         event.target.value = '';
 
-        // 💡 여기까지 왔다면 서버 저장이 100% 끝난 것입니다. 이제 화면을 새로 그립니다.
-        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 서버에 100% 저장되었습니다!\n이제 화면을 새로 불러옵니다. (새로고침 하셔도 안전합니다)`);
+        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 서버에 100% 저장되었습니다!\n이제 최신 화면을 불러옵니다.`);
         
         await load(); // DB에서 최신 데이터 강제 다시 불러오기
 
     } catch (error) {
         console.error(error);
-        document.body.style.cursor = 'default';
-        const btn = document.getElementById('excel-upload').previousElementSibling;
-        btn.innerText = "재고 실사/입고";
-        btn.style.backgroundColor = "";
-        alert("엑셀 처리 중 서버 통신 오류가 발생했습니다: " + error.message);
+        // 에러 발생 시에도 방어막 해제
+        let loader = document.getElementById('bulk-loader');
+        if(loader) document.body.removeChild(loader);
+        
+        alert("엑셀 처리 중 오류가 발생했습니다: " + error.message);
         event.target.value = '';
     }
 }
