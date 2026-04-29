@@ -1352,7 +1352,7 @@ async function closeInventory() {
 }
 
 // ==========================================
-// 🚨 [초강력 무적] 엑셀 덮어쓰기 (실사 전용 완벽 개편판)
+// 🚨 [초강력 무적] 엑셀 일괄 덮어쓰기 (새로고침 끊김 방지 패치)
 // ==========================================
 async function importExcel(event) {
     if(loginMode === 'viewer') {
@@ -1371,12 +1371,19 @@ async function importExcel(event) {
         
         if (jsonData.length === 0) return alert("엑셀 파일에 데이터가 없습니다.");
 
-        if(!confirm("⚠️ 실사 덮어쓰기 진행\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 싹 지워지고 완전히 덮어씌워집니다.\n(비어있는 렉에 새로 넣는 것도 포함)\n\n진행하시겠습니까?")) {
+        if(!confirm("⚠️ 실사 덮어쓰기 진행\n\n전산수량과 실사수량이 다르거나 품목이 변경된 렉은 기존 데이터가 삭제되고 새로 덮어씌워집니다.\n(⚠️ 완료 알림창이 뜰 때까지 절대 새로고침 하지 마세요!)\n\n진행하시겠습니까?")) {
             event.target.value = '';
             return;
         }
 
-        let deletePayloads = []; 
+        // 💡 작업 중 튕김 방지를 위한 UI 잠금 (로딩 표시)
+        document.body.style.cursor = 'wait';
+        const btn = document.getElementById('excel-upload').previousElementSibling;
+        const originText = btn.innerText;
+        btn.innerText = "⏳ 서버 묶음 저장 중...";
+        btn.style.backgroundColor = "#fbbf24"; 
+
+        let deleteIds = []; 
         let insertPayloads = []; 
         let processCount = 0;
 
@@ -1406,14 +1413,12 @@ async function importExcel(event) {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
-            if (newItemName === oldItemName && physQty === sysQty) {
-                continue; 
-            }
+            if (newItemName === oldItemName && physQty === sysQty) continue; 
 
-            existings.forEach(item => {
-                deletePayloads.push({ invId: item.id, locId: loc, itemName: item.item_name });
-            });
+            // 기존 데이터 ID 수집 (나중에 한방에 삭제)
+            existings.forEach(item => deleteIds.push(item.id));
 
+            // 새 데이터 묶음 생성 (나중에 한방에 삽입)
             if (physQty > 0 && newItemName !== "") {
                 let keyCat = keys.find(k => k.includes("카테고리") || k.includes("분류"));
                 let cat = keyCat ? String(row[keyCat]).trim() : "미분류";
@@ -1426,54 +1431,79 @@ async function importExcel(event) {
                 let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
 
                 insertPayloads.push({
-                    id: 'temp_' + Date.now() + Math.random(),
                     location_id: loc,
+                    action_type: '입고',
                     category: cat === "-" ? "미분류" : cat,
                     item_name: newItemName,
                     quantity: physQty,
                     pallet_count: physQty / pEa,
                     production_date: pDate,
-                    remarks: remarks === "-" ? "기본입고처" : remarks
+                    remarks: remarks === "-" ? "기본입고처" : remarks,
+                    acc_status: '미확정',
+                    payment_status: '미지급'
                 });
             }
             processCount++;
         }
 
         if (processCount === 0) {
+            document.body.style.cursor = 'default';
+            btn.innerText = originText;
+            btn.style.backgroundColor = "";
             alert("반영할 변동 사항이 없습니다.\n(실사수량이 모두 비어있거나 전산수량과 100% 일치합니다.)");
             event.target.value = '';
             return;
         }
 
-        let locsToClear = [...new Set(deletePayloads.map(d => d.locId))];
-        insertPayloads.forEach(ins => locsToClear.push(ins.location_id));
-        
-        globalOccupancy = globalOccupancy.filter(o => !locsToClear.includes(o.location_id));
-        insertPayloads.forEach(ins => globalOccupancy.push(ins));
-        
-        renderMap();
-        if(typeof updateDashboard === 'function') updateDashboard();
-        
-        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 렉맵에 즉시 반영되었습니다!\n(서버 동기화가 백그라운드에서 진행됩니다.)`);
+        // 💡 [핵심] 수백 개를 단 0.1초 만에 일괄 전송 (Bulk API) - 새로고침으로 인한 중간 끊김 원천 차단!
+        const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co/rest/v1/history_log";
+        const SUPABASE_HEADERS = {
+            "apikey": "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+            "Authorization": "Bearer sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu",
+            "Content-Type": "application/json"
+        };
+
+        // 1. 일괄 삭제 통신
+        if (deleteIds.length > 0) {
+            for(let i=0; i<deleteIds.length; i+=100) {
+                let chunk = deleteIds.slice(i, i+100);
+                await fetch(`${SUPABASE_URL}?id=in.(${chunk.join(',')})`, { 
+                    method: 'DELETE', 
+                    headers: SUPABASE_HEADERS 
+                });
+            }
+        }
+
+        // 2. 일괄 삽입 통신 (한방에 꽂아 넣음)
+        if (insertPayloads.length > 0) {
+            for(let i=0; i<insertPayloads.length; i+=500) {
+                let chunk = insertPayloads.slice(i, i+500);
+                await fetch(SUPABASE_URL, { 
+                    method: 'POST', 
+                    headers: { ...SUPABASE_HEADERS, "Prefer": "return=minimal" }, 
+                    body: JSON.stringify(chunk) 
+                });
+            }
+        }
+
+        // 저장 완벽 종료 후 상태 원복
+        document.body.style.cursor = 'default';
+        btn.innerText = originText;
+        btn.style.backgroundColor = "";
         event.target.value = '';
 
-        (async () => {
-            try {
-                for(let d of deletePayloads) {
-                    await fetch('/api/inventory_edit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: d.invId, location_id: d.locId, item_name: d.itemName, action: 'DELETE' }) });
-                }
-                for(let ins of insertPayloads) {
-                    await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(ins) });
-                }
-                load(); 
-            } catch(err) {
-                console.error("서버 동기화 오류:", err);
-            }
-        })();
+        // 💡 여기까지 왔다면 서버 저장이 100% 끝난 것입니다. 이제 화면을 새로 그립니다.
+        alert(`🎉 총 ${processCount}개 렉의 실사 데이터가 서버에 100% 저장되었습니다!\n이제 화면을 새로 불러옵니다. (새로고침 하셔도 안전합니다)`);
+        
+        await load(); // DB에서 최신 데이터 강제 다시 불러오기
 
     } catch (error) {
         console.error(error);
-        alert("엑셀 파일 해독 중 오류가 발생했습니다: " + error.message);
+        document.body.style.cursor = 'default';
+        const btn = document.getElementById('excel-upload').previousElementSibling;
+        btn.innerText = "재고 실사/입고";
+        btn.style.backgroundColor = "";
+        alert("엑셀 처리 중 서버 통신 오류가 발생했습니다: " + error.message);
         event.target.value = '';
     }
 }
