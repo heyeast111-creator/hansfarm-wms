@@ -31,7 +31,7 @@ const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') { loginMode = 'viewer'; alert("뷰어 모드로 접속되었습니다."); } 
-    else if (pw === '11111') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
+    else if (pw === '00700') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
     else { alert("비밀번호가 틀렸습니다."); return; }
     
     document.getElementById('login-screen').style.display = 'none';
@@ -82,7 +82,7 @@ function renderAll() {
 }
 
 // ==========================================
-// 관리자 권한 모달 & 정산회계 탭 해제 로직 완벽 복구
+// 🚨 관리자 권한 모달창 투명도(opacity) 버그 100% 해결
 // ==========================================
 function adminLogin() {
     if(isAdmin) { 
@@ -99,6 +99,14 @@ function adminLogin() {
     if(modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
+        
+        // 💡 [핵심 패치] 투명도(opacity-0)에 갇힌 하얀 박스를 강제로 구출하여 보이게 만듦
+        let innerBox = modal.querySelector('div');
+        if(innerBox) {
+            innerBox.classList.remove('opacity-0');
+            innerBox.classList.add('opacity-100');
+        }
+
         let pwInput = document.getElementById('admin-pw-input');
         if(pwInput) { pwInput.value = ''; pwInput.focus(); }
     } else {
@@ -154,7 +162,7 @@ function showView(viewName) {
     let targetView = document.getElementById('view-' + viewName);
     if(targetView) { targetView.classList.remove('hidden'); targetView.classList.add('flex'); }
 
-    // 4단계: PC 메뉴바 색깔 제어 (Active Class 처리)
+    // 4단계: PC 메뉴바 색깔 제어 (Active Class 처리 - 지금 보는 메뉴만 진하게!)
     document.querySelectorAll('.nav-btn-pc').forEach(btn => {
         btn.classList.remove('bg-indigo-50', 'border-indigo-200', 'text-indigo-700', 'font-black', 'shadow-inner');
         btn.classList.add('border-slate-200', 'text-slate-600', 'font-bold');
@@ -188,7 +196,7 @@ function showView(viewName) {
 }
 
 // ==========================================
-// 대시보드 계산 로직 (관리자 금액 계산 포함)
+// 대시보드 계산 로직 (관리자 금액 계산 유지)
 // ==========================================
 function updateDashboard() {
     try {
@@ -286,7 +294,7 @@ function exportAllHistoryExcel() {
 }
 
 // ==========================================
-// 우측 패널 및 모달 제어 로직 
+// 우측 패널 및 모달 제어
 // ==========================================
 function showHistoryModal(locId) {
     let locHistory = globalHistory.filter(h => h.location_id === locId).sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50);
