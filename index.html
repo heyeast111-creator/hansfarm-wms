@@ -34,7 +34,9 @@
     </div>
 
     <aside id="sidebar" class="hidden md:flex w-36 bg-white border-r border-slate-300 flex-col items-center py-6 shadow-lg z-20 shrink-0 h-screen overflow-y-auto">
-        <div class="mb-8 w-full px-4 flex justify-center cursor-pointer hover:opacity-80 transition-opacity" onclick="adminLogin()"><img src="/logo.jpg" onerror="this.src='logo.jpg'" alt="HANS FARM" class="max-w-full h-auto object-contain"></div>
+        <div class="mb-8 w-full px-4 flex justify-center cursor-pointer hover:opacity-80 transition-opacity" onclick="adminLogin()">
+            <img src="/logo.jpg" onerror="this.src='logo.jpg'" alt="HANS FARM" class="max-w-full h-auto object-contain">
+        </div>
         <div class="flex flex-col space-y-2 w-full px-3" id="sidebar-menu">
             <button onclick="showView('dashboard')" class="nav-btn-pc target-dashboard w-full py-3 rounded-md text-sm border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all">대시보드</button>
             <button onclick="showView('order')" class="nav-btn-pc target-order w-full py-3 rounded-md text-sm border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-all">재고/발주</button>
@@ -44,15 +46,19 @@
             <button onclick="showView('accounting')" class="nav-btn-pc target-accounting hidden w-full py-3 rounded-md text-sm border-slate-200 text-yellow-700 font-black hover:bg-yellow-50 transition-all">정산/회계</button>
             <div class="my-2 border-b border-slate-200 w-full"></div>
             <button onclick="exportPhysicalCountExcel()" class="w-full py-3 rounded-md bg-blue-50 border border-blue-200 text-blue-700 font-black text-[12px] transition-all hover:bg-blue-100">실사 양식</button>
-            <button onclick="document.getElementById('excel-upload').click()" class="w-full mt-1 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black text-[12px] transition-all hover:bg-emerald-100">재고 실사</button>
+            <button onclick="document.getElementById('excel-upload').click()" class="w-full mt-1 py-3 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-700 font-black text-[12px] transition-all hover:bg-emerald-100">재고 실사/입고</button>
         </div>
     </aside>
 
-    <main id="main-app" class="hidden flex-1 overflow-hidden flex flex-col h-full w-full relative">
+    <main id="main-app" class="hidden flex-1 overflow-hidden flex flex-col h-full w-full relative pb-16 md:pb-0">
         <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importExcel(event)">
-        
-        <div id="view-order" class="hidden flex-col h-full w-full absolute inset-0 bg-slate-100 overflow-hidden">
-            <div class="bg-white border-b border-slate-300 px-4 md:px-8 pt-4 flex space-x-2 md:space-x-6 overflow-x-auto shrink-0 shadow-sm">
+        <input type="file" id="product-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importProductsExcel(event, 'materials')">
+        <input type="file" id="finished-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importProductsExcel(event, 'finished')">
+        <input type="file" id="bom-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importBomExcel(event)">
+        <input type="file" id="production-upload" accept=".xlsx, .xls, .csv" class="hidden" onchange="importProductionExcel(event)">
+
+        <div id="view-order" class="hidden flex-col h-full w-full absolute inset-0 z-10 bg-slate-100">
+            <div class="bg-white border-b border-slate-300 px-4 md:px-8 pt-4 flex space-x-2 md:space-x-6 overflow-x-auto shrink-0 shadow-sm custom-scrollbar">
                 <button id="order-tab-inventory" onclick="switchOrderTab('inventory')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-indigo-700 border-b-4 border-indigo-700 transition-colors">렉맵</button>
                 <button id="order-tab-search" onclick="switchOrderTab('search')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">재고조회</button>
                 <button id="order-tab-history" onclick="switchOrderTab('history')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">발주조회</button>
@@ -60,37 +66,61 @@
                 <button id="order-tab-safety" onclick="switchOrderTab('safety')" class="whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors">안전재고설정</button>
             </div>
 
-            <div class="flex-1 relative overflow-hidden">
+            <div class="flex-1 relative overflow-hidden flex flex-col">
                 <div id="subview-inventory" class="flex flex-col h-full w-full absolute inset-0 bg-slate-200">
-                    <header class="bg-white border-b border-slate-300 flex flex-col xl:flex-row items-start xl:items-center justify-between p-4 shrink-0 shadow-sm z-10 gap-4">
-                        <div class="flex space-x-2 overflow-x-auto w-full xl:w-auto">
-                            <button id="tab-room" onclick="switchZone('실온')" class="whitespace-nowrap px-4 py-2 bg-orange-500 text-white font-bold rounded-lg text-sm">실온 (Room)</button>
-                            <button id="tab-cold" onclick="switchZone('냉장')" class="whitespace-nowrap px-4 py-2 bg-slate-100 border text-slate-500 font-bold rounded-lg text-sm">냉장 (Cold)</button>
-                            <button id="tab-floor" onclick="switchZone('현장')" class="whitespace-nowrap px-4 py-2 bg-slate-100 border text-slate-500 font-bold rounded-lg text-sm">생산 현장</button>
+                    <header class="bg-white border-b border-slate-300 flex flex-col xl:flex-row items-start xl:items-center justify-between p-4 shrink-0 shadow-sm z-10 gap-4 w-full">
+                        <div class="flex space-x-2 overflow-x-auto w-full xl:w-auto custom-scrollbar pb-2 xl:pb-0 shrink-0">
+                            <button id="tab-room" onclick="switchZone('실온')" class="whitespace-nowrap px-4 md:px-6 py-2 bg-orange-500 text-white font-bold rounded-lg shadow-inner text-sm">실온 (Room)</button>
+                            <button id="tab-cold" onclick="switchZone('냉장')" class="whitespace-nowrap px-4 md:px-6 py-2 bg-slate-100 border border-slate-300 text-slate-500 font-bold rounded-lg hover:bg-slate-200 text-sm">냉장 (Cold)</button>
+                            <button id="tab-floor" onclick="switchZone('현장')" class="whitespace-nowrap px-4 md:px-6 py-2 bg-slate-100 border border-slate-300 text-slate-500 font-bold rounded-lg hover:bg-slate-200 text-sm">생산 현장</button>
                         </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button onclick="toggleRightPanel()" class="px-3 py-1.5 bg-slate-100 border border-slate-300 text-slate-700 font-black rounded text-xs shadow-sm whitespace-nowrap">우측 패널 켬/끔</button>
-                            <button onclick="toggleWaitContainer()" class="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded text-xs shadow-sm whitespace-nowrap">대기장</button>
-                            <button onclick="toggleMapSearch()" class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded text-xs shadow-sm whitespace-nowrap">스캔창</button>
-                            <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-xs rounded px-2 py-1.5"><option value="1">1층 (1F)</option><option value="2">2층 (2F)</option></select>
-                            <button onclick="load()" class="p-1.5 bg-white border border-slate-300 rounded hover:bg-slate-100"><svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
+                        <div class="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-start xl:justify-end">
+                            <button onclick="toggleRightPanel()" class="px-3 py-1.5 bg-slate-100 border border-slate-300 text-slate-700 font-black rounded hover:bg-slate-200 text-xs shadow-sm whitespace-nowrap">우측 패널 켬/끔</button>
+                            <button onclick="toggleWaitContainer()" class="px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black rounded hover:bg-emerald-100 text-xs shadow-sm whitespace-nowrap">대기장</button>
+                            <button onclick="toggleMapSearch()" class="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 font-black rounded hover:bg-indigo-100 text-xs shadow-sm whitespace-nowrap">스캔창</button>
+                            <button onclick="exportAllHistoryExcel()" class="px-3 py-1.5 bg-blue-50 border border-blue-200 text-blue-700 font-black rounded hover:bg-blue-100 text-xs shadow-sm whitespace-nowrap">히스토리 엑셀</button>
+                            <button onclick="closeInventory()" class="px-3 py-1.5 bg-purple-50 border border-purple-200 text-purple-700 font-black rounded hover:bg-purple-100 text-xs shadow-sm whitespace-nowrap">재고마감</button>
+                            <div class="flex items-center space-x-2 border-l border-slate-300 pl-2">
+                                <select id="floor-select" onchange="renderMap()" class="bg-white border-2 border-slate-300 text-slate-800 font-bold text-xs rounded px-2 py-1.5"><option value="1">1층 (1F)</option><option value="2">2층 (2F)</option></select>
+                                <button onclick="load()" class="p-1.5 bg-white border border-slate-300 rounded hover:bg-slate-100"><svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></button>
+                            </div>
                         </div>
                     </header>
-                    <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                        <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full overflow-hidden">
-                            <div class="p-2 bg-emerald-50 border-b border-emerald-100 flex justify-between items-center"><span class="text-sm font-black text-emerald-800 ml-1">입고 대기장</span><button onclick="createWaitingPallets()" class="bg-emerald-600 text-white font-bold py-1 px-3 rounded text-xs">박스 생성</button></div>
-                            <div class="p-3 border-b border-slate-200 space-y-2">
-                                <div class="flex space-x-2"><select id="wait-supplier" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitCategoryDropdown()"></select><select id="wait-cat" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitItemDropdown()"></select></div>
-                                <div class="flex space-x-2"><select id="wait-item" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="toggleWaitManualInput()"></select><input type="text" id="wait-item-manual" placeholder="품목 직접 입력" class="hidden w-1/2 p-1.5 border-2 border-orange-300 rounded bg-orange-50 text-[10px] font-black text-orange-700 outline-none"><input type="date" id="wait-date" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none"></div>
-                                <div class="flex space-x-2"><input type="number" id="wait-qty" placeholder="EA수량" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none"><input type="number" id="wait-pal" placeholder="P수량" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none"></div>
+                    <div class="flex-1 overflow-hidden p-2 md:p-6 relative flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 w-full">
+                        <div id="wait-container" class="hidden w-full md:w-80 flex-col bg-white rounded-xl shadow-md border border-slate-200 shrink-0 h-[40vh] md:h-full">
+                            <div class="p-2 bg-emerald-50 border-b border-emerald-100 rounded-t-xl flex justify-between items-center">
+                                <span class="text-sm font-black text-emerald-800 ml-1">입고 대기장 <span class="text-[10px] text-emerald-600 ml-1">(더블클릭 이동)</span></span>
+                                <button onclick="createWaitingPallets()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-1 px-3 rounded shadow-md text-xs transition-colors">박스 생성</button>
                             </div>
-                            <div class="flex-1 overflow-y-auto p-3 bg-slate-100 grid grid-cols-2 md:grid-cols-3 gap-2 content-start custom-scrollbar" id="waiting-grid"></div>
+                            <div class="p-3 border-b border-slate-200 space-y-2">
+                                <div class="flex space-x-2">
+                                    <select id="wait-supplier" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitCategoryDropdown()"></select>
+                                    <select id="wait-cat" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="updateWaitItemDropdown()"></select>
+                                </div>
+                                <div class="flex space-x-2">
+                                    <select id="wait-item" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none" onchange="toggleWaitManualInput()"></select>
+                                    <input type="text" id="wait-item-manual" placeholder="품목명 직접입력 (기타)" class="hidden w-1/2 p-1.5 border-2 border-orange-300 rounded bg-orange-50 text-[10px] font-black text-orange-700 outline-none">
+                                    <input type="date" id="wait-date" class="w-1/2 p-1.5 border border-slate-300 rounded bg-slate-50 text-[10px] font-bold outline-none">
+                                </div>
+                                <div class="flex space-x-2">
+                                    <input type="number" id="wait-qty" placeholder="총수량(EA)" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none">
+                                    <input type="number" id="wait-pal" placeholder="P수량(파레트)" class="w-1/2 p-1.5 border-2 border-emerald-300 rounded font-black text-emerald-700 text-[11px] outline-none">
+                                </div>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-3 bg-slate-100 grid grid-cols-3 gap-2 content-start custom-scrollbar" id="waiting-grid"></div>
                         </div>
-                        <div class="flex-1 flex flex-col rounded-xl overflow-hidden relative">
-                            <div id="map-scroller" class="w-full h-full overflow-auto custom-scrollbar p-2 md:p-6 bg-white shadow-inner">
+                        <div class="flex-1 flex flex-col rounded-xl h-[50vh] md:h-full relative overflow-hidden">
+                            <div id="map-search-container" class="hidden bg-white p-3 md:p-4 border-b border-slate-200 w-full flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-3 items-center md:items-end shrink-0 text-center shadow-md z-20 absolute top-0 left-0 rounded-t-xl">
+                                <div class="w-full md:w-1/4 text-left"><label class="block text-[10px] font-bold text-slate-500 mb-1">구역 카테고리</label><select id="map-search-category" onchange="updateMapSearchItemDropdown()" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"></select></div>
+                                <div class="w-full md:w-2/4 text-left"><label class="block text-[10px] font-bold text-slate-500 mb-1">품목명 검색</label><input type="text" id="map-search-keyword" list="map-search-item-list" placeholder="검색어 입력" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"><datalist id="map-search-item-list"></datalist></div>
+                                <div class="w-full md:w-1/4 text-left flex space-x-2 md:block"><div class="flex-1"><label class="block text-[10px] font-bold text-slate-500 mb-1">찾을 개수(렉)</label><input type="number" id="map-search-count" value="1" min="1" class="w-full p-2 border border-slate-300 rounded bg-slate-50 text-xs font-bold outline-none"></div><div class="flex flex-1 space-x-1 md:mt-2 items-end md:hidden"><button onclick="executeMapSearch()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded shadow text-xs">스캔</button><button onclick="clearSearchTargets()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-2 rounded shadow-sm text-xs">리셋</button></div></div>
+                                <button onclick="executeMapSearch()" class="hidden md:block bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded shadow transition-colors text-sm whitespace-nowrap">FIFO 스캔</button>
+                                <button onclick="clearSearchTargets()" class="hidden md:block bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold py-2 px-3 rounded shadow-sm transition-colors text-sm whitespace-nowrap">초기화</button>
+                            </div>
+                            <div class="w-full flex-1 overflow-auto custom-scrollbar p-2 md:p-6" id="map-scroller">
                                 <div class="transition-all mx-auto w-fit min-w-max" id="map-container">
                                     <div id="vertical-racks" class="flex items-end flex-nowrap"></div>
-                                    <div class="h-10 md:h-14 w-full flex items-center justify-center text-slate-400 font-black tracking-[0.5em] bg-yellow-50/50 border-y-2 border-yellow-300 my-4 shadow-inner text-xs md:text-sm">통로 (Aisle)</div>
+                                    <div class="h-10 md:h-14 w-full flex items-center justify-center text-slate-400 font-black tracking-[0.2em] md:tracking-[0.5em] bg-yellow-50/50 border-y-2 border-yellow-300 my-4 shadow-inner text-xs md:text-sm" id="aisle-text">통로 (Aisle)</div>
                                     <div class="flex justify-end md:pr-[168px] flex-nowrap" id="horizontal-rack"></div>
                                 </div>
                             </div>
@@ -98,76 +128,538 @@
                     </div>
                 </div>
 
-                <div id="subview-history" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-hidden">
-                    <div class="flex justify-between items-center mb-4 shrink-0"><h2 class="text-xl font-black">발주 내역 관리</h2><button onclick="toggleOrderCart()" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg">신규 발주 작성</button></div>
-                    <div id="order-cart-container" class="hidden flex-col mb-4 bg-white p-4 rounded-xl border-2 border-indigo-200 shadow-md shrink-0">
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-                            <select id="oc-sup" onchange="updateOrderCartCategoryDropdown()" class="p-2 border rounded font-bold text-xs bg-slate-50"></select>
-                            <select id="oc-cat" onchange="updateOrderCartItemDropdown()" class="p-2 border rounded font-bold text-xs bg-slate-50"></select>
-                            <select id="oc-item" class="p-2 border rounded font-bold text-xs bg-slate-50"></select>
-                            <input type="date" id="oc-date" class="p-2 border rounded font-bold text-xs">
-                            <div class="flex space-x-1"><input type="number" id="oc-pal" placeholder="P" class="w-1/2 border-2 border-indigo-300 rounded p-1 font-black text-indigo-700 outline-none"><button onclick="addOrderCartItem()" class="flex-1 bg-indigo-600 text-white font-bold rounded text-xs shadow-sm">담기</button></div>
+                <div id="subview-search" class="hidden flex-col items-center justify-start md:justify-center h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto bg-slate-100">
+                    <div class="bg-white p-4 md:p-8 rounded-2xl shadow-xl border border-slate-200 w-full max-w-5xl text-center">
+                        <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3 mb-6">
+                            <div class="w-full md:w-1/4 text-left"><label class="block text-[11px] font-bold text-slate-500 mb-1">① 관리 유형</label><select id="summary-type" onchange="updateSummarySupplierDropdown()" class="w-full text-sm p-3 border-2 border-slate-300 rounded-xl font-bold text-slate-800 outline-none bg-slate-50"><option value="ALL">전체 유형</option><option value="FINISHED">제품</option><option value="MATERIAL">자재</option><option value="RAW">원란</option></select></div>
+                            <div class="w-full md:w-1/4 text-left"><label class="block text-[11px] font-bold text-slate-500 mb-1">② 입고처</label><select id="summary-supplier" onchange="updateSummaryCategoryDropdown()" class="w-full text-sm p-3 border-2 border-rose-200 rounded-xl font-bold text-rose-800 outline-none bg-white"></select></div>
+                            <div class="w-full md:w-1/4 text-left"><label class="block text-[11px] font-bold text-slate-500 mb-1">③ 카테고리</label><select id="summary-category" onchange="updateSummaryItemDropdown()" class="w-full text-sm p-3 border-2 border-indigo-200 rounded-xl font-bold text-indigo-800 outline-none bg-white"></select></div>
+                            <div class="w-full md:w-1/4 text-left"><label class="block text-[11px] font-bold text-slate-500 mb-1">④ 품목명 확인</label><select id="summary-item" onchange="calculateSummary()" class="w-full text-sm p-3 border-2 border-emerald-200 rounded-xl font-bold text-emerald-800 outline-none bg-white"></select></div>
                         </div>
-                        <div class="max-h-32 overflow-auto border rounded mb-2 bg-slate-50"><table class="w-full text-[11px]"><tbody id="order-cart-tbody"></tbody></table></div>
-                        <button onclick="submitOrderCart()" class="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-lg transition-colors shadow-md">발주 확정 및 카카오톡 텍스트 복사</button>
+                        <div class="mt-4 md:mt-8 p-6 bg-slate-50 border border-slate-200 rounded-xl shadow-inner">
+                            <div class="text-sm font-bold text-slate-500 mb-2">현재 총 가용 재고</div>
+                            <div class="text-4xl md:text-5xl font-black text-indigo-600" id="summary-result">0 <span class="text-xl md:text-2xl text-indigo-400 font-bold">EA</span></div>
+                            <div class="text-xs md:text-sm font-bold text-rose-500 mt-2 md:mt-3" id="summary-pallet">0.0 P</div>
+                            <div id="summary-breakdown" class="w-full max-w-sm mx-auto mb-4"></div>
+                            <button onclick="findItemLocationFromSummary()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-4 md:px-8 rounded-xl shadow-md transition-colors w-full max-w-sm mx-auto flex items-center justify-center text-sm md:text-base mt-2">렉맵에서 위치 확인</button>
+                        </div>
                     </div>
-                    <div class="bg-white rounded-xl border shadow-sm flex-1 overflow-hidden flex flex-col min-h-[300px]">
+                </div>
+
+                <div id="subview-history" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100">
+                    <div class="flex justify-between items-center mb-4 shrink-0">
+                        <h2 class="text-xl md:text-2xl font-black text-slate-800">발주 내역 관리</h2>
+                        <button onclick="toggleOrderCart()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-colors flex items-center text-sm">신규 발주 작성</button>
+                    </div>
+
+                    <div id="order-cart-container" class="hidden flex-col mb-6 bg-white p-4 md:p-6 rounded-2xl shadow-lg border-2 border-indigo-200 shrink-0">
+                        <div class="flex justify-between items-center border-b pb-2 mb-4">
+                            <h3 class="text-lg font-black text-indigo-800">발주 장바구니</h3>
+                            <span class="text-xs text-slate-500 font-bold">항목을 담고 '카톡 복사'를 누르세요.</span>
+                        </div>
+                        <div class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-4">
+                            <select id="oc-sup" onchange="updateOrderCartCategoryDropdown()" class="w-full md:w-1/5 border border-slate-300 rounded p-2 text-sm font-bold bg-slate-50"></select>
+                            <select id="oc-cat" onchange="updateOrderCartItemDropdown()" class="w-full md:w-1/5 border border-slate-300 rounded p-2 text-sm font-bold bg-slate-50"></select>
+                            <select id="oc-item" class="w-full md:w-1/5 border border-slate-300 rounded p-2 text-sm font-bold bg-slate-50"></select>
+                            <input type="date" id="oc-date" class="w-full md:w-1/5 border border-slate-300 rounded p-2 text-sm font-bold text-blue-700 bg-white outline-none" title="도착 예정일">
+                            <div class="flex w-full md:w-1/5 space-x-2">
+                                <input type="number" id="oc-pal" placeholder="파레트(P)" class="w-1/2 border-2 border-indigo-300 rounded p-2 text-sm font-black text-indigo-700 outline-none">
+                                <button onclick="addOrderCartItem()" class="w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded shadow transition-colors text-sm">담기</button>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 rounded-lg border border-slate-200 p-2 mb-4 min-h-[100px] max-h-[200px] overflow-y-auto custom-scrollbar">
+                            <table class="w-full text-left text-xs md:text-sm border-collapse">
+                                <thead><tr class="text-slate-500 border-b border-slate-200"><th class="p-1">예정일</th><th class="p-1">발주처</th><th class="p-1">품목명</th><th class="p-1 text-right">수량</th><th class="p-1 text-center">삭제</th></tr></thead>
+                                <tbody id="order-cart-tbody"></tbody>
+                            </table>
+                        </div>
+                        <button onclick="submitOrderCart()" class="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-black rounded-xl shadow-md transition-colors text-sm md:text-base">발주 확정 및 카카오톡 텍스트 복사</button>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-y-auto overflow-x-auto flex-1 custom-scrollbar min-h-[300px]">
                         <div id="order-sort-area" class="shrink-0 bg-slate-50 p-2 border-b"></div>
-                        <div class="overflow-auto flex-1 custom-scrollbar">
-                            <table class="w-full text-left border-collapse min-w-[800px]">
-                                <thead class="sticky top-0 bg-slate-50 border-b-2 text-slate-500 text-xs font-black z-10 shadow-sm"><tr><th class="p-3">발주일</th><th class="p-3 text-blue-600">예정일</th><th class="p-3">발주처</th><th class="p-3">품목명</th><th class="p-3 text-right">수량</th><th class="p-3 text-center">상태</th><th class="p-3 text-center">작업</th></tr></thead>
-                                <tbody id="order-list-tbody" class="divide-y text-xs"></tbody>
+                        <table class="w-full text-left border-collapse min-w-[700px]">
+                            <thead class="sticky top-0 bg-slate-50 border-b-2 border-slate-200 text-slate-500 text-xs md:text-sm z-10 shadow-sm">
+                                <tr><th class="p-3 font-black">발주일자</th><th class="p-3 font-black text-blue-600">도착예정일</th><th class="p-3 font-black">발주처</th><th class="p-3 font-black">품목명</th><th class="p-3 font-black text-right">주문 수량</th><th class="p-3 font-black text-center">상태</th><th class="p-3 font-black text-center">작업</th></tr>
+                            </thead>
+                            <tbody id="order-list-tbody" class="divide-y divide-slate-100 text-xs md:text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="subview-daily" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100">
+                     <div class="flex flex-col h-full w-full bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+                        <div class="p-4 border-b bg-slate-50 flex flex-col md:flex-row justify-between items-center shrink-0">
+                            <h2 class="text-xl font-black text-slate-800 mb-2 md:mb-0">일자별 재고 조회</h2>
+                            <div class="flex items-center space-x-2">
+                                <input type="date" id="daily-target-date" onchange="renderDailyInventory()" class="border-2 border-indigo-200 rounded p-2 text-sm font-bold text-indigo-700 outline-none">
+                                <button onclick="exportDailyInventoryExcel()" class="bg-indigo-600 text-white font-bold px-4 py-2 rounded text-sm shadow-md">엑셀 다운로드</button>
+                            </div>
+                        </div>
+                        <div class="flex-1 overflow-auto custom-scrollbar">
+                            <table class="w-full text-left border-collapse min-w-[600px]">
+                                <thead class="sticky top-0 bg-slate-50 border-b-2 border-slate-200 text-slate-500 text-xs shadow-sm">
+                                    <tr><th class="p-3 font-black w-1/4">카테고리</th><th class="p-3 font-black w-1/2">품목명</th><th class="p-3 font-black text-right w-1/4">총 수량 (EA)</th></tr>
+                                </thead>
+                                <tbody id="daily-inventory-list" class="divide-y divide-slate-100">
+                                    <tr><td colspan="3" class="p-10 text-center text-slate-400 font-bold">날짜를 선택해주세요.</td></tr>
+                                </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
 
-                <div id="subview-search" class="hidden absolute inset-0"></div>
-                <div id="subview-daily" class="hidden absolute inset-0"></div>
-                <div id="subview-safety" class="hidden absolute inset-0"></div>
+                <div id="subview-safety" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-4 border-b-2 border-slate-200 pb-4 space-y-4 md:space-y-0 shrink-0">
+                        <div class="flex flex-wrap items-center gap-3 w-full">
+                            <select id="safe-mode" onchange="toggleSafeMode()" class="border-2 border-indigo-400 rounded-lg p-2 text-sm font-black text-indigo-700 bg-indigo-50 outline-none flex-1 md:flex-none">
+                                <option value="pallet">🚨 위험재고 (파레트 부족)</option>
+                                <option value="days">📅 소요량 (버팀일수 기준)</option>
+                            </select>
+                            <select id="safe-filter-sup" onchange="renderSafetyStock()" class="border border-slate-300 rounded-lg p-2 text-sm font-bold bg-white outline-none flex-1 md:flex-none min-w-[120px]">
+                                <option value="ALL">전체 입고처</option>
+                            </select>
+                            <select id="safe-filter-cat" onchange="renderSafetyStock()" class="border border-slate-300 rounded-lg p-2 text-sm font-bold bg-white outline-none flex-1 md:flex-none min-w-[120px]">
+                                <option value="ALL">전체 카테고리</option>
+                            </select>
+                            
+                            <div id="target-pallet-container" class="flex items-center space-x-2 bg-white p-1.5 rounded-xl shadow-sm border border-slate-200">
+                                <label class="font-bold text-slate-600 text-sm whitespace-nowrap ml-2">위험 재고 기준:</label>
+                                <div class="relative">
+                                    <input type="number" id="safe-pallet-target" value="5" min="0" step="0.1" onchange="renderSafetyStock()" class="w-16 border-2 border-rose-200 rounded-lg p-1.5 font-black text-rose-700 text-center outline-none">
+                                    <span class="absolute right-1.5 top-1.5 font-bold text-slate-400 text-sm">P</span>
+                                </div>
+                            </div>
+
+                            <div id="target-days-container" class="hidden items-center space-x-2 bg-white p-1.5 rounded-xl shadow-sm border border-slate-200">
+                                <label class="font-bold text-slate-600 text-sm whitespace-nowrap ml-2">목표 버팀 일수:</label>
+                                <div class="relative">
+                                    <input type="number" id="safe-days-target" value="7" min="1" onchange="renderSafetyStock()" class="w-16 border-2 border-blue-200 rounded-lg p-1.5 font-black text-blue-700 text-center outline-none">
+                                    <span class="absolute right-1.5 top-1.5 font-bold text-slate-400 text-sm">일</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-2xl shadow-md border border-slate-200 flex flex-col flex-1 overflow-hidden min-h-[300px]">
+                        <div class="overflow-y-auto flex-1 custom-scrollbar">
+                            <table class="w-full text-left border-collapse min-w-[700px]">
+                                <thead id="safety-thead" class="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 text-slate-500 text-sm shadow-sm">
+                                </thead>
+                                <tbody id="safety-list" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div id="view-dashboard" class="hidden absolute inset-0 p-8 overflow-auto bg-slate-100 z-10">
-            <h1 class="text-3xl font-black text-slate-800 mb-8">물류 대시보드</h1>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-orange-500 flex flex-col items-center">
-                    <h3 class="font-black text-orange-800 mb-4">☀️ 실온 창고</h3>
-                    <div id="dash-room-donut" class="relative w-32 h-32 rounded-full flex items-center justify-center shadow-inner mb-6 donut-ring"><div class="absolute inset-3 bg-white rounded-full flex items-center justify-center"><span class="text-2xl font-black text-orange-600" id="dash-room-percent">0%</span></div></div>
-                    <div class="w-full text-xs font-bold text-slate-600 space-y-2"><div class="flex justify-between"><span>수용량</span><span>170</span></div><div class="flex justify-between text-orange-600"><span>적재</span><span id="dash-room-occ">0</span></div><div class="flex justify-between text-emerald-600"><span>빈 렉</span><span id="dash-room-empty">0</span></div></div>
-                </div>
-                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-indigo-500 flex flex-col items-center">
-                    <h3 class="font-black text-indigo-800 mb-4">❄️ 냉장 창고</h3>
-                    <div id="dash-cold-donut" class="relative w-32 h-32 rounded-full flex items-center justify-center shadow-inner mb-6 donut-ring"><div class="absolute inset-3 bg-white rounded-full flex items-center justify-center"><span class="text-2xl font-black text-indigo-600" id="dash-cold-percent">0%</span></div></div>
-                    <div class="w-full text-xs font-bold text-slate-600 space-y-2"><div class="flex justify-between"><span>수용량</span><span>116</span></div><div class="flex justify-between text-indigo-600"><span>적재</span><span id="dash-cold-occ">0</span></div><div class="flex justify-between text-emerald-600"><span>빈 렉</span><span id="dash-cold-empty">0</span></div></div>
-                </div>
-                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center">
-                    <h3 class="font-black text-emerald-800 mb-4">🏭 생산 현장</h3>
-                    <div id="dash-floor-donut" class="relative w-32 h-32 rounded-full flex items-center justify-center shadow-inner mb-6 donut-ring"><div class="absolute inset-3 bg-white rounded-full flex items-center justify-center"><span class="text-2xl font-black text-emerald-600" id="dash-floor-percent">0%</span></div></div>
-                    <div class="w-full text-xs font-bold text-slate-600 space-y-2"><div class="flex justify-between"><span>수용량</span><span>60</span></div><div class="flex justify-between text-emerald-600"><span>적재</span><span id="dash-floor-occ">0</span></div><div class="flex justify-between text-blue-600"><span>빈 렉</span><span id="dash-floor-empty">0</span></div></div>
+        <div id="view-dashboard" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 overflow-auto z-10 bg-slate-100">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 space-y-2 md:space-y-0">
+                <h1 class="text-2xl md:text-3xl font-black text-slate-800">물류 대시보드</h1>
+                <div class="flex items-center space-x-2 bg-white p-2 rounded-lg shadow-sm border border-slate-200">
+                    <span class="text-xs font-bold text-slate-500">소모원가 조회기간:</span>
+                    <select id="dash-period" onchange="updateDashboard()" class="border-none font-bold text-rose-600 outline-none cursor-pointer bg-transparent">
+                        <option value="daily">일간</option>
+                        <option value="weekly">주간</option>
+                        <option value="monthly">월간</option>
+                    </select>
                 </div>
             </div>
-            <div id="admin-finance-panel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="bg-yellow-50 p-6 rounded-2xl border border-yellow-200 shadow-md"><h3 class="text-yellow-800 font-black mb-4">💰 재고 자산 (추정)</h3><div class="flex justify-between text-xl font-black text-yellow-900"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div></div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6">
+                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-orange-500 flex flex-col items-center">
+                    <h3 class="font-black text-orange-800 text-lg mb-4">☀️ 실온 창고</h3>
+                    <div class="relative w-32 h-32 rounded-full donut-ring flex items-center justify-center shadow-inner mb-6" id="dash-room-donut" style="background: conic-gradient(#f97316 0%, #e2e8f0 0%);">
+                        <div class="absolute inset-3 bg-white rounded-full flex items-center justify-center shadow-sm">
+                            <span class="text-2xl font-black text-orange-600" id="dash-room-percent">0%</span>
+                        </div>
+                    </div>
+                    <div class="w-full space-y-3 text-sm">
+                        <div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-room-total">0</span></div>
+                        <div class="flex justify-between text-orange-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-room-occ">0</span></div>
+                        <div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-room-empty">0</span></div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-indigo-500 flex flex-col items-center">
+                    <h3 class="font-black text-indigo-800 text-lg mb-4">❄️ 냉장 창고</h3>
+                    <div class="relative w-32 h-32 rounded-full donut-ring flex items-center justify-center shadow-inner mb-6" id="dash-cold-donut" style="background: conic-gradient(#6366f1 0%, #e2e8f0 0%);">
+                        <div class="absolute inset-3 bg-white rounded-full flex items-center justify-center shadow-sm">
+                            <span class="text-2xl font-black text-indigo-600" id="dash-cold-percent">0%</span>
+                        </div>
+                    </div>
+                    <div class="w-full space-y-3 text-sm">
+                        <div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-cold-total">0</span></div>
+                        <div class="flex justify-between text-indigo-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-cold-occ">0</span></div>
+                        <div class="flex justify-between text-emerald-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-cold-empty">0</span></div>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-md border-t-4 border-emerald-500 flex flex-col items-center">
+                    <h3 class="font-black text-emerald-800 text-lg mb-4">🏭 생산 현장</h3>
+                    <div class="relative w-32 h-32 rounded-full donut-ring flex items-center justify-center shadow-inner mb-6" id="dash-floor-donut" style="background: conic-gradient(#10b981 0%, #e2e8f0 0%);">
+                        <div class="absolute inset-3 bg-white rounded-full flex items-center justify-center shadow-sm">
+                            <span class="text-2xl font-black text-emerald-600" id="dash-floor-percent">0%</span>
+                        </div>
+                    </div>
+                    <div class="w-full space-y-3 text-sm">
+                        <div class="flex justify-between text-slate-600"><span class="font-bold">총 수용량</span><span class="font-black" id="dash-floor-total">0</span></div>
+                        <div class="flex justify-between text-emerald-600"><span class="font-bold">적재 볼륨</span><span class="font-black" id="dash-floor-occ">0</span></div>
+                        <div class="flex justify-between text-blue-600"><span class="font-bold">빈 렉 수</span><span class="font-black" id="dash-floor-empty">0</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-finance-panel" class="hidden grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-yellow-50 p-6 rounded-2xl shadow-md border border-yellow-200">
+                    <h3 class="text-yellow-800 font-black text-lg mb-4 flex items-center">💰 재고 자산 (현재 기준)</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>❄️ 냉장 자산</span><span id="dash-val-cold">0 원</span></div>
+                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>☀️ 실온 자산</span><span id="dash-val-room">0 원</span></div>
+                        <div class="flex justify-between items-center text-sm font-bold text-yellow-700 border-b border-yellow-200 pb-2"><span>🏭 현장 자산</span><span id="dash-val-floor">0 원</span></div>
+                        <div class="flex justify-between items-center text-xl font-black text-yellow-900 pt-2"><span>총 자산 가치</span><span id="dash-val-total">0 원</span></div>
+                    </div>
+                </div>
+                <div class="bg-rose-50 p-6 rounded-2xl shadow-md border border-rose-200 flex flex-col justify-center text-center">
+                    <h3 class="text-rose-800 font-black text-lg mb-2">💸 선택 기간 소모 원가 (출고)</h3>
+                    <div class="text-4xl font-black text-rose-600 my-4" id="dash-cost-out">0 원</div>
+                    <div class="text-sm text-rose-500 font-bold bg-white w-fit mx-auto px-4 py-1 rounded-full border border-rose-200 shadow-sm" id="dash-cost-label">일간 기준</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-products" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-auto z-10">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 shrink-0 space-y-4 md:space-y-0">
+                <div class="flex space-x-2 md:space-x-4 w-full md:w-auto overflow-x-auto custom-scrollbar">
+                    <button onclick="switchProductTab('fp')" id="tab-btn-fp" class="whitespace-nowrap text-lg md:text-2xl font-black text-indigo-700 border-b-4 border-indigo-700 pb-1 px-2 transition-colors">제품 마스터</button>
+                    <button onclick="switchProductTab('pm')" id="tab-btn-pm" class="whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">자재 마스터</button>
+                    <button onclick="switchProductTab('bom')" id="tab-btn-bom" class="whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors">BOM 설정</button>
+                </div>
+                <div id="fp-header-btns" class="flex space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('finished-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportProductsExcel('finished')" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="fp-wipe-btn" onclick="deleteAllProducts('finished')" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
+                <div id="pm-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('product-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportProductsExcel('materials')" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="pm-wipe-btn" onclick="deleteAllProducts('materials')" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
+                <div id="bom-header-btns" class="hidden space-x-2 w-full md:w-auto justify-end"><button onclick="if(loginMode==='viewer') return alert('뷰어 모드에서는 사용할 수 없습니다.'); document.getElementById('bom-upload').click()" class="bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 py-2 px-3 rounded-lg shadow-sm hover:bg-emerald-100 transition-colors text-xs md:text-sm">엑셀 업로드</button><button onclick="exportBomExcel()" class="bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 py-2 px-3 rounded-lg shadow-sm hover:bg-indigo-100 transition-colors text-xs md:text-sm">양식 다운</button><button id="bom-wipe-btn" onclick="deleteAllBom()" class="hidden bg-rose-50 text-rose-700 font-bold border border-rose-200 py-2 px-3 rounded-lg shadow-sm hover:bg-rose-100 transition-colors text-xs md:text-sm">일괄 삭제</button></div>
+            </div>
+            
+            <div id="subview-fp" class="flex flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
+                <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit overflow-y-auto custom-scrollbar max-h-full">
+                    <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="fp-form-title">신규 완제품 추가</h2>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="fp-cat" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">제품명</label><input type="text" id="fp-name" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">비고(생산처)</label><input type="text" id="fp-supplier" placeholder="자체생산" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
+                    <div class="flex space-x-2 mb-4"><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">일간출고량</label><input type="number" id="fp-usage" value="0" class="w-full border border-slate-300 rounded p-2 text-sm"></div><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">1P당 수량</label><input type="number" id="fp-pallet-ea" value="1" class="w-full border border-slate-300 rounded p-2 text-sm"></div></div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">단가(매출)</label><input type="number" id="fp-price" value="0" class="w-full border border-slate-300 rounded p-2 mb-6 text-sm">
+                    <button id="fp-submit-btn" onclick="submitProduct('finished')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">등록하기</button><button id="fp-cancel-btn" onclick="cancelEdit('finished')" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">수정 취소</button>
+                </div>
+                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden min-h-[300px]">
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-4 shrink-0">
+                        <select id="fp-filter-cat" onchange="renderProductMaster('finished')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 카테고리</option></select>
+                        <select id="fp-filter-sup" onchange="renderProductMaster('finished')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 생산처</option></select>
+                        <input type="text" id="fp-search" onkeyup="renderProductMaster('finished')" placeholder="제품명 검색어 입력..." class="w-full sm:w-2/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none">
+                    </div>
+                    <div class="overflow-y-auto flex-1 custom-scrollbar"><table class="w-full text-left border-collapse text-xs md:text-sm min-w-[500px]"><thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500 shadow-sm"><tr><th class="p-2">분류</th><th class="p-2">제품명</th><th class="p-2">비고</th><th class="p-2 text-right">1P수량</th><th class="p-2 text-center">관리</th></tr></thead><tbody id="fp-list" class="divide-y divide-slate-100"></tbody></table></div>
+                </div>
+            </div>
+
+            <div id="subview-pm" class="hidden flex-col md:grid-cols-3 gap-6 flex-1 min-h-0">
+                <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit overflow-y-auto custom-scrollbar max-h-full">
+                    <h2 class="font-black text-lg text-indigo-700 mb-4 border-b pb-2" id="pm-form-title">신규 자재 추가</h2>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label><input type="text" id="pm-cat" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">자재명</label><input type="text" id="pm-name" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">입고처</label><input type="text" id="pm-supplier" class="w-full border border-slate-300 rounded p-2 mb-3 text-sm">
+                    <div class="flex space-x-2 mb-4"><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">일간소모량</label><input type="number" id="pm-usage" value="0" class="w-full border border-slate-300 rounded p-2 text-sm"></div><div class="w-1/2"><label class="block text-xs font-bold text-slate-500 mb-1">1P당 수량</label><input type="number" id="pm-pallet-ea" value="1" class="w-full border border-slate-300 rounded p-2 text-sm"></div></div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">단가(매입)</label><input type="number" id="pm-price" value="0" class="w-full border border-slate-300 rounded p-2 mb-6 text-sm">
+                    <button id="pm-submit-btn" onclick="submitProduct('materials')" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors mb-2">등록하기</button><button id="pm-cancel-btn" onclick="cancelEdit('materials')" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl shadow-sm transition-colors">수정 취소</button>
+                </div>
+                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden min-h-[300px]">
+                    <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 mb-4 shrink-0">
+                        <select id="pm-filter-cat" onchange="renderProductMaster('materials')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 카테고리</option></select>
+                        <select id="pm-filter-sup" onchange="renderProductMaster('materials')" class="w-full sm:w-1/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none bg-slate-50"><option value="ALL">전체 입고처</option></select>
+                        <input type="text" id="pm-search" onkeyup="renderProductMaster('materials')" placeholder="자재명 검색어 입력..." class="w-full sm:w-2/4 border border-slate-300 rounded-lg p-2 text-sm font-bold outline-none">
+                    </div>
+                    <div class="overflow-y-auto flex-1 custom-scrollbar"><table class="w-full text-left border-collapse text-xs md:text-sm min-w-[500px]"><thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500 shadow-sm"><tr><th class="p-2">분류</th><th class="p-2">자재명</th><th class="p-2">입고처</th><th class="p-2 text-right">1P수량</th><th class="p-2 text-center">관리</th></tr></thead><tbody id="pm-list" class="divide-y divide-slate-100"></tbody></table></div>
+                </div>
+            </div>
+
+            <div id="subview-bom" class="hidden flex-col md:grid md:grid-cols-3 gap-6 flex-1 min-h-0">
+                <div class="col-span-1 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit flex flex-col">
+                    <h2 class="font-black text-lg text-emerald-700 mb-4 border-b pb-2">신규 레시피 조립</h2>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">1. 완제품 카테고리 선택</label>
+                    <select id="bom-finished-cat" onchange="updateBomFinishedDropdown()" class="w-full border-2 border-emerald-200 rounded-lg p-2 mb-3 text-sm font-black text-emerald-800 outline-none bg-emerald-50"></select>
+
+                    <label class="block text-xs font-bold text-slate-500 mb-1">2. 기준 완제품 선택</label>
+                    <select id="bom-finished" class="w-full border-2 border-emerald-200 rounded-lg p-2 mb-5 text-sm font-black text-emerald-800 outline-none bg-emerald-50"></select>
+                    
+                    <label class="block text-xs font-bold text-slate-500 mb-1">3. 구성품(자재/원란) 카테고리 및 자재 선택</label>
+                    <div class="flex flex-col space-y-2 mb-3">
+                        <select id="bom-material-cat" onchange="updateBomMaterialDropdown()" class="w-full border border-slate-300 rounded p-2 text-xs font-bold bg-slate-50"></select>
+                        <div class="flex space-x-2">
+                            <select id="bom-material" class="flex-1 border border-slate-300 rounded p-2 text-xs font-bold bg-slate-50"></select>
+                            <button onclick="addMaterialToBomCart()" class="bg-slate-600 hover:bg-slate-700 text-white font-bold px-4 rounded shadow-sm text-xs transition-colors whitespace-nowrap">담기</button>
+                        </div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg border border-slate-200 p-2 mb-6 min-h-[200px] max-h-[350px] overflow-y-auto custom-scrollbar">
+                        <div class="text-xs font-bold text-slate-500 mb-2 border-b pb-1">레시피 구성 (수량 조절)</div>
+                        <div id="bom-cart-list" class="space-y-2">
+                            <div class="text-center text-slate-400 text-xs py-4 font-bold">위에서 구성품을 추가해주세요</div>
+                        </div>
+                    </div>
+                    <button onclick="submitBomCart()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm md:text-base">조립된 레시피 일괄 저장</button>
+                </div>
+                <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col overflow-hidden min-h-[600px] md:min-h-[700px]">
+                    <h2 class="font-black text-lg text-slate-700 mb-4 shrink-0">현재 BOM (저장된 레시피)</h2>
+                    <div class="overflow-y-auto flex-1 custom-scrollbar">
+                        <table class="w-full text-left border-collapse text-xs md:text-sm min-w-[400px]">
+                            <thead class="sticky top-0 bg-white z-10 border-b-2 border-slate-200 text-slate-500 shadow-sm">
+                                <tr><th class="p-2">완제품</th><th class="p-2">자재</th><th class="p-2 text-right">수량</th><th class="p-2 text-center">관리</th></tr>
+                            </thead>
+                            <tbody id="bom-list" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-accounting" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-auto z-10">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4">
+                <h1 class="text-2xl md:text-3xl font-black text-yellow-800">매입처 정산/회계 <span class="text-base text-slate-500 hidden md:inline-block ml-2">(명세서 대조)</span></h1>
+                <div class="flex space-x-2 w-full md:w-auto">
+                    <button onclick="batchConfirmAccounting()" class="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-md text-sm transition-colors flex items-center justify-center">✅ 전체 일괄 확정</button>
+                    <button onclick="exportAccountingExcel()" class="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-md text-sm transition-colors">엑셀 다운로드</button>
+                </div>
+            </div>
+            
+            <div class="flex flex-col space-y-2 mb-4 bg-white p-5 rounded-2xl shadow-md border border-slate-200 shrink-0">
+                <div class="flex flex-wrap gap-4">
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">조회 기준</label>
+                        <select id="acc-type" onchange="toggleAccDateInput(); updateAccFilters('type')" class="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold bg-slate-50">
+                            <option value="date">일자별 조회</option>
+                            <option value="period">기간 조회 (시작~종료)</option>
+                            <option value="month">월별 조회</option>
+                        </select>
+                    </div>
+                    <div class="w-full md:w-auto flex-[2]">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">날짜/기간 선택</label>
+                        <input type="date" id="acc-date" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded-lg p-2 text-sm font-black text-indigo-700 outline-none">
+                        <div id="acc-period-wrapper" class="hidden items-center space-x-1">
+                            <input type="date" id="acc-period-start" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded-lg p-2 text-sm font-black text-indigo-700 outline-none">
+                            <span class="text-slate-500 font-bold">~</span>
+                            <input type="date" id="acc-period-end" onchange="updateAccFilters('date')" class="w-full border border-indigo-300 rounded-lg p-2 text-sm font-black text-indigo-700 outline-none">
+                        </div>
+                        <input type="month" id="acc-month" onchange="updateAccFilters('date')" class="hidden w-full border border-indigo-300 rounded-lg p-2 text-sm font-black text-indigo-700 outline-none">
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">매입처</label>
+                        <select id="acc-supplier" onchange="updateAccFilters('supplier')" class="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold"><option value="ALL">전체 매입처</option></select>
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">품목명</label>
+                        <select id="acc-item" onchange="renderAccounting()" class="w-full border border-slate-300 rounded-lg p-2 text-sm font-bold"><option value="ALL">전체 품목</option></select>
+                    </div>
+                    <div class="w-full md:w-auto flex-1">
+                        <label class="block text-[10px] font-bold text-rose-500 mb-1">정렬/그룹 방식</label>
+                        <select id="acc-group" onchange="renderAccounting()" class="w-full border-2 border-rose-300 rounded-lg p-2 text-sm font-black text-rose-700 bg-rose-50 outline-none">
+                            <option value="individual">개별 명세서 대조 (수정/확정)</option>
+                            <option value="daily_item">일자순 품목별 요약</option>
+                            <option value="supplier">업체별 누적 요약</option>
+                            <option value="item">품목별 누적 요약</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 shrink-0">
+                <div class="bg-white p-4 md:p-5 rounded-2xl shadow-md border-l-4 border-slate-700"><div class="text-[10px] md:text-xs text-slate-500 font-bold mb-1">확정 공급가액</div><div class="text-xl md:text-2xl font-black text-slate-800" id="acc-supply">0 원</div></div>
+                <div class="bg-white p-4 md:p-5 rounded-2xl shadow-md border-l-4 border-rose-500"><div class="text-[10px] md:text-xs text-rose-500 font-bold mb-1">확정 부가세(10%)</div><div class="text-xl md:text-2xl font-black text-rose-600" id="acc-tax">0 원</div></div>
+                <div class="bg-indigo-50 p-4 md:p-5 rounded-2xl shadow-md border border-indigo-200"><div class="text-[10px] md:text-xs text-indigo-600 font-bold mb-1">✅ 확정 총 합계</div><div class="text-2xl md:text-3xl font-black text-indigo-800" id="acc-total">0 원</div></div>
+                <div class="bg-orange-50 p-4 md:p-5 rounded-2xl shadow-inner border border-orange-200"><div class="text-[10px] md:text-xs text-orange-600 font-bold mb-1">⚠️ 미확정 잔액 합계</div><div class="text-2xl md:text-3xl font-black text-orange-700 animate-pulse" id="acc-unconfirmed">0 원</div></div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-y-auto overflow-x-auto flex-1 custom-scrollbar min-h-[300px]">
+                <table class="w-full text-left border-collapse min-w-[1000px]" id="accounting-table">
+                    <thead id="acc-thead" class="sticky top-0 bg-slate-50 z-10 shadow-sm border-b-2 border-slate-300">
+                    </thead>
+                    <tbody id="acc-list" class="divide-y divide-slate-100"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="view-production" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-auto z-10">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+                <h1 class="text-2xl md:text-3xl font-black text-emerald-800 mb-4 md:mb-0">생산 실적 등록 (자재 자동 출고)</h1>
+                <div class="flex space-x-2">
+                    <button onclick="exportProductionExcel()" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold py-2 px-4 rounded-lg shadow-sm text-sm transition-colors whitespace-nowrap">양식 다운</button>
+                    <button onclick="document.getElementById('production-upload').click()" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors text-sm whitespace-nowrap">엑셀 일괄 등록</button>
+                </div>
+            </div>
+            
+            <div class="flex flex-col md:flex-row gap-6 mb-8">
+                <div class="w-full md:w-1/3 bg-white p-6 rounded-2xl shadow-md border border-slate-200 h-fit">
+                    <h2 class="text-lg font-black text-slate-700 mb-4 border-b pb-2">1. 생산 실적 수동 입력</h2>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">생산할 완제품 선택</label>
+                    <select id="prod-finished-item" class="w-full border-2 border-emerald-200 rounded-lg p-3 mb-4 text-sm font-black text-emerald-800 outline-none bg-emerald-50 custom-scrollbar max-h-40"></select>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">생산 수량 (EA)</label>
+                    <input type="number" id="prod-qty" value="1" min="1" class="w-full border-2 border-slate-300 rounded-lg p-3 mb-6 text-sm font-black outline-none text-slate-700">
+                    <button onclick="calculateProductionBOM()" class="w-full bg-slate-600 hover:bg-slate-700 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm">BOM 소요량 계산</button>
+                </div>
+                
+                <div id="prod-step-2" class="w-full md:w-2/3 bg-white p-6 rounded-2xl shadow-md border border-slate-200 flex flex-col min-h-[300px]">
+                    <h2 class="text-lg font-black text-slate-700 mb-4 border-b pb-2">2. 자재 확인 및 담기 <span class="text-xs text-rose-500 ml-2">※ 대체 자재 변경 가능</span></h2>
+                    <div class="overflow-y-auto flex-1 custom-scrollbar mb-4 max-h-60">
+                        <table class="w-full text-left border-collapse text-xs md:text-sm">
+                            <thead class="sticky top-0 bg-slate-50 z-10 border-b border-slate-200 text-slate-500 shadow-sm">
+                                <tr><th class="p-2">기본 자재명</th><th class="p-2 text-right">필요량</th><th class="p-2 text-center">실제사용 (스왑)</th><th class="p-2 text-center">현장재고</th></tr>
+                            </thead>
+                            <tbody id="prod-bom-list" class="divide-y divide-slate-100">
+                                <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">좌측에서 생산할 제품을 선택해주세요.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button id="btn-add-to-prod-cart" onclick="addToProductionCart()" class="hidden w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl shadow-md transition-colors text-sm">🛒 생산 장바구니에 담기</button>
+                </div>
+            </div>
+
+            <div class="w-full bg-white p-6 rounded-2xl shadow-lg border-2 border-indigo-200 flex flex-col min-h-[250px]">
+                <h2 class="text-xl font-black text-indigo-800 mb-4 flex items-center">📦 3. 최종 생산 장바구니</h2>
+                <div class="overflow-y-auto flex-1 custom-scrollbar mb-6">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="bg-indigo-50 border-b-2 border-indigo-100 text-indigo-700 font-black">
+                            <tr><th class="p-3">완제품명</th><th class="p-3 text-right">생산수량</th><th class="p-3">사용 자재 내역</th><th class="p-3 text-center">삭제</th></tr>
+                        </thead>
+                        <tbody id="prod-cart-list" class="divide-y divide-slate-100">
+                            <tr><td colspan="4" class="p-10 text-center text-slate-400 font-bold">장바구니가 비어있습니다.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <button id="btn-execute-batch-production" onclick="executeBatchProduction()" class="hidden w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-2xl transition-all text-lg animate-bounce">✅ 장바구니 전체 생산 등록 및 현장 재고 차감</button>
             </div>
         </div>
         
-        <div id="view-products" class="hidden absolute inset-0 bg-slate-100"></div>
-        <div id="view-production" class="hidden absolute inset-0 bg-slate-100"></div>
-        <div id="view-outbound" class="hidden absolute inset-0 bg-slate-100"></div>
-        <div id="view-accounting" class="hidden absolute inset-0 bg-slate-100"></div>
+        <div id="view-outbound" class="hidden flex-col h-full w-full absolute inset-0 p-4 md:p-8 bg-slate-100 overflow-auto z-10">
+            <div class="flex justify-between items-center mb-6 shrink-0"><h1 class="text-3xl font-black text-slate-800">최종 출고 관리</h1><button onclick="exportOutboundExcel()" class="bg-rose-600 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-colors">출고 이력 엑셀</button></div>
+            <div class="bg-white p-6 rounded-2xl border shadow-md flex-1 overflow-hidden flex flex-col">
+                <div class="flex space-x-4 mb-4 shrink-0"><input type="date" id="outbound-start" class="border p-2 rounded text-sm font-bold shadow-sm"><span class="self-center">~</span><input type="date" id="outbound-end" class="border p-2 rounded text-sm font-bold shadow-sm"><button onclick="renderOutboundUI()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold shadow-md">조회</button></div>
+                <div class="overflow-auto flex-1 custom-scrollbar"><table class="w-full text-left text-sm border-collapse min-w-[800px]"><thead class="sticky top-0 bg-slate-50 border-b-2 text-slate-500 shadow-sm z-10"><tr><th class="p-3">출고일시</th><th class="p-3">품목명</th><th class="p-3">카테고리</th><th class="p-3 text-right">수량(EA)</th><th class="p-3">출고지(렉)</th><th class="p-3 text-center">상태</th></tr></thead><tbody id="outbound-history-list" class="divide-y"></tbody></table></div>
+            </div>
+        </div>
+
     </main>
 
-    <aside id="right-sidebar" class="hidden fixed md:relative bottom-16 md:bottom-0 right-0 w-full md:w-80 h-[60vh] md:h-full bg-white border-t md:border-l border-slate-300 flex flex-col shadow-lg z-40 shrink-0">
-        <div class="p-4 border-b bg-slate-50 flex justify-between items-center"><h2 class="text-lg font-black text-slate-800">상세 정보</h2><button onclick="closeInfoPanel()" class="md:hidden text-slate-500 font-bold px-2 py-1 bg-slate-200 rounded text-xs">닫기</button></div>
-        <div class="p-4 flex-1 overflow-y-auto custom-scrollbar" id="info-panel"></div>
+    <aside id="right-sidebar" class="hidden fixed md:relative bottom-16 md:bottom-0 right-0 w-full md:w-80 h-[60vh] md:h-full bg-white border-t md:border-l border-slate-300 flex-col shadow-[0_-10px_20px_rgba(0,0,0,0.15)] md:shadow-lg z-40 shrink-0 transition-all">
+        <div class="p-3 md:p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center"><h2 class="text-base md:text-lg font-black text-slate-800 flex items-center">위치 상세 정보</h2><button onclick="closeInfoPanel()" class="md:hidden text-slate-500 font-bold px-2 py-1 bg-slate-200 rounded text-xs">닫기</button></div>
+        <div class="p-4 md:p-6 flex-1 overflow-y-auto pb-20 md:pb-6 custom-scrollbar" id="info-panel"><div class="text-center text-slate-400 py-10 mt-10">도면에서 위치를 선택해주세요</div></div>
     </aside>
 
-    <div id="admin-pw-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-50 items-center justify-center z-[200]">
-        <div class="bg-white p-6 rounded-xl shadow-2xl w-80 flex flex-col"><h2 class="text-lg font-black mb-4 text-center">관리자 비밀번호</h2><input type="password" id="admin-pw-input" class="w-full border-2 rounded-lg p-3 text-center mb-4 outline-none focus:border-indigo-500" onkeypress="if(event.key==='Enter') submitAdminPassword()"><div class="flex space-x-3"><button onclick="closeAdminModal()" class="flex-1 bg-slate-200 font-bold py-2.5 rounded-lg">취소</button><button onclick="submitAdminPassword()" class="flex-1 bg-indigo-600 text-white font-bold py-2.5 rounded-lg shadow-md">확인</button></div></div>
+    <div id="history-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-50 items-center justify-center z-[200]">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col w-[90%] max-w-md max-h-[80vh]">
+            <div class="flex justify-between items-center mb-4 border-b pb-2">
+                <h2 class="text-lg font-black text-indigo-800" id="history-modal-title">전체 기록</h2>
+                <button onclick="closeHistoryModal()" class="text-slate-500 font-bold text-2xl hover:text-rose-500">&times;</button>
+            </div>
+            <div class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-2" id="history-modal-content"></div>
+        </div>
     </div>
-    
-    <div id="history-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-50 items-center justify-center z-[200]"><div class="bg-white p-6 rounded-2xl shadow-2xl w-[90%] max-w-md max-h-[80vh] flex flex-col"><div class="flex justify-between items-center border-b pb-2 mb-4"><h2 class="text-lg font-black text-indigo-800" id="history-modal-title">전체 기록</h2><button onclick="closeHistoryModal()" class="text-slate-500 font-bold text-2xl">&times;</button></div><div id="history-modal-content" class="overflow-y-auto space-y-2 custom-scrollbar"></div></div></div>
+
+    <div id="admin-pw-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-50 items-center justify-center z-[200]">
+        <div class="bg-white p-6 rounded-xl shadow-2xl flex flex-col w-80 transform transition-all scale-95 opacity-0 animate-[popup_0.2s_ease-out_forwards]">
+            <h2 class="text-lg font-black text-slate-800 mb-4 text-center">관리자 비밀번호 입력</h2>
+            <input type="password" id="admin-pw-input" placeholder="비밀번호 입력" class="w-full border-2 border-slate-300 rounded-lg p-3 text-center font-black tracking-widest mb-4 outline-none focus:border-indigo-500" onkeypress="if(event.key==='Enter') submitAdminPassword()">
+            <div class="flex space-x-3">
+                <button onclick="closeAdminModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2.5 rounded-lg transition-colors">취소</button>
+                <button onclick="submitAdminPassword()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg shadow-md transition-colors">확인</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-order-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[250]">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col w-[400px] transform transition-all scale-95 opacity-0 animate-[popup_0.2s_ease-out_forwards]">
+            <h2 class="text-xl font-black text-indigo-800 mb-4 border-b pb-2">발주 내역 수정</h2>
+            <input type="hidden" id="edit-order-id">
+            <input type="hidden" id="edit-order-supplier">
+            
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">발주처 (입고처)</label>
+                <div id="edit-order-supplier-text" class="text-sm font-black text-rose-600 bg-rose-50 p-2.5 rounded border border-rose-200"></div>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label>
+                <select id="edit-order-cat" onchange="updateEditOrderCategoryDropdown()" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-bold bg-slate-50 outline-none focus:border-indigo-500"></select>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label>
+                <select id="edit-order-item" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-black text-indigo-800 bg-indigo-50 outline-none focus:border-indigo-500"></select>
+            </div>
+            
+            <div class="flex space-x-3 mb-6">
+                <div class="w-1/2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">수량 (EA)</label>
+                    <input type="number" id="edit-order-qty" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-black text-indigo-700 outline-none focus:border-indigo-500">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">도착 예정일</label>
+                    <input type="date" id="edit-order-date" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-bold text-blue-700 outline-none focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex space-x-3">
+                <button onclick="closeEditOrderModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button>
+                <button onclick="submitEditOrder()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">수정 완료</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-acc-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[250]">
+        <div class="bg-white p-6 rounded-2xl shadow-2xl flex flex-col w-[400px] transform transition-all scale-95 opacity-0 animate-[popup_0.2s_ease-out_forwards]">
+            <h2 class="text-xl font-black text-indigo-800 mb-4 border-b pb-2">명세서 대조 내역 수정</h2>
+            <input type="hidden" id="edit-acc-idx">
+
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">매입처</label>
+                <div id="edit-acc-supplier" class="text-sm font-black text-rose-600 bg-rose-50 p-2.5 rounded border border-rose-200"></div>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label>
+                <select id="edit-acc-cat" onchange="updateEditAccCategoryDropdown()" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-bold bg-slate-50 outline-none focus:border-indigo-500"></select>
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-500 mb-1">품목명</label>
+                <select id="edit-acc-item" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-black text-indigo-800 bg-indigo-50 outline-none focus:border-indigo-500"></select>
+            </div>
+
+            <div class="flex space-x-3 mb-4">
+                <div class="w-1/2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">총 수량 (EA)</label>
+                    <input type="number" id="edit-acc-qty" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-black text-indigo-700 outline-none focus:border-indigo-500">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">입고일자</label>
+                    <input type="date" id="edit-acc-date" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-bold text-blue-700 outline-none focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex space-x-3 mb-6">
+                <div class="w-1/2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">단가 (원)</label>
+                    <input type="number" id="edit-acc-price" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-black text-emerald-700 outline-none focus:border-indigo-500">
+                </div>
+                <div class="w-1/2">
+                    <label class="block text-xs font-bold text-slate-500 mb-1">조정액 (원)</label>
+                    <input type="number" id="edit-acc-adj" class="w-full border-2 border-slate-300 rounded p-2.5 text-sm font-black text-rose-700 outline-none focus:border-indigo-500" placeholder="예: -5000">
+                </div>
+            </div>
+
+            <div class="flex space-x-3">
+                <button onclick="closeEditAccModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button>
+                <button onclick="submitEditAccModal()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">수정 완료</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="direct-input-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]"></div>
+    <div id="split-acc-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]"></div>
 
     <script src="js_global.js"></script>
     <script src="js_inventory.js"></script>
