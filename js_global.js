@@ -1,3 +1,6 @@
+// ==========================================
+// 전역 변수 (Global Variables) - 절대 삭제 금지
+// ==========================================
 let globalOccupancy = []; 
 let productMaster = []; 
 let finishedProductMaster = []; 
@@ -24,7 +27,7 @@ const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') { loginMode = 'viewer'; alert("뷰어 모드로 접속되었습니다."); } 
-    else if (pw === '11111') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
+    else if (pw === '00700') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
     else { alert("비밀번호가 틀렸습니다."); return; }
     
     document.getElementById('login-screen').style.display = 'none';
@@ -40,7 +43,6 @@ async function load() {
         const SUPABASE_URL = "https://sxdldhjmatzzyfufavrm.supabase.co";
         const SUPABASE_KEY = "sb_publishable_gIXjo5pyqbDO55wgJq1Yxg_RbCEYEYu";
 
-        // 🚨 가장 완벽하게 작동했던 기존 Supabase 직접 연결(5000줄 제한 해제) 코드로 100% 원복
         const [occRes, prodRes, fpRes, bomRes, histRes] = await Promise.all([ 
             fetch('/api/inventory?t=' + ts), 
             fetch('/api/products?t=' + ts), 
@@ -75,12 +77,56 @@ function renderAll() {
     try { if(typeof renderDailyInventory === 'function') renderDailyInventory(); } catch(e){}
 }
 
+// ==========================================
+// 🚨 여기서부터 관리자 모드 및 정산/회계 해제 로직 완벽 복구
+// ==========================================
 function adminLogin() {
-    if(isAdmin) { isAdmin = false; alert("관리자 모드가 해제되었습니다."); updateDashboard(); return; }
-    const pw = prompt("관리자 비밀번호를 입력하세요:"); 
-    if(pw === "123456789*") { isAdmin = true; alert("관리자 권한이 활성화되었습니다."); load(); } 
-    else if (pw !== null) { alert("비밀번호가 틀렸습니다."); }
+    if(isAdmin) { 
+        isAdmin = false; 
+        alert("관리자 모드가 해제되었습니다."); 
+        document.querySelectorAll('.target-accounting').forEach(el => el.classList.add('hidden'));
+        let pnl = document.getElementById('admin-finance-panel'); 
+        if(pnl) pnl.classList.add('hidden');
+        showView('dashboard'); 
+        return; 
+    }
+    
+    let modal = document.getElementById('admin-pw-modal');
+    if(modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        let pwInput = document.getElementById('admin-pw-input');
+        if(pwInput) { pwInput.value = ''; pwInput.focus(); }
+    } else {
+        const pw = prompt("관리자 비밀번호를 입력하세요:"); 
+        if(pw === "123456789*") grantAdmin(); 
+        else if (pw !== null) alert("비밀번호가 틀렸습니다.");
+    }
 }
+
+function closeAdminModal() {
+    let modal = document.getElementById('admin-pw-modal');
+    if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+}
+
+function submitAdminPassword() {
+    let pwInput = document.getElementById('admin-pw-input');
+    if(pwInput && pwInput.value === "123456789*") {
+        grantAdmin();
+        closeAdminModal();
+    } else {
+        alert("비밀번호가 틀렸습니다.");
+    }
+}
+
+function grantAdmin() {
+    isAdmin = true; 
+    alert("관리자 권한이 활성화되었습니다."); 
+    // 숨겨져 있던 정산/회계 탭 스위치 켜기
+    document.querySelectorAll('.target-accounting').forEach(el => el.classList.remove('hidden'));
+    load(); 
+}
+// ==========================================
 
 function showView(viewName) {
     movingItem = null;
@@ -102,7 +148,10 @@ function showView(viewName) {
     if(viewName === 'products') { if(typeof renderProductMaster === 'function') { renderProductMaster('finished'); switchProductTab('fp'); } } 
     else if(viewName === 'order') { if(typeof switchOrderTab === 'function') switchOrderTab(currentOrderTab); } 
     else if(viewName === 'dashboard') updateDashboard(); 
-    else if(viewName === 'accounting') { if(typeof renderAccounting === 'function') renderAccounting(); } 
+    else if(viewName === 'accounting') { 
+        if(!isAdmin) { alert("관리자 권한이 필요합니다."); showView('dashboard'); return; }
+        if(typeof renderAccounting === 'function') renderAccounting(); 
+    } 
     else if(viewName === 'outbound') { if(typeof renderOutboundUI === 'function') renderOutboundUI(); } 
 }
 
@@ -151,24 +200,30 @@ function updateDashboard() {
                 totalAssetValue += (item.quantity * (pInfo ? (pInfo.unit_price || 0) : 0));
             });
             let dt = document.getElementById('dash-val-total'); if(dt) dt.innerText = totalAssetValue.toLocaleString() + ' 원';
+        } else {
+            let pnl = document.getElementById('admin-finance-panel'); if(pnl) pnl.classList.add('hidden');
         }
     } catch (e) { console.error(e); }
 }
 
+function getAllLocationIds() {
+    let ids = [];
+    for(let i=1; i<=30; i++) ids.push(`W-${i.toString().padStart(2, '0')}`);
+    layoutRoom.forEach(col => { if(!col.aisle && !col.gap) { for(let r=1; r<=col.cols; r++) { let base = `R-${col.id}-${r.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); } } });
+    for(let c=1; c<=10; c++) { let base = `R-K-${c.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); }
+    layoutCold.forEach(col => { if(!col.aisle && !col.gap) { for(let r=1; r<=col.cols; r++) { let base = `C-${col.id}-${r.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); } } });
+    for(let c=1; c<=8; c++) { let base = `C-I-${c.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); }
+    ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => { let cols = parseInt(localStorage.getItem(area + '_cols')) || 10; for(let r=1; r<=cols; r++) ids.push(`${area}-${r.toString().padStart(2, '0')}`); });
+    return ids;
+}
+
 function exportPhysicalCountExcel() {
     try {
-        let ids = [];
-        for(let i=1; i<=30; i++) ids.push(`W-${i.toString().padStart(2, '0')}`);
-        layoutRoom.forEach(col => { if(!col.aisle && !col.gap) { for(let r=1; r<=col.cols; r++) { let base = `R-${col.id}-${r.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); } } });
-        for(let c=1; c<=10; c++) { let base = `R-K-${c.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); }
-        layoutCold.forEach(col => { if(!col.aisle && !col.gap) { for(let r=1; r<=col.cols; r++) { let base = `C-${col.id}-${r.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); } } });
-        for(let c=1; c<=8; c++) { let base = `C-I-${c.toString().padStart(2, '0')}`; ids.push(base); ids.push(base + "-2F"); }
-        ['FL-1F-R', 'FL-1F-M', 'FL-1F-P', 'FL-2F-M', 'FL-2F-P', 'FL-3F-G'].forEach(area => { let cols = parseInt(localStorage.getItem(area + '_cols')) || 10; for(let r=1; r<=cols; r++) ids.push(`${area}-${r.toString().padStart(2, '0')}`); });
-
-        const occMap = {}; 
+        const allLocs = getAllLocationIds();
+        const occMap = {};
         globalOccupancy.forEach(item => { if(!occMap[item.location_id]) occMap[item.location_id] = []; occMap[item.location_id].push(item); });
         
-        let wsData = ids.map(locId => {
+        let wsData = allLocs.map(locId => {
             const items = occMap[locId];
             if (items && items.length > 0) {
                 return items.map(item => ({ "위치": locId, "카테고리": item.category || "", "품목명": item.item_name || "", "입고처": item.remarks || "기본입고처", "전산수량(EA)": item.quantity, "실사수량(EA)": "", "차이": "", "비고": "" }));
@@ -180,7 +235,7 @@ function exportPhysicalCountExcel() {
         ws['!cols'] = [{wch: 15}, {wch: 15}, {wch: 25}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 10}, {wch: 20}];
         XLSX.utils.book_append_sheet(wb, ws, "재고실사양식(전체)"); 
         XLSX.writeFile(wb, `한스팜_전체렉실사양식_${new Date().toISOString().split('T')[0]}.xlsx`);
-    } catch (e) { alert("오류"); }
+    } catch (e) { alert("엑셀 추출 오류가 발생했습니다."); }
 }
 
 function exportAllHistoryExcel() {
@@ -189,7 +244,7 @@ function exportAllHistoryExcel() {
         let wsData = sorted.map(h => ({ "일시": new Date(h.created_at).toLocaleString(), "위치": h.location_id, "작업": h.action_type, "카테고리": h.category, "품목명": h.item_name, "수량(EA)": h.quantity, "비고": h.remarks }));
         const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wsData), "히스토리"); 
         XLSX.writeFile(wb, `한스팜_히스토리_${new Date().toISOString().split('T')[0]}.xlsx`);
-    } catch(e) { alert("오류"); }
+    } catch(e) { alert("오류 발생"); }
 }
 
 function showHistoryModal(locId) {
@@ -203,6 +258,7 @@ function showHistoryModal(locId) {
     let contentEl = document.getElementById('history-modal-content'); if(contentEl) contentEl.innerHTML = html || '<div class="text-center text-slate-400">기록 없음</div>';
     let modalEl = document.getElementById('history-modal'); if(modalEl) { modalEl.classList.remove('hidden'); modalEl.classList.add('flex'); }
 }
+
 function closeHistoryModal() { let modalEl = document.getElementById('history-modal'); if(modalEl) { modalEl.classList.add('hidden'); modalEl.classList.remove('flex'); } }
 function toggleRightPanel() { let rs = document.getElementById('right-sidebar'); if(!rs) return; isRightPanelVisible = !isRightPanelVisible; if(isRightPanelVisible) { rs.classList.remove('hidden'); rs.classList.add('flex'); } else { rs.classList.add('hidden'); rs.classList.remove('flex'); } }
 function closeInfoPanel() { let rs = document.getElementById('right-sidebar'); if(rs) { rs.classList.add('hidden'); rs.classList.remove('flex'); isRightPanelVisible = false; } selectedCellId = null; movingItem = null; renderMap(); }
