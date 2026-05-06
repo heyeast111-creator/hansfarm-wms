@@ -542,27 +542,33 @@
             </div>
         </div>
 
-        <!-- 📱 모바일 전용 하단 메뉴바 (이사 완료!) -->
-        <nav id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-300 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-[150] flex justify-around p-2 pb-4">
+       <!-- 📱 모바일 전용 하단 메뉴바 (다국어 i18n 적용 완료) -->
+        <nav id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-300 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-[150] flex justify-around p-2 pb-4 relative">
+            
+            <!-- 🌐 모바일 언어 변경 플로팅 버튼 (메뉴바 우측 상단에 둥둥 떠있게 배치) -->
+            <button id="lang-toggle-btn" onclick="toggleLanguage()" class="absolute -top-14 right-4 bg-slate-800 text-white px-4 py-2 rounded-full shadow-lg text-xs font-black z-[160] transition-transform active:scale-95">
+                🌐 EN
+            </button>
+
             <button onclick="showView('dashboard')" class="nav-btn-mo target-dashboard flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
                 <span class="text-lg mb-0.5">📊</span>
-                <span class="font-bold">대시보드</span>
+                <span class="font-bold" data-i18n="nav_dashboard">대시보드</span>
             </button>
             <button onclick="showView('order')" class="nav-btn-mo target-order flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
                 <span class="text-lg mb-0.5">📦</span>
-                <span class="font-bold">재고/발주</span>
+                <span class="font-bold" data-i18n="nav_order">재고/발주</span>
             </button>
             <button onclick="showView('production')" class="nav-btn-mo target-production flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
                 <span class="text-lg mb-0.5">🏭</span>
-                <span class="font-bold">생산관리</span>
+                <span class="font-bold" data-i18n="nav_prod">생산관리</span>
             </button>
             <button onclick="showView('outbound')" class="nav-btn-mo target-outbound flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
                 <span class="text-lg mb-0.5">🚚</span>
-                <span class="font-bold">출고관리</span>
+                <span class="font-bold" data-i18n="nav_outbound">출고관리</span>
             </button>
             <button onclick="showView('products')" class="nav-btn-mo target-products flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
                 <span class="text-lg mb-0.5">📝</span>
-                <span class="font-bold">품목관리</span>
+                <span class="font-bold" data-i18n="nav_items">품목관리</span>
             </button>
         </nav>
     </main>
