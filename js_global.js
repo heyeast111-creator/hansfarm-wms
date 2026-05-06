@@ -31,7 +31,7 @@ const layoutCold = [ { id: 'F', cols: 12 }, { aisle: true }, { id: 'E', cols: 10
 function siteLogin() {
     const pw = document.getElementById('site-pw').value;
     if (pw === '0000') { loginMode = 'viewer'; alert("뷰어 모드로 접속되었습니다."); } 
-    else if (pw === '00700') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
+    else if (pw === '11111') { loginMode = 'editor'; alert("일반 사용자 모드로 접속되었습니다."); } 
     else { alert("비밀번호가 틀렸습니다."); return; }
     
     document.getElementById('login-screen').style.display = 'none';
