@@ -667,5 +667,28 @@
     <script src="js_accounting.js"></script>
     <script src="js_production.js"></script>
     <script src="js_outbound.js"></script> 
+    <!-- 📱 모바일 전용 하단 메뉴바 (md:hidden으로 모바일에서만 노출) -->
+    <nav id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-300 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-[150] flex justify-around p-2 pb-safe">
+        <button onclick="showView('dashboard')" class="nav-btn-mo target-dashboard flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">📊</span>
+            <span class="font-bold">대시보드</span>
+        </button>
+        <button onclick="showView('order')" class="nav-btn-mo target-order flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">📦</span>
+            <span class="font-bold">재고/발주</span>
+        </button>
+        <button onclick="showView('production')" class="nav-btn-mo target-production flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">🏭</span>
+            <span class="font-bold">생산관리</span>
+        </button>
+        <button onclick="showView('outbound')" class="nav-btn-mo target-outbound flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">🚚</span>
+            <span class="font-bold">출고관리</span>
+        </button>
+        <button onclick="showView('products')" class="nav-btn-mo target-products flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">📝</span>
+            <span class="font-bold">품목관리</span>
+        </button>
+    </nav>
 </body>
 </html>
