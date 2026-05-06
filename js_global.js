@@ -333,25 +333,33 @@ function closeInfoPanel() {
 // ==========================================
 let currentLang = 'ko';
 
-// 미니 번역 사전
+// 💡 확장된 미니 번역 사전 (상단 탭, 공통 버튼, 팝업 텍스트 등 모두 포함)
 const langDict = {
     'ko': {
-        'nav_dashboard': '대시보드',
-        'nav_order': '재고/발주',
-        'nav_prod': '생산관리',
-        'nav_outbound': '출고관리',
-        'nav_items': '품목관리'
+        'nav_dashboard': '대시보드', 'nav_order': '재고/발주', 'nav_prod': '생산관리', 'nav_outbound': '출고관리', 'nav_items': '품목관리',
+        'tab_map': '렉맵', 'tab_search': '재고조회', 'tab_history': '발주조회', 'tab_daily': '📅 일자별 재고', 'tab_safety': '안전재고설정',
+        'zone_room': '실온 (Room)', 'zone_cold': '냉장 (Cold)', 'zone_floor': '생산 현장',
+        'btn_panel': '우측 패널 켬/끔', 'btn_wait': '대기장', 'btn_scan': '스캔창', 'btn_hist_excel': '히스토리 엑셀', 'btn_close_inv': '재고마감',
+        'lbl_aisle': '통로 (Aisle)',
+        'btn_floor_out': '현장 반출', 'btn_move': '렉 이동', 'btn_final_out': '최종 출고', 'btn_split': '분할',
+        'lbl_supplier': '입고처', 'lbl_empty': '비어있음'
     },
     'en': {
-        'nav_dashboard': 'Dashboard',
-        'nav_order': 'Inventory',
-        'nav_prod': 'Production',
-        'nav_outbound': 'Outbound',
-        'nav_items': 'Products'
+        'nav_dashboard': 'Dashboard', 'nav_order': 'Inventory', 'nav_prod': 'Production', 'nav_outbound': 'Outbound', 'nav_items': 'Products',
+        'tab_map': 'Rack Map', 'tab_search': 'Search', 'tab_history': 'Orders', 'tab_daily': '📅 Daily Stock', 'tab_safety': 'Safety Stock',
+        'zone_room': 'Room Temp', 'zone_cold': 'Cold Storage', 'zone_floor': 'Prod. Site',
+        'btn_panel': 'Toggle Panel', 'btn_wait': 'Waiting Area', 'btn_scan': 'Scan Tool', 'btn_hist_excel': 'History Excel', 'btn_close_inv': 'Close Inv.',
+        'lbl_aisle': 'Aisle',
+        'btn_floor_out': 'To Floor', 'btn_move': 'Move Rack', 'btn_final_out': 'Final Outbound', 'btn_split': 'Split',
+        'lbl_supplier': 'Supplier', 'lbl_empty': 'Empty'
     }
 };
 
-// 💡 버튼을 누르면 즉시 언어를 바꿔주는 스위치 함수
+// JS 내부에서 동적으로 텍스트를 바꿀 때 쓰는 헬퍼 함수
+function t(key) {
+    return (langDict[currentLang] && langDict[currentLang][key]) ? langDict[currentLang][key] : key;
+}
+
 function toggleLanguage() {
     currentLang = currentLang === 'ko' ? 'en' : 'ko';
     
@@ -367,5 +375,12 @@ function toggleLanguage() {
     const btn = document.getElementById('lang-toggle-btn');
     if(btn) {
         btn.innerText = currentLang === 'ko' ? '🌐 EN' : '🌐 KO';
+    }
+
+    // 💡 렉맵 통로 글자나 현재 열려있는 우측 팝업도 언어에 맞게 즉시 새로고침
+    if(typeof renderMap === 'function') renderMap();
+    if(selectedCellId && typeof clickCell === 'function') {
+        const cellEl = document.getElementById('cell-' + selectedCellId);
+        clickCell(cellEl ? cellEl.innerText : selectedCellId, selectedCellId);
     }
 }
