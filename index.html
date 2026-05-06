@@ -540,6 +540,29 @@
                 <div class="flex space-x-4 mb-4 shrink-0"><input type="date" id="outbound-start" class="border p-2 rounded text-sm font-bold shadow-sm"><span class="self-center">~</span><input type="date" id="outbound-end" class="border p-2 rounded text-sm font-bold shadow-sm"><button onclick="renderOutboundUI()" class="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold shadow-md">조회</button></div>
                 <div class="overflow-auto flex-1 custom-scrollbar"><table class="w-full text-left text-sm border-collapse min-w-[800px]"><thead class="sticky top-0 bg-slate-50 border-b-2 text-slate-500 shadow-sm z-10"><tr><th class="p-3">출고일시</th><th class="p-3">품목명</th><th class="p-3">카테고리</th><th class="p-3 text-right">수량(EA)</th><th class="p-3">출고지(렉)</th><th class="p-3 text-center">상태</th></tr></thead><tbody id="outbound-history-list" class="divide-y"></tbody></table></div>
             </div>
+              <!-- 📱 모바일 전용 하단 메뉴바 (md:hidden으로 모바일에서만 노출) -->
+    <nav id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-300 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-[150] flex justify-around p-2 pb-safe">
+        <button onclick="showView('dashboard')" class="nav-btn-mo target-dashboard flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">📊</span>
+            <span class="font-bold">대시보드</span>
+        </button>
+        <button onclick="showView('order')" class="nav-btn-mo target-order flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">📦</span>
+            <span class="font-bold">재고/발주</span>
+        </button>
+        <button onclick="showView('production')" class="nav-btn-mo target-production flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">🏭</span>
+            <span class="font-bold">생산관리</span>
+        </button>
+        <button onclick="showView('outbound')" class="nav-btn-mo target-outbound flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">🚚</span>
+            <span class="font-bold">출고관리</span>
+        </button>
+        <button onclick="showView('products')" class="nav-btn-mo target-products flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
+            <span class="text-lg mb-0.5">📝</span>
+            <span class="font-bold">품목관리</span>
+        </button>
+    </nav>
         </div>
 
     </main>
@@ -661,29 +684,7 @@
     <div id="direct-input-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]"></div>
     <div id="split-acc-modal" class="hidden fixed inset-0 bg-slate-800 bg-opacity-60 items-center justify-center z-[260]"></div>
 
-  <!-- 📱 모바일 전용 하단 메뉴바 (md:hidden으로 모바일에서만 노출) -->
-    <nav id="mobile-nav" class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-300 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] z-[150] flex justify-around p-2 pb-safe">
-        <button onclick="showView('dashboard')" class="nav-btn-mo target-dashboard flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
-            <span class="text-lg mb-0.5">📊</span>
-            <span class="font-bold">대시보드</span>
-        </button>
-        <button onclick="showView('order')" class="nav-btn-mo target-order flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
-            <span class="text-lg mb-0.5">📦</span>
-            <span class="font-bold">재고/발주</span>
-        </button>
-        <button onclick="showView('production')" class="nav-btn-mo target-production flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
-            <span class="text-lg mb-0.5">🏭</span>
-            <span class="font-bold">생산관리</span>
-        </button>
-        <button onclick="showView('outbound')" class="nav-btn-mo target-outbound flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
-            <span class="text-lg mb-0.5">🚚</span>
-            <span class="font-bold">출고관리</span>
-        </button>
-        <button onclick="showView('products')" class="nav-btn-mo target-products flex flex-col items-center justify-center w-full py-1.5 rounded-lg text-[10px] text-slate-600 border border-transparent transition-colors">
-            <span class="text-lg mb-0.5">📝</span>
-            <span class="font-bold">품목관리</span>
-        </button>
-    </nav>
+
     
     <script src="js_global.js"></script>
     <script src="js_inventory.js"></script>
