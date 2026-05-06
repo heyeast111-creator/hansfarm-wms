@@ -327,3 +327,45 @@ function closeInfoPanel() {
     movingItem = null; 
     renderMap(); 
 }
+
+// ==========================================
+// 🌐 다국어(i18n) 지원 로직 (한국어 / 영어)
+// ==========================================
+let currentLang = 'ko';
+
+// 미니 번역 사전
+const langDict = {
+    'ko': {
+        'nav_dashboard': '대시보드',
+        'nav_order': '재고/발주',
+        'nav_prod': '생산관리',
+        'nav_outbound': '출고관리',
+        'nav_items': '품목관리'
+    },
+    'en': {
+        'nav_dashboard': 'Dashboard',
+        'nav_order': 'Inventory',
+        'nav_prod': 'Production',
+        'nav_outbound': 'Outbound',
+        'nav_items': 'Products'
+    }
+};
+
+// 💡 버튼을 누르면 즉시 언어를 바꿔주는 스위치 함수
+function toggleLanguage() {
+    currentLang = currentLang === 'ko' ? 'en' : 'ko';
+    
+    // 화면에서 data-i18n 꼬리표가 붙은 모든 글자를 찾아서 스위치!
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if(langDict[currentLang] && langDict[currentLang][key]) {
+            el.innerText = langDict[currentLang][key];
+        }
+    });
+
+    // 언어 변경 버튼 글자도 같이 변경
+    const btn = document.getElementById('lang-toggle-btn');
+    if(btn) {
+        btn.innerText = currentLang === 'ko' ? '🌐 EN' : '🌐 KO';
+    }
+}
