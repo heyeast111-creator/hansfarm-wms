@@ -29,6 +29,7 @@ function initDailyInventoryUI() {
         btn.onclick = () => switchOrderTab('daily');
         btn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors";
         btn.innerText = "📅 일자별 재고";
+        btn.setAttribute('data-i18n', 'tab_daily'); // 💡 다국어 꼬리표 추가
         tabContainer.appendChild(btn);
     }
 }
@@ -273,14 +274,14 @@ function renderMap() {
         
         // --- 실온/냉장 렌더링 ---
         let aisleText = document.getElementById('aisle-text'); 
-        if(aisleText) { aisleText.classList.remove('hidden'); aisleText.innerText = "통로 (Aisle)"; }
+        if(aisleText) { aisleText.classList.remove('hidden'); aisleText.innerText = t('lbl_aisle'); } // 💡 번역 적용
         
         const activeLayout = currentZone === '실온' ? layoutRoom : layoutCold; 
         const prefix = currentZone === '실온' ? 'R-' : 'C-'; 
 
         activeLayout.forEach(col => { 
             if (col.aisle) { 
-                vHtml += `<div class="w-10 md:w-14 shrink-0 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1"><span class="text-yellow-600 font-black tracking-widest text-[10px]" style="writing-mode: vertical-rl;">통로</span></div>`; 
+                vHtml += `<div class="w-10 md:w-14 shrink-0 h-[420px] bg-yellow-50/50 flex flex-col items-center justify-center border-x-2 border-yellow-300 shadow-inner rounded-sm mx-1"><span class="text-yellow-600 font-black tracking-widest text-[10px]" style="writing-mode: vertical-rl;">${t('lbl_aisle')}</span></div>`; // 💡 번역 적용
             } 
             else if (col.gap) { 
                 vHtml += `<div class="w-2 md:w-4 shrink-0"></div>`; 
@@ -334,7 +335,7 @@ function renderMap() {
 }
 
 // ==========================================
-// 💡 렉 클릭 & 우측 패널 액션 & 드래그앤드롭
+// 💡 [i18n 번역 적용 완료] 렉 클릭 시 우측 상세 정보 패널 출력
 // ==========================================
 async function clickCell(displayId, searchId) { 
     try {
@@ -401,12 +402,12 @@ async function clickCell(displayId, searchId) {
                 let dynPallet = getDynamicPalletCount(item);
                 let actionBtns = (loginMode !== 'viewer') ? `
                 <div class="flex space-x-2 mt-3 border-t pt-2">
-                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">현장 반출</button>
-                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">렉 이동</button>
+                    <button onclick="dispatchToFloor('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 py-1.5 rounded text-[10px] font-bold shadow-sm">${t('btn_floor_out')}</button>
+                    <button onclick="selectForMove('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}', '${item.remarks||''}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 py-1.5 rounded text-[10px] font-bold shadow-sm">${t('btn_move')}</button>
                 </div>
                 <div class="flex space-x-2 mt-2">
-                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">최종 출고</button>
-                    <button onclick="splitPallet('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks || ''}', '${item.production_date || ''}', '${item.category || ''}')" class="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-1.5 rounded text-[10px] font-bold shadow-sm">파레트 분할</button>
+                    <button onclick="processOutbound('${item.id}', '${item.item_name}', ${item.quantity}, ${dynPallet}, '${searchId}')" class="flex-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 py-1.5 rounded text-[10px] font-bold shadow-sm">${t('btn_final_out')}</button>
+                    <button onclick="splitPallet('${item.id}', '${item.item_name}', ${item.quantity}, '${searchId}', '${item.remarks || ''}', '${item.production_date || ''}', '${item.category || ''}')" class="flex-1 bg-orange-50 hover:bg-orange-100 text-orange-600 border border-orange-200 py-1.5 rounded text-[10px] font-bold shadow-sm">${t('btn_split')}</button>
                     <button onclick="editInventoryItem('${item.id}', '${item.item_name}', ${item.quantity}, '${item.production_date || ''}', '${searchId}', '${item.remarks || ''}')" class="flex-1 bg-slate-50 hover:bg-slate-200 text-slate-600 border border-slate-200 py-1.5 rounded text-[10px] font-bold shadow-sm">편집/삭제</button>
                 </div>` : '';
 
@@ -416,7 +417,7 @@ async function clickCell(displayId, searchId) {
                         <div>
                             <span class="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${item.category}</span>
                             <div class="font-black text-xs text-slate-800 mt-1">${item.item_name}</div>
-                            <div class="text-[9px] font-bold text-rose-600">입고처: ${item.remarks||'기본'}</div>
+                            <div class="text-[9px] font-bold text-rose-600">${t('lbl_supplier')}: ${item.remarks||'기본'}</div>
                         </div>
                         <div class="text-right">
                             <div class="text-sm font-bold text-indigo-600">${item.quantity.toLocaleString()} EA</div>
@@ -428,7 +429,7 @@ async function clickCell(displayId, searchId) {
                 </div>`; 
             }); 
         } else { 
-            panelHtml += `<div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 font-bold">비어있음</div>`; 
+            panelHtml += `<div class="text-center text-slate-400 py-6 bg-slate-50 rounded-lg border border-dashed border-slate-300 font-bold">${t('lbl_empty')}</div>`; 
         } 
         
         if (!searchId.startsWith('W-')) {
@@ -1306,7 +1307,7 @@ function renderSafetyStock() {
         catSelect.value = curCat; 
     }
     
-    monitoredList = monitoredList.filter(i => (curSup === 'ALL' || i.suppliers.has(curSup)) && (curCat === 'ALL' || i.category === curCat));
+    monoredList = monitoredList.filter(i => (curSup === 'ALL' || i.suppliers.has(curSup)) && (curCat === 'ALL' || i.category === curCat));
 
     if (mode === 'pallet') {
         thead.innerHTML = `<tr><th class="p-3 font-black">카테고리</th><th class="p-3 font-black">품목명 (입고처)</th><th class="p-3 font-black text-right">재고 (EA)</th><th class="p-3 font-black text-right">파레트 (P)</th><th class="p-3 font-black text-center">발주</th></tr>`;
