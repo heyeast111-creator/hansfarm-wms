@@ -10,7 +10,7 @@ function switchProductTab(tab) {
             
             if(btn) btn.className = "whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors";
             
-            // 💡 [핵심 패치] Tailwind의 md:grid와 충돌하지 않도록 인라인 스타일로 확실하게 숨김 처리
+            // 💡 [핵심 패치 1] 숨길 때는 강력한 인라인 스타일(none)로 가려야 md:grid를 이기고 겹침을 막을 수 있습니다.
             if(view) { 
                 view.classList.add('hidden'); 
                 view.style.display = 'none'; 
@@ -33,7 +33,7 @@ function switchProductTab(tab) {
             }
         }
         
-        // 💡 [핵심 패치] 보여줄 때는 강제 스타일을 지워서 index.html에 짜둔 본래 디자인(flex, grid 등)이 자연스럽게 적용되도록 복구
+        // 💡 [핵심 패치 2] 보여줄 때는 강제 스타일을 없애서 HTML의 본래 디자인이 적용되도록 복구 (드롭다운 클릭 먹통 방지)
         if(activeView) { 
             activeView.classList.remove('hidden'); 
             activeView.style.display = ''; 
@@ -43,8 +43,9 @@ function switchProductTab(tab) {
             activeBtns.style.display = ''; 
         }
 
-        if(tab === 'fp') renderProductMaster('finished');
-        if(tab === 'pm') renderProductMaster('materials');
+        // 💡 [핵심 패치 3] 탭이 열릴 때마다 드롭다운 필터 데이터(카테고리/입고처)를 무조건 다시 꽉 채우도록 추가!
+        if(tab === 'fp') { populateProductFilters('finished'); renderProductMaster('finished'); }
+        if(tab === 'pm') { populateProductFilters('materials'); renderProductMaster('materials'); }
         if(tab === 'bom') { updateBomDropdowns(); renderBomMaster(); }
     } catch(e) { console.error("Product Tab Error:", e); }
 }
@@ -133,7 +134,6 @@ function cancelEdit(targetType) {
     renderProductMaster(targetType);
 }
 
-// 💡 수정됨: 백엔드 PUT 거부를 대비한 "삭제 후 재생성(POST)" 강제 세이브 로직
 async function submitProduct(targetType) { 
     if(loginMode === 'viewer') return alert("뷰어 모드에서는 사용할 수 없습니다.");
     const prefix = targetType === 'finished' ? 'fp' : 'pm';
@@ -149,7 +149,6 @@ async function submitProduct(targetType) {
 
     try { 
         if(editingProductOriginalName) { 
-            // ⚡ 백엔드 업데이트 실패 방지: 기존 항목 완벽히 지우고 새 항목으로 덮어쓰기
             await fetch(`${endpoint}?item_name=${encodeURIComponent(editingProductOriginalName)}&supplier=${encodeURIComponent(editingProductOriginalSupplier)}`, { method: 'DELETE' });
             await fetch(endpoint, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({category: cat, item_name: name, supplier: supplier, daily_usage: usage, unit_price: price, pallet_ea: ea}) }); 
             alert("품목 마스터 수정이 완벽하게 저장되었습니다."); 
@@ -161,7 +160,6 @@ async function submitProduct(targetType) {
             document.getElementById(`${prefix}-supplier`).value = ''; 
         } 
         
-        // ⭐ 강제 데이터 최신화 후 화면 렌더링
         await load(); 
         populateProductFilters(targetType);
         renderProductMaster(targetType);
