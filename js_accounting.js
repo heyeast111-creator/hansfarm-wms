@@ -416,7 +416,15 @@ window.openDirectInputModal = async function() {
             <div class="flex space-x-3"><button onclick="closeDirectInputModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button><button onclick="submitDirectInput()" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">장부에 입력</button></div>
         </div>
     `;
-    modal.classList.remove('hidden'); modal.classList.add('flex');
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex');
+    
+    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
+    let innerBox = modal.querySelector('div');
+    if(innerBox) {
+        innerBox.classList.remove('opacity-0', 'scale-95');
+        innerBox.classList.add('opacity-100', 'scale-100');
+    }
 }
 
 window.updateDiCategoryDropdown = function() {
@@ -510,7 +518,16 @@ function openEditAccModal(idx) {
     updateEditAccCategoryDropdown(pInfo ? pInfo.category : null);
     updateEditAccItemDropdown(document.getElementById('edit-acc-cat').value, item.item_name);
 
-    let modal = document.getElementById('edit-acc-modal'); modal.classList.remove('hidden'); modal.classList.add('flex');
+    let modal = document.getElementById('edit-acc-modal'); 
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex');
+    
+    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
+    let innerBox = modal.querySelector('div');
+    if(innerBox) {
+        innerBox.classList.remove('opacity-0', 'scale-95');
+        innerBox.classList.add('opacity-100', 'scale-100');
+    }
 }
 
 function closeEditAccModal() { let modal = document.getElementById('edit-acc-modal'); modal.classList.add('hidden'); modal.classList.remove('flex'); }
@@ -577,7 +594,15 @@ function openSplitAccModal(idx) {
             <div class="flex space-x-3"><button onclick="closeSplitAccModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-3 rounded-xl transition-colors">취소</button><button onclick="executeSplitAcc()" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-black py-3 rounded-xl shadow-md transition-colors">이대로 분할하기</button></div>
         </div>
     `;
-    modal.classList.remove('hidden'); modal.classList.add('flex');
+    modal.classList.remove('hidden'); 
+    modal.classList.add('flex');
+    
+    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
+    let innerBox = modal.querySelector('div');
+    if(innerBox) {
+        innerBox.classList.remove('opacity-0', 'scale-95');
+        innerBox.classList.add('opacity-100', 'scale-100');
+    }
 }
 
 function closeSplitAccModal() { let modal = document.getElementById('split-acc-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } splitTargetItem = null; }
