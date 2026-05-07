@@ -4,20 +4,46 @@
 function switchProductTab(tab) {
     try {
         ['fp', 'pm', 'bom'].forEach(t => {
-            let btn = document.getElementById(`tab-btn-${t}`); let view = document.getElementById(`subview-${t}`); let btns = document.getElementById(`${t}-header-btns`);
+            let btn = document.getElementById(`tab-btn-${t}`); 
+            let view = document.getElementById(`subview-${t}`); 
+            let btns = document.getElementById(`${t}-header-btns`);
+            
             if(btn) btn.className = "whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors";
-            if(view) { view.classList.add('hidden'); view.style.display = 'none'; }
-            if(btns) { btns.classList.add('hidden'); btns.style.display = 'none'; }
+            
+            // 💡 [핵심 패치] 인라인 style.display를 완전히 제거하고 Tailwind 클래스로만 제어
+            if(view) { 
+                view.style.display = ''; // 기존 style 강제값 제거
+                view.classList.add('hidden'); 
+                view.classList.remove('grid', 'flex'); 
+            }
+            if(btns) { 
+                btns.style.display = ''; // 기존 style 강제값 제거
+                btns.classList.add('hidden'); 
+                btns.classList.remove('flex'); 
+            }
         });
 
-        let activeBtn = document.getElementById(`tab-btn-${tab}`); let activeView = document.getElementById(`subview-${tab}`); let activeBtns = document.getElementById(`${tab}-header-btns`);
+        let activeBtn = document.getElementById(`tab-btn-${tab}`); 
+        let activeView = document.getElementById(`subview-${tab}`); 
+        let activeBtns = document.getElementById(`${tab}-header-btns`);
 
         if(activeBtn) {
             activeBtn.className = "whitespace-nowrap text-lg md:text-2xl font-black text-indigo-700 border-b-4 border-indigo-700 pb-1 px-2 transition-colors";
-            if(tab === 'bom') { activeBtn.classList.replace('text-indigo-700', 'text-emerald-700'); activeBtn.classList.replace('border-indigo-700', 'border-emerald-700'); }
+            if(tab === 'bom') { 
+                activeBtn.classList.replace('text-indigo-700', 'text-emerald-700'); 
+                activeBtn.classList.replace('border-indigo-700', 'border-emerald-700'); 
+            }
         }
-        if(activeView) { activeView.classList.remove('hidden'); activeView.style.display = (tab === 'fp' || tab === 'pm') ? 'grid' : 'flex'; }
-        if(activeBtns) { activeBtns.classList.remove('hidden'); activeBtns.style.display = 'flex'; }
+        
+        // 💡 [핵심 패치] grid와 flex를 Tailwind 클래스로 명확하게 부여
+        if(activeView) { 
+            activeView.classList.remove('hidden'); 
+            if(tab === 'fp' || tab === 'pm' || tab === 'bom') activeView.classList.add('md:grid', 'flex');
+        }
+        if(activeBtns) { 
+            activeBtns.classList.remove('hidden'); 
+            activeBtns.classList.add('flex'); 
+        }
 
         if(tab === 'fp') renderProductMaster('finished');
         if(tab === 'pm') renderProductMaster('materials');
