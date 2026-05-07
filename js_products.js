@@ -10,16 +10,14 @@ function switchProductTab(tab) {
             
             if(btn) btn.className = "whitespace-nowrap text-lg md:text-2xl font-black text-slate-400 hover:text-slate-600 pb-1 px-2 transition-colors";
             
-            // 💡 [핵심 패치] 인라인 style.display를 완전히 제거하고 Tailwind 클래스로만 제어
+            // 💡 [핵심 패치] Tailwind의 md:grid와 충돌하지 않도록 인라인 스타일로 확실하게 숨김 처리
             if(view) { 
-                view.style.display = ''; // 기존 style 강제값 제거
                 view.classList.add('hidden'); 
-                view.classList.remove('grid', 'flex'); 
+                view.style.display = 'none'; 
             }
             if(btns) { 
-                btns.style.display = ''; // 기존 style 강제값 제거
                 btns.classList.add('hidden'); 
-                btns.classList.remove('flex'); 
+                btns.style.display = 'none'; 
             }
         });
 
@@ -35,14 +33,14 @@ function switchProductTab(tab) {
             }
         }
         
-        // 💡 [핵심 패치] grid와 flex를 Tailwind 클래스로 명확하게 부여
+        // 💡 [핵심 패치] 보여줄 때는 강제 스타일을 지워서 index.html에 짜둔 본래 디자인(flex, grid 등)이 자연스럽게 적용되도록 복구
         if(activeView) { 
             activeView.classList.remove('hidden'); 
-            if(tab === 'fp' || tab === 'pm' || tab === 'bom') activeView.classList.add('md:grid', 'flex');
+            activeView.style.display = ''; 
         }
         if(activeBtns) { 
             activeBtns.classList.remove('hidden'); 
-            activeBtns.classList.add('flex'); 
+            activeBtns.style.display = ''; 
         }
 
         if(tab === 'fp') renderProductMaster('finished');
