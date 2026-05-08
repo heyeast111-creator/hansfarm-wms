@@ -235,7 +235,7 @@ function updateDashboard() {
         let dfOcc = document.getElementById('dash-floor-occ'); if(dfOcc) dfOcc.innerText = floorOcc;
         let dfEmp = document.getElementById('dash-floor-empty'); if(dfEmp) dfEmp.innerText = Math.max(0, floorTotal - floorOcc);
 
-        // 💡 대시보드 비용 계산 (원클릭 보고서를 위해 로직 강화)
+        // 💡 대시보드 원래 비용 계산 (화면상단 콤보박스에 종속)
         let costOut = 0; let costIn = 0;
         let period = document.getElementById('dash-period')?.value || 'daily';
         let now = new Date(); let startDate = new Date();
@@ -271,10 +271,8 @@ function updateDashboard() {
             });
             let dt = document.getElementById('dash-val-total'); if(dt) dt.innerText = totalAssetValue.toLocaleString() + ' 원';
             
-            // 전역 변수로 저장 (주간보고서에서 꺼내 쓰기 위함)
+            // 전역 변수로 자산가치만 저장 (비용은 팝업에서 따로 계산)
             window.currentAssetValue = totalAssetValue;
-            window.currentCostIn = costIn;
-            window.currentCostOut = costOut;
         } else {
             let pnl = document.getElementById('admin-finance-panel'); if(pnl) pnl.classList.add('hidden');
         }
@@ -282,24 +280,49 @@ function updateDashboard() {
 }
 
 // ==========================================
-// 💡 [신규 추가] 주간 보고서 생성 로직
+// 💡 [수정] 주간 보고서 생성 로직 (독립 달력 및 체크박스 완벽 적용)
 // ==========================================
-function generateWeeklyReport() {
-    // 1. 기간 설정 (최근 7일)
-    let today = new Date();
-    let lastWeek = new Date();
-    lastWeek.setDate(today.getDate() - 7);
-    
-    let dateRangeStr = `${lastWeek.getFullYear()}.${String(lastWeek.getMonth()+1).padStart(2,'0')}.${String(lastWeek.getDate()).padStart(2,'0')} ~ ${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`;
-    document.getElementById('report-date-range').innerText = `집계 기간: ${dateRangeStr}`;
+function generateWeeklyReport(isUpdate = false) {
+    let startInput = document.getElementById('report-start-date');
+    let endInput = document.getElementById('report-end-date');
 
-    // 2. 비용 및 자산 데이터 밀어넣기
-    // (만약 관리자 모드가 아니라면 대시보드 로직에서 계산이 안 됐을 수 있으므로 강제 1회 계산)
+    // 1. 처음 열었을 때는 최근 7일로 달력 세팅
+    if(!isUpdate) {
+        let today = new Date();
+        let lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 7);
+        
+        startInput.value = lastWeek.toISOString().split('T')[0];
+        endInput.value = today.toISOString().split('T')[0];
+    }
+    
+    let startDateStr = startInput.value;
+    let endDateStr = endInput.value;
+
+    if(!startDateStr || !endDateStr) return;
+    if(startDateStr > endDateStr) return alert("시작일이 종료일보다 늦을 수 없습니다.");
+
+    // 2. 비용 데이터 (달력 기간 기준으로 독립적으로 완벽하게 재계산)
+    let costOut = 0; let costIn = 0;
+    globalHistory.forEach(h => {
+        // 날짜 비교를 위해 YYYY-MM-DD 형식으로 통일
+        let hDateStr = new Date(h.created_at).toISOString().split('T')[0];
+        
+        if (hDateStr >= startDateStr && hDateStr <= endDateStr) {
+            let pInfo = productMaster.find(p => p.item_name === h.item_name) || finishedProductMaster.find(p => p.item_name === h.item_name);
+            let price = pInfo ? (pInfo.unit_price || 0) : 0;
+            let amount = h.quantity * price;
+            
+            if (h.action_type === '출고') costOut += amount;
+            if (h.action_type === '입고') costIn += amount;
+        }
+    });
+
     if(!window.currentAssetValue) updateDashboard(); 
     
     document.getElementById('report-total-asset').innerText = (window.currentAssetValue || 0).toLocaleString() + ' 원';
-    document.getElementById('report-in-cost').innerText = (window.currentCostIn || 0).toLocaleString() + ' 원';
-    document.getElementById('report-out-cost').innerText = (window.currentCostOut || 0).toLocaleString() + ' 원';
+    document.getElementById('report-in-cost').innerText = costIn.toLocaleString() + ' 원';
+    document.getElementById('report-out-cost').innerText = costOut.toLocaleString() + ' 원';
 
     // 3. 창고 가동률 막대그래프 동기화
     let roomPct = document.getElementById('dash-room-percent').innerText || '0%';
@@ -311,7 +334,7 @@ function generateWeeklyReport() {
     document.getElementById('report-cold-pct').innerText = coldPct;
     document.getElementById('report-cold-bar').style.width = coldPct;
 
-    // 4. 안전재고 미달 품목 (목표 파레트 기준) 자동 추출
+    // 4. 안전재고 미달 품목 (목표 파레트 기준) & [재고 0개 제외] 필터 연동
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     let aggregatedItems = {};
     materialProducts.forEach(p => { 
@@ -326,16 +349,19 @@ function generateWeeklyReport() {
         } 
     });
     
-    // 설정창에 있는 목표 파레트 값을 가져오거나, 없으면 기본값 5
     let targetPallets = document.getElementById('safe-pallet-target') ? parseFloat(document.getElementById('safe-pallet-target').value) : 5;
+    let hideZero = document.getElementById('report-hide-zero').checked; // 체크박스 상태 확인
     
     let riskList = Object.values(aggregatedItems)
-        .filter(i => i.total_pallet < targetPallets)
+        .filter(i => {
+            if (hideZero && i.total_pallet === 0) return false; // 재고 0개 제외 옵션 켜지면 0은 컷
+            return i.total_pallet < targetPallets;
+        })
         .sort((a,b) => a.total_pallet - b.total_pallet);
     
     let riskHtml = '';
     if(riskList.length === 0) {
-        riskHtml = `<tr><td colspan="4" class="py-4 text-center text-slate-400">🚨 현재 미달된 품목이 없어 안전합니다!</td></tr>`;
+        riskHtml = `<tr><td colspan="4" class="py-4 text-center text-slate-400">🚨 현재 조건에 미달된 품목이 없어 안전합니다!</td></tr>`;
     } else {
         riskList.forEach(item => {
             riskHtml += `
@@ -350,11 +376,11 @@ function generateWeeklyReport() {
     }
     document.getElementById('report-risk-list').innerHTML = riskHtml;
 
-    // 5. 금주 많이 나간(출고) 품목 Top 3 추출
+    // 5. 달력 기간 내 많이 나간(출고) 품목 Top 3 추출
     let outCount = {};
     globalHistory.forEach(h => {
-        let hDate = new Date(h.created_at);
-        if(h.action_type === '출고' && hDate >= lastWeek) {
+        let hDateStr = new Date(h.created_at).toISOString().split('T')[0];
+        if(h.action_type === '출고' && hDateStr >= startDateStr && hDateStr <= endDateStr) {
             outCount[h.item_name] = (outCount[h.item_name] || 0) + h.quantity;
         }
     });
@@ -366,7 +392,7 @@ function generateWeeklyReport() {
     let topHtml = '';
     let medals = ['🥇', '🥈', '🥉'];
     if(topItems.length === 0) {
-        topHtml = `<div class="text-center text-slate-400 py-2">이번 주 출고 내역이 없습니다.</div>`;
+        topHtml = `<div class="text-center text-slate-400 py-2">조회 기간 내 출고 내역이 없습니다.</div>`;
     } else {
         topItems.forEach((item, idx) => {
             topHtml += `
@@ -380,9 +406,11 @@ function generateWeeklyReport() {
     document.getElementById('report-top-items').innerHTML = topHtml;
 
     // 6. 모달 띄우기
-    let modal = document.getElementById('weekly-report-modal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    if(!isUpdate) {
+        let modal = document.getElementById('weekly-report-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+    }
 }
 
 function closeWeeklyReport() {
