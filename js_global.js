@@ -235,6 +235,33 @@ function updateDashboard() {
         let dfOcc = document.getElementById('dash-floor-occ'); if(dfOcc) dfOcc.innerText = floorOcc;
         let dfEmp = document.getElementById('dash-floor-empty'); if(dfEmp) dfEmp.innerText = Math.max(0, floorTotal - floorOcc);
 
+        // 💡 대시보드 비용 계산 (원클릭 보고서를 위해 로직 강화)
+        let costOut = 0; let costIn = 0;
+        let period = document.getElementById('dash-period')?.value || 'daily';
+        let now = new Date(); let startDate = new Date();
+        
+        if (period === 'daily') startDate.setDate(now.getDate() - 1);
+        else if (period === 'weekly') startDate.setDate(now.getDate() - 7);
+        else if (period === 'monthly') startDate.setMonth(now.getMonth() - 1);
+        
+        globalHistory.forEach(h => {
+            let hDate = new Date(h.created_at);
+            if (hDate >= startDate) {
+                let pInfo = productMaster.find(p => p.item_name === h.item_name) || finishedProductMaster.find(p => p.item_name === h.item_name);
+                let price = pInfo ? (pInfo.unit_price || 0) : 0;
+                let amount = h.quantity * price;
+                if (h.action_type === '출고') costOut += amount;
+                if (h.action_type === '입고') costIn += amount;
+            }
+        });
+
+        let dtOut = document.getElementById('dash-cost-out'); if(dtOut) dtOut.innerText = costOut.toLocaleString() + ' 원';
+        
+        let label = "일간 기준";
+        if(period === 'weekly') label = "주간 기준";
+        if(period === 'monthly') label = "월간 기준";
+        let dtLabel = document.getElementById('dash-cost-label'); if(dtLabel) dtLabel.innerText = label;
+
         if(isAdmin) {
             let pnl = document.getElementById('admin-finance-panel'); if(pnl) pnl.classList.remove('hidden');
             let totalAssetValue = 0;
@@ -243,10 +270,125 @@ function updateDashboard() {
                 totalAssetValue += (item.quantity * (pInfo ? (pInfo.unit_price || 0) : 0));
             });
             let dt = document.getElementById('dash-val-total'); if(dt) dt.innerText = totalAssetValue.toLocaleString() + ' 원';
+            
+            // 전역 변수로 저장 (주간보고서에서 꺼내 쓰기 위함)
+            window.currentAssetValue = totalAssetValue;
+            window.currentCostIn = costIn;
+            window.currentCostOut = costOut;
         } else {
             let pnl = document.getElementById('admin-finance-panel'); if(pnl) pnl.classList.add('hidden');
         }
     } catch (e) { console.error(e); }
+}
+
+// ==========================================
+// 💡 [신규 추가] 주간 보고서 생성 로직
+// ==========================================
+function generateWeeklyReport() {
+    // 1. 기간 설정 (최근 7일)
+    let today = new Date();
+    let lastWeek = new Date();
+    lastWeek.setDate(today.getDate() - 7);
+    
+    let dateRangeStr = `${lastWeek.getFullYear()}.${String(lastWeek.getMonth()+1).padStart(2,'0')}.${String(lastWeek.getDate()).padStart(2,'0')} ~ ${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')}`;
+    document.getElementById('report-date-range').innerText = `집계 기간: ${dateRangeStr}`;
+
+    // 2. 비용 및 자산 데이터 밀어넣기
+    // (만약 관리자 모드가 아니라면 대시보드 로직에서 계산이 안 됐을 수 있으므로 강제 1회 계산)
+    if(!window.currentAssetValue) updateDashboard(); 
+    
+    document.getElementById('report-total-asset').innerText = (window.currentAssetValue || 0).toLocaleString() + ' 원';
+    document.getElementById('report-in-cost').innerText = (window.currentCostIn || 0).toLocaleString() + ' 원';
+    document.getElementById('report-out-cost').innerText = (window.currentCostOut || 0).toLocaleString() + ' 원';
+
+    // 3. 창고 가동률 막대그래프 동기화
+    let roomPct = document.getElementById('dash-room-percent').innerText || '0%';
+    let coldPct = document.getElementById('dash-cold-percent').innerText || '0%';
+    
+    document.getElementById('report-room-pct').innerText = roomPct;
+    document.getElementById('report-room-bar').style.width = roomPct;
+    
+    document.getElementById('report-cold-pct').innerText = coldPct;
+    document.getElementById('report-cold-bar').style.width = coldPct;
+
+    // 4. 안전재고 미달 품목 (목표 파레트 기준) 자동 추출
+    let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
+    let aggregatedItems = {};
+    materialProducts.forEach(p => { 
+        aggregatedItems[p.item_name] = { item_name: p.item_name, total_pallet: 0 }; 
+    });
+
+    globalOccupancy.forEach(item => { 
+        if(aggregatedItems[item.item_name]) { 
+            let pInfo = productMaster.find(p => p.item_name === item.item_name);
+            let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 1;
+            aggregatedItems[item.item_name].total_pallet += (item.quantity / pEa); 
+        } 
+    });
+    
+    // 설정창에 있는 목표 파레트 값을 가져오거나, 없으면 기본값 5
+    let targetPallets = document.getElementById('safe-pallet-target') ? parseFloat(document.getElementById('safe-pallet-target').value) : 5;
+    
+    let riskList = Object.values(aggregatedItems)
+        .filter(i => i.total_pallet < targetPallets)
+        .sort((a,b) => a.total_pallet - b.total_pallet);
+    
+    let riskHtml = '';
+    if(riskList.length === 0) {
+        riskHtml = `<tr><td colspan="4" class="py-4 text-center text-slate-400">🚨 현재 미달된 품목이 없어 안전합니다!</td></tr>`;
+    } else {
+        riskList.forEach(item => {
+            riskHtml += `
+                <tr>
+                    <td class="py-2">${item.item_name}</td>
+                    <td class="py-2 text-right text-rose-600">${item.total_pallet.toFixed(1)} P</td>
+                    <td class="py-2 text-right text-slate-400">${targetPallets} P</td>
+                    <td class="py-2 text-center"><span class="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs">긴급 발주 요망</span></td>
+                </tr>
+            `;
+        });
+    }
+    document.getElementById('report-risk-list').innerHTML = riskHtml;
+
+    // 5. 금주 많이 나간(출고) 품목 Top 3 추출
+    let outCount = {};
+    globalHistory.forEach(h => {
+        let hDate = new Date(h.created_at);
+        if(h.action_type === '출고' && hDate >= lastWeek) {
+            outCount[h.item_name] = (outCount[h.item_name] || 0) + h.quantity;
+        }
+    });
+    
+    let topItems = Object.entries(outCount)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3);
+        
+    let topHtml = '';
+    let medals = ['🥇', '🥈', '🥉'];
+    if(topItems.length === 0) {
+        topHtml = `<div class="text-center text-slate-400 py-2">이번 주 출고 내역이 없습니다.</div>`;
+    } else {
+        topItems.forEach((item, idx) => {
+            topHtml += `
+                <div class="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                    <span class="font-black text-slate-700">${medals[idx]} ${item[0]}</span>
+                    <span class="font-bold text-indigo-600">${item[1].toLocaleString()} EA 출고</span>
+                </div>
+            `;
+        });
+    }
+    document.getElementById('report-top-items').innerHTML = topHtml;
+
+    // 6. 모달 띄우기
+    let modal = document.getElementById('weekly-report-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeWeeklyReport() {
+    let modal = document.getElementById('weekly-report-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
 }
 
 // ==========================================
@@ -333,7 +475,6 @@ function closeInfoPanel() {
 // ==========================================
 let currentLang = 'ko';
 
-// 💡 확장된 미니 번역 사전 (상단 탭, 공통 버튼, 팝업 텍스트 등 모두 포함)
 const langDict = {
     'ko': {
         'nav_dashboard': '대시보드', 'nav_order': '재고/발주', 'nav_prod': '생산관리', 'nav_outbound': '출고관리', 'nav_items': '품목관리',
@@ -355,7 +496,6 @@ const langDict = {
     }
 };
 
-// JS 내부에서 동적으로 텍스트를 바꿀 때 쓰는 헬퍼 함수
 function t(key) {
     return (langDict[currentLang] && langDict[currentLang][key]) ? langDict[currentLang][key] : key;
 }
@@ -363,7 +503,6 @@ function t(key) {
 function toggleLanguage() {
     currentLang = currentLang === 'ko' ? 'en' : 'ko';
     
-    // 화면에서 data-i18n 꼬리표가 붙은 모든 글자를 찾아서 스위치!
     document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
         if(langDict[currentLang] && langDict[currentLang][key]) {
@@ -371,13 +510,11 @@ function toggleLanguage() {
         }
     });
 
-    // 언어 변경 버튼 글자도 같이 변경
     const btn = document.getElementById('lang-toggle-btn');
     if(btn) {
         btn.innerText = currentLang === 'ko' ? '🌐 EN' : '🌐 KO';
     }
 
-    // 💡 렉맵 통로 글자나 현재 열려있는 우측 팝업도 언어에 맞게 즉시 새로고침
     if(typeof renderMap === 'function') renderMap();
     if(selectedCellId && typeof clickCell === 'function') {
         const cellEl = document.getElementById('cell-' + selectedCellId);
