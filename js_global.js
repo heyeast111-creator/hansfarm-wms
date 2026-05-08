@@ -235,6 +235,12 @@ function updateDashboard() {
         let dfOcc = document.getElementById('dash-floor-occ'); if(dfOcc) dfOcc.innerText = floorOcc;
         let dfEmp = document.getElementById('dash-floor-empty'); if(dfEmp) dfEmp.innerText = Math.max(0, floorTotal - floorOcc);
 
+        // 💡 1. 전역으로 세부 수치(칸 수)도 저장해둡니다. (보고서에서 쓰기 위함)
+        window.dashInfo = {
+            room: { occ: roomOcc, total: roomTotal, emp: Math.max(0, roomTotal - roomOcc) },
+            cold: { occ: coldOcc, total: coldTotal, emp: Math.max(0, coldTotal - coldOcc) }
+        };
+
         // 💡 대시보드 원래 비용 계산 (화면상단 콤보박스에 종속)
         let costOut = 0; let costIn = 0;
         let period = document.getElementById('dash-period')?.value || 'daily';
@@ -283,10 +289,16 @@ function updateDashboard() {
 // 💡 [수정] 주간 보고서 생성 로직 (독립 달력 및 체크박스 완벽 적용)
 // ==========================================
 function generateWeeklyReport(isUpdate = false) {
+    // 💡 2. 재산 가치(0원) 방지: 관리자 권한이 없으면 아예 조회를 막음
+    if(!isAdmin) {
+        alert("보고서 생성(비용 및 재고자산 조회)은 관리자 권한이 필요합니다.\n먼저 상단 로고를 클릭해 로그인해주세요.");
+        return;
+    }
+
     let startInput = document.getElementById('report-start-date');
     let endInput = document.getElementById('report-end-date');
 
-    // 1. 처음 열었을 때는 최근 7일로 달력 세팅
+    // 처음 열었을 때는 최근 7일로 달력 세팅
     if(!isUpdate) {
         let today = new Date();
         let lastWeek = new Date();
@@ -302,7 +314,7 @@ function generateWeeklyReport(isUpdate = false) {
     if(!startDateStr || !endDateStr) return;
     if(startDateStr > endDateStr) return alert("시작일이 종료일보다 늦을 수 없습니다.");
 
-    // 2. 비용 데이터 (달력 기간 기준으로 독립적으로 완벽하게 재계산)
+    // 비용 데이터 (달력 기간 기준으로 독립적으로 완벽하게 재계산)
     let costOut = 0; let costIn = 0;
     globalHistory.forEach(h => {
         // 날짜 비교를 위해 YYYY-MM-DD 형식으로 통일
@@ -324,17 +336,20 @@ function generateWeeklyReport(isUpdate = false) {
     document.getElementById('report-in-cost').innerText = costIn.toLocaleString() + ' 원';
     document.getElementById('report-out-cost').innerText = costOut.toLocaleString() + ' 원';
 
-    // 3. 창고 가동률 막대그래프 동기화
+    // 💡 3. 창고 가동률 막대그래프 동기화 및 상세 수치(총/사용/빈) 추가 표기
     let roomPct = document.getElementById('dash-room-percent').innerText || '0%';
     let coldPct = document.getElementById('dash-cold-percent').innerText || '0%';
     
-    document.getElementById('report-room-pct').innerText = roomPct;
+    let rInfo = window.dashInfo?.room || { occ: 0, total: 0, emp: 0 };
+    let cInfo = window.dashInfo?.cold || { occ: 0, total: 0, emp: 0 };
+
+    document.getElementById('report-room-pct').innerHTML = `${roomPct} <span class="text-[10px] text-emerald-600 font-bold ml-1">(총 ${rInfo.total}칸 / 사용 ${rInfo.occ} / 빈렉 ${rInfo.emp})</span>`;
     document.getElementById('report-room-bar').style.width = roomPct;
     
-    document.getElementById('report-cold-pct').innerText = coldPct;
+    document.getElementById('report-cold-pct').innerHTML = `${coldPct} <span class="text-[10px] text-emerald-600 font-bold ml-1">(총 ${cInfo.total}칸 / 사용 ${cInfo.occ} / 빈렉 ${cInfo.emp})</span>`;
     document.getElementById('report-cold-bar').style.width = coldPct;
 
-    // 4. 안전재고 미달 품목 (목표 파레트 기준) & [재고 0개 제외] 필터 연동
+    // 안전재고 미달 품목 (목표 파레트 기준) & [재고 0개 제외] 필터 연동
     let materialProducts = productMaster.filter(p => p.category && !p.category.includes('원란'));
     let aggregatedItems = {};
     materialProducts.forEach(p => { 
@@ -349,7 +364,8 @@ function generateWeeklyReport(isUpdate = false) {
         } 
     });
     
-    let targetPallets = document.getElementById('safe-pallet-target') ? parseFloat(document.getElementById('safe-pallet-target').value) : 5;
+    // 설정창에 있는 목표 파레트 값을 가져오거나, 없으면 기본값 5
+    let targetPallets = document.getElementById('report-target-pallet') ? parseFloat(document.getElementById('report-target-pallet').value) : 5;
     let hideZero = document.getElementById('report-hide-zero').checked; // 체크박스 상태 확인
     
     let riskList = Object.values(aggregatedItems)
@@ -376,7 +392,7 @@ function generateWeeklyReport(isUpdate = false) {
     }
     document.getElementById('report-risk-list').innerHTML = riskHtml;
 
-    // 5. 달력 기간 내 많이 나간(출고) 품목 Top 3 추출
+    // 달력 기간 내 많이 나간(출고) 품목 Top 3 추출
     let outCount = {};
     globalHistory.forEach(h => {
         let hDateStr = new Date(h.created_at).toISOString().split('T')[0];
@@ -405,7 +421,7 @@ function generateWeeklyReport(isUpdate = false) {
     }
     document.getElementById('report-top-items').innerHTML = topHtml;
 
-    // 6. 모달 띄우기
+    // 모달 띄우기
     if(!isUpdate) {
         let modal = document.getElementById('weekly-report-modal');
         modal.classList.remove('hidden');
