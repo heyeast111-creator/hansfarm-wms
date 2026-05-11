@@ -314,8 +314,10 @@ function generateWeeklyReport(isUpdate = false) {
     if(!startDateStr || !endDateStr) return;
     if(startDateStr > endDateStr) return alert("시작일이 종료일보다 늦을 수 없습니다.");
 
-    // 비용 데이터 (달력 기간 기준으로 독립적으로 완벽하게 재계산)
+    // 비용 데이터 및 매입처별 비중 집계 (달력 기간 기준)
     let costOut = 0; let costIn = 0;
+    let supplierCost = {}; // 💡 거래처별 매입액을 담을 바구니
+
     globalHistory.forEach(h => {
         // 날짜 비교를 위해 YYYY-MM-DD 형식으로 통일
         let hDateStr = new Date(h.created_at).toISOString().split('T')[0];
@@ -326,7 +328,12 @@ function generateWeeklyReport(isUpdate = false) {
             let amount = h.quantity * price;
             
             if (h.action_type === '출고') costOut += amount;
-            if (h.action_type === '입고') costIn += amount;
+            if (h.action_type === '입고') {
+                costIn += amount;
+                // 매입처별로 금액 합산
+                let sup = pInfo ? (pInfo.supplier || '기본입고처') : '기본입고처';
+                supplierCost[sup] = (supplierCost[sup] || 0) + amount;
+            }
         }
     });
 
@@ -335,6 +342,37 @@ function generateWeeklyReport(isUpdate = false) {
     document.getElementById('report-total-asset').innerText = (window.currentAssetValue || 0).toLocaleString() + ' 원';
     document.getElementById('report-in-cost').innerText = costIn.toLocaleString() + ' 원';
     document.getElementById('report-out-cost').innerText = costOut.toLocaleString() + ' 원';
+
+    // 💡 5. 거래처별 매입액 비중 Top 3 계산 및 UI 렌더링
+    let supHtml = '';
+    // 금액(value) 기준으로 내림차순 정렬 후 상위 3개만 자르기
+    let sortedSups = Object.entries(supplierCost).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    
+    let supContainer = document.getElementById('report-top-suppliers');
+    if(supContainer) {
+        if (sortedSups.length === 0 || costIn === 0) {
+            supHtml = '<div class="text-center text-slate-400 text-sm mt-4 font-bold">조회 기간 내 매입 내역이 없습니다.</div>';
+        } else {
+            let medals = ['🥇', '🥈', '🥉'];
+            let colors = ['bg-amber-500', 'bg-slate-400', 'bg-amber-700']; // 1등 금색, 2등 은색, 3등 동색
+            
+            sortedSups.forEach((sup, idx) => {
+                let pct = ((sup[1] / costIn) * 100).toFixed(1);
+                supHtml += `
+                    <div>
+                        <div class="flex justify-between text-sm font-bold text-slate-700 mb-1">
+                            <span>${medals[idx] || '🏆'} ${sup[0]}</span>
+                            <span class="text-amber-700">${sup[1].toLocaleString()} 원 <span class="text-[10px] text-slate-500 ml-1">(${pct}%)</span></span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2">
+                            <div class="${colors[idx] || 'bg-amber-300'} h-2 rounded-full" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        supContainer.innerHTML = supHtml;
+    }
 
     // 💡 3. 창고 가동률 막대그래프 동기화 및 상세 수치(총/사용/빈) 추가 표기
     let roomPct = document.getElementById('dash-room-percent').innerText || '0%';
@@ -377,49 +415,62 @@ function generateWeeklyReport(isUpdate = false) {
     
     let riskHtml = '';
     if(riskList.length === 0) {
-        riskHtml = `<tr><td colspan="4" class="py-4 text-center text-slate-400">🚨 현재 조건에 미달된 품목이 없어 안전합니다!</td></tr>`;
+        riskHtml = `<tr><td colspan="3" class="py-4 text-center text-slate-400">🚨 현재 조건에 미달된 품목이 없어 안전합니다!</td></tr>`;
     } else {
         riskList.forEach(item => {
             riskHtml += `
                 <tr>
                     <td class="py-2">${item.item_name}</td>
                     <td class="py-2 text-right text-rose-600">${item.total_pallet.toFixed(1)} P</td>
-                    <td class="py-2 text-right text-slate-400">${targetPallets} P</td>
-                    <td class="py-2 text-center"><span class="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs">긴급 발주 요망</span></td>
+                    <td class="py-2 text-center"><span class="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs">긴급 요망</span></td>
                 </tr>
             `;
         });
     }
-    document.getElementById('report-risk-list').innerHTML = riskHtml;
+    let riskContainer = document.getElementById('report-risk-list');
+    if(riskContainer) riskContainer.innerHTML = riskHtml;
 
-    // 달력 기간 내 많이 나간(출고) 품목 Top 3 추출
-    let outCount = {};
+    // 💡 6. 장기 체화 재고 (잠자는 재고) 추출 로직
+    let staleDaysInput = document.getElementById('report-stale-days');
+    let staleDays = staleDaysInput ? (parseInt(staleDaysInput.value) || 30) : 30;
+    
+    let cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - staleDays); // N일 전 날짜 계산
+    
+    // 최근 N일 내에 히스토리에 한 번이라도 등장한(활동이 있었던) 품목들을 수집
+    let recentActiveItems = new Set();
     globalHistory.forEach(h => {
-        let hDateStr = new Date(h.created_at).toISOString().split('T')[0];
-        if(h.action_type === '출고' && hDateStr >= startDateStr && hDateStr <= endDateStr) {
-            outCount[h.item_name] = (outCount[h.item_name] || 0) + h.quantity;
+        let hDate = new Date(h.created_at);
+        if(hDate >= cutoffDate) {
+            recentActiveItems.add(h.item_name);
         }
     });
+
+    // 현재 창고 렉에 남아있는데, 최근 활동 리스트에 없는 품목 필터링
+    let staleList = globalOccupancy.filter(occ => !recentActiveItems.has(occ.item_name));
     
-    let topItems = Object.entries(outCount)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3);
-        
-    let topHtml = '';
-    let medals = ['🥇', '🥈', '🥉'];
-    if(topItems.length === 0) {
-        topHtml = `<div class="text-center text-slate-400 py-2">조회 기간 내 출고 내역이 없습니다.</div>`;
-    } else {
-        topItems.forEach((item, idx) => {
-            topHtml += `
-                <div class="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
-                    <span class="font-black text-slate-700">${medals[idx]} ${item[0]}</span>
-                    <span class="font-bold text-indigo-600">${item[1].toLocaleString()} EA 출고</span>
-                </div>
-            `;
-        });
+    let staleHtml = '';
+    let staleContainer = document.getElementById('report-stale-list');
+    if(staleContainer) {
+        if(staleList.length === 0) {
+            staleHtml = `<tr><td colspan="4" class="py-6 text-center text-slate-400 font-bold">🎉 훌륭합니다! 기준일 내에 고인 장기 체화 재고가 없습니다.</td></tr>`;
+        } else {
+            // 수량이 많은 순서대로 상위 30개까지만 표시
+            staleList.sort((a, b) => b.quantity - a.quantity).slice(0, 30).forEach(item => {
+                let pInfo = productMaster.find(p => p.item_name === item.item_name) || finishedProductMaster.find(p => p.item_name === item.item_name);
+                let cat = pInfo ? (pInfo.category || '미분류') : '미분류';
+                staleHtml += `
+                    <tr class="hover:bg-slate-100 transition-colors">
+                        <td class="py-2"><span class="bg-slate-200 text-slate-600 px-2 py-0.5 rounded text-[10px] font-black shadow-sm">${item.location_id}</span></td>
+                        <td class="py-2 text-slate-500 text-xs">${cat}</td>
+                        <td class="py-2">${item.item_name}</td>
+                        <td class="py-2 text-right text-rose-600">${item.quantity.toLocaleString()} EA</td>
+                    </tr>
+                `;
+            });
+        }
+        staleContainer.innerHTML = staleHtml;
     }
-    document.getElementById('report-top-items').innerHTML = topHtml;
 
     // 모달 띄우기
     if(!isUpdate) {
