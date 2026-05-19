@@ -569,6 +569,7 @@ async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     } catch(e) { alert("서버 통신 오류"); }
 }
 
+// 💡 [핵심 패치] 출고 완료 후 잔여 파레트 계산 및 3P 미만 시 경고창 띄우기
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
     if(loginMode === 'viewer') return;
     const qtyStr = prompt(`[${itemName}] 출고 수량 (최대 ${maxQty}EA)`, maxQty); 
@@ -576,10 +577,22 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
     const qty = parseInt(qtyStr);
     if(isNaN(qty) || qty<=0 || qty>maxQty) return alert("입력 오류입니다.");
     
-    const outPallet = getDynamicPalletCount({item_name: itemName, remarks: null, quantity: qty}); 
+    let currentItem = globalOccupancy.find(o => o.id === invId);
+    let supplier = currentItem ? currentItem.remarks : null;
+
+    const outPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty}); 
+    const remainQty = maxQty - qty;
+    const remainPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: remainQty});
+
     try { 
         await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); 
-        alert("출고 완료"); 
+        
+        if (remainPallet < 3) {
+            alert(`출고 완료\n\n⚠️ 현재재고 ${remainPallet.toFixed(1)}p ${remainQty.toLocaleString()}ea 입니다.`);
+        } else {
+            alert("출고 완료"); 
+        }
+        
         await load(); 
     } catch(e) { console.error(e); } 
 }
@@ -1400,7 +1413,6 @@ async function importExcel(event) {
         let changedLocs = new Set();
         let parsedRows = [];
 
-        // 1. 엑셀 데이터 분석 및 "초기화할 렉" 완벽 스캔
         for (let row of jsonData) {
             let keys = Object.keys(row);
             let loc = keys.find(k => k === "위치" || k.includes("렉")) ? String(row[keys.find(k => k === "위치" || k.includes("렉"))]).trim() : "";
@@ -1411,7 +1423,7 @@ async function importExcel(event) {
 
             let sysQty = parseInt(String(row[keys.find(k => k.includes("전산"))]||"0").replace(/,/g, '')) || 0;
             let physQtyStr = String(row[keys.find(k => k.includes("실사"))]||"").trim();
-            if(physQtyStr === "") continue; // 실사 안 적힌 건 무조건 보존
+            if(physQtyStr === "") continue; 
             
             let physQty = parseInt(physQtyStr.replace(/,/g, ''));
             if(isNaN(physQty) || physQty < 0) continue;
@@ -1421,7 +1433,6 @@ async function importExcel(event) {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
 
-            // 전산 수량과 실사 수량이 다르거나, 이름이 다르면 무조건 해당 렉은 '갈아엎기 대상'
             if (itemName !== oldItemName || physQty !== sysQty) {
                 changedLocs.add(loc); 
             }
@@ -1437,7 +1448,6 @@ async function importExcel(event) {
         let deleteTasks = [];
         let insertTasks = [];
 
-        // 2. 갈아엎기 대상(changedLocs) 렉의 기존 데이터만 깔끔하게 DELETE 큐에 담기
         changedLocs.forEach(loc => {
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             existings.forEach(e => {
@@ -1445,7 +1455,6 @@ async function importExcel(event) {
             });
         });
 
-        // 3. 갈아엎기 대상 렉에 들어갈 새 데이터를 INSERT 큐에 담기 (🚨 누락 필드 완벽 복원)
         for (let parsed of parsedRows) {
             if (changedLocs.has(parsed.loc) && parsed.physQty > 0) {
                 let finalName = parsed.itemName !== "" ? parsed.itemName : "품목명누락_실사";
@@ -1464,8 +1473,8 @@ async function importExcel(event) {
                     pallet_count: parsed.physQty/pEa, 
                     production_date: pDate, 
                     remarks: remarks === "-" ? "기본입고처" : remarks,
-                    acc_status: "미확정",       // 🚨 이거 없어서 서버가 거부했었음 (복구 완료!)
-                    payment_status: "미지급"    // 🚨 이거 없어서 서버가 거부했었음 (복구 완료!)
+                    acc_status: "미확정",        
+                    payment_status: "미지급"    
                 });
             }
         }
@@ -1483,7 +1492,6 @@ async function importExcel(event) {
             }
         };
 
-        // 💡 [안전 제일 탱크 모드] 절대 꼬이지 않게 순서대로 진행하며 중간에 1초씩 휴식(DB 반영 시간 보장)
         if (deleteTasks.length > 0) {
             await processInChunks(deleteTasks, '/api/inventory_edit', '기존 데이터 삭제');
         }
