@@ -29,7 +29,7 @@ function initDailyInventoryUI() {
         btn.onclick = () => switchOrderTab('daily');
         btn.className = "whitespace-nowrap px-4 md:px-6 py-3 font-black text-slate-400 hover:text-slate-600 border-b-4 border-transparent transition-colors";
         btn.innerText = "📅 일자별 재고";
-        btn.setAttribute('data-i18n', 'tab_daily'); // 💡 다국어 꼬리표 추가
+        btn.setAttribute('data-i18n', 'tab_daily'); 
         tabContainer.appendChild(btn);
     }
 }
@@ -154,9 +154,6 @@ function changeFloorCols(areaId, delta) {
     renderMap();
 }
 
-// ==========================================
-// 💡 렉맵 렌더링 로직 (UI 찌그러짐 방지 적용)
-// ==========================================
 function renderMap() { 
     try {
         let floorSelect = document.getElementById('floor-select'); 
@@ -166,7 +163,6 @@ function renderMap() {
         const hContainer = document.getElementById('horizontal-rack'); 
         if(!vContainer) return;
 
-        // 💡 Flex 찌그러짐 방지용 nowrap 추가
         vContainer.classList.add('flex-nowrap');
         if(hContainer) hContainer.classList.add('flex-nowrap');
 
@@ -272,7 +268,6 @@ function renderMap() {
             return; 
         } 
         
-        // --- 실온/냉장 렌더링 ---
         let aisleText = document.getElementById('aisle-text'); 
         if(aisleText) { aisleText.classList.remove('hidden'); aisleText.innerText = typeof t === 'function' ? t('lbl_aisle') : "통로 (Aisle)"; } 
         
@@ -569,7 +564,7 @@ async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     } catch(e) { alert("서버 통신 오류"); }
 }
 
-// 💡 [핵심 패치] 출고 완료 후 잔여 파레트 계산 및 3P 미만 시 경고창 띄우기
+// 💡 [핵심 패치] 출고 완료 후 잔여 파레트 계산 (전체 창고 기준) 및 타 로케이션 안내
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
     if(loginMode === 'viewer') return;
     const qtyStr = prompt(`[${itemName}] 출고 수량 (최대 ${maxQty}EA)`, maxQty); 
@@ -581,17 +576,45 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
     let supplier = currentItem ? currentItem.remarks : null;
 
     const outPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty}); 
-    const remainQty = maxQty - qty;
-    const remainPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: remainQty});
+
+    // 1. 전체 창고(globalOccupancy)에서 동일 품목의 총 수량 및 위치 파악
+    let totalGlobalQty = 0;
+    let otherLocations = new Set();
+    
+    globalOccupancy.forEach(o => {
+        if(o.item_name === itemName) {
+            totalGlobalQty += o.quantity;
+            // 현재 출고 중인 렉의 남은 수량 처리
+            if(o.id === invId) {
+                if (o.quantity > qty) otherLocations.add(o.location_id);
+            } else {
+                otherLocations.add(o.location_id);
+            }
+        }
+    });
+
+    // 2. 출고 후 찐 잔여 수량 계산
+    const remainGlobalQty = totalGlobalQty - qty;
+    const remainGlobalPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: remainGlobalQty});
 
     try { 
         await fetch('/api/outbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ inventory_id: invId, location_id: locId, item_name: itemName, quantity: qty, pallet_count: outPallet }) }); 
         
-        if (remainPallet < 3) {
-            alert(`출고 완료\n\n⚠️ 현재재고 ${remainPallet.toFixed(1)}p ${remainQty.toLocaleString()}ea 입니다.`);
-        } else {
-            alert("출고 완료"); 
+        let msg = "✅ 출고 완료";
+        
+        // 3. 3P 미만 위험 재고 알림 (전체 재고 기준)
+        if (remainGlobalPallet < 3) {
+            msg += `\n\n🚨 [위험] 전체 안전재고 3P 미만!\n▶ 현재 총 재고: ${remainGlobalPallet.toFixed(1)}P (${remainGlobalQty.toLocaleString()}EA)`;
+            if (remainGlobalQty > 0 && otherLocations.size > 0) {
+                msg += `\n📍 남은 재고 위치: ${Array.from(otherLocations).join(', ')}`;
+            }
+        } 
+        // 4. 안전재고는 넘지만, 방금 출고한 렉이 텅 비어서 다른 렉을 찾아야 할 때 직관적 안내
+        else if (qty === maxQty && otherLocations.size > 0) {
+            msg += `\n\n💡 현재 렉은 비워졌지만, 다른 위치에 재고가 넉넉히 있습니다.\n📍 남은 재고 위치: ${Array.from(otherLocations).join(', ')}\n▶ 현재 총 재고: ${remainGlobalPallet.toFixed(1)}P (${remainGlobalQty.toLocaleString()}EA)`;
         }
+
+        alert(msg);
         
         await load(); 
     } catch(e) { console.error(e); } 
@@ -1211,7 +1234,6 @@ function openEditOrderModal(logId) {
     modal.classList.remove('hidden'); 
     modal.classList.add('flex');
     
-    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
     let innerBox = modal.querySelector('div');
     if(innerBox) {
         innerBox.classList.remove('opacity-0', 'scale-95');
