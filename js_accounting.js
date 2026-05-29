@@ -346,7 +346,6 @@ function renderSummaryTable(col1, col2, col3, col4, data) {
         </tr>`).join('');
 }
 
-// 💡 [수정 1] 삭제 시 정식 파이썬 API 루트(/api/history/{id}) 사용
 async function deleteAccountingItem(idx) {
     let sortedData = [...accTableData].sort((a, b) => { if(a.status === '미확정' && b.status === '확정') return -1; if(a.status === '확정' && b.status === '미확정') return 1; return b.date.localeCompare(a.date); });
     let item = sortedData[idx]; 
@@ -366,7 +365,6 @@ async function deleteAccountingItem(idx) {
 
     try {
         if(isManual) {
-            // 정식 API 사용 (CORS 에러 완벽 차단)
             for(let id of item.ids) {
                 await fetch(`/api/history/${id}`, { method: 'DELETE' });
             }
@@ -419,7 +417,6 @@ window.openDirectInputModal = async function() {
     modal.classList.remove('hidden'); 
     modal.classList.add('flex');
     
-    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
     let innerBox = modal.querySelector('div');
     if(innerBox) {
         innerBox.classList.remove('opacity-0', 'scale-95');
@@ -451,7 +448,7 @@ window.updateDiPrice = function() {
 
 function closeDirectInputModal() { let modal = document.getElementById('direct-input-modal'); if(modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); } }
 
-// 💡 [수정 2] 수기입력 시 파이썬 정식 API(/api/orders_create) 사용 (데이터 증발 및 에러 100% 방지)
+// 💡 [수정 2] 수기입력 증발(Ghosting) 완벽 차단 로직 (로딩 UI 적용)
 async function submitDirectInput() {
     const date = document.getElementById('di-date').value;
     const supplier = document.getElementById('di-supplier').value;
@@ -461,6 +458,13 @@ async function submitDirectInput() {
     const price = parseInt(document.getElementById('di-price').value) || 0;
 
     if(!date || !supplier || !item_name || qty <= 0) return alert("입력값을 확인해주세요.");
+
+    // 💡 화면 클릭 방지용 임시 로딩창 (데이터 엇갈림 완벽 차단)
+    let loader = document.createElement('div');
+    loader.id = 'temp-loader';
+    loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[9999]';
+    loader.innerHTML = '<div class="bg-white px-6 py-4 rounded-2xl shadow-2xl font-black text-teal-700 flex items-center text-lg"><span class="animate-spin text-3xl mr-4">⏳</span> 데이터 안전 기록 중...</div>';
+    document.body.appendChild(loader);
 
     let tempId = 'temp_' + Date.now();
     let newPayload = {
@@ -473,7 +477,6 @@ async function submitDirectInput() {
     closeDirectInputModal();
 
     try {
-        // 보안 차단(CORS) 없는 정식 터널 사용
         const res = await fetch('/api/orders_create', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify([newPayload])
@@ -482,9 +485,14 @@ async function submitDirectInput() {
         let data = await res.json();
         if(data.status !== 'success') throw new Error("서버 저장 실패");
         
-        setTimeout(() => load(), 500); 
+        // 💡 1.5초(1500ms) 대기 후 새로고침 (클라우드 DB가 완벽하게 저장할 시간 보장)
+        setTimeout(async () => { 
+            await load(); 
+            if(document.getElementById('temp-loader')) document.body.removeChild(document.getElementById('temp-loader'));
+        }, 1500); 
     } catch (e) { 
         globalHistory = globalHistory.filter(h => h.id !== tempId); renderAccounting();
+        if(document.getElementById('temp-loader')) document.body.removeChild(document.getElementById('temp-loader'));
         alert("오류 발생: " + e.message); 
     }
 }
@@ -522,7 +530,6 @@ function openEditAccModal(idx) {
     modal.classList.remove('hidden'); 
     modal.classList.add('flex');
     
-    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
     let innerBox = modal.querySelector('div');
     if(innerBox) {
         innerBox.classList.remove('opacity-0', 'scale-95');
@@ -597,7 +604,6 @@ function openSplitAccModal(idx) {
     modal.classList.remove('hidden'); 
     modal.classList.add('flex');
     
-    // 💡 [핵심 패치] 투명도 갇힘 버그 100% 해결
     let innerBox = modal.querySelector('div');
     if(innerBox) {
         innerBox.classList.remove('opacity-0', 'scale-95');
@@ -614,11 +620,18 @@ window.calcSplitRemain = function() {
     else { document.getElementById('split-out-qty').classList.remove('border-rose-500'); document.getElementById('split-error-msg').classList.add('hidden'); document.getElementById('split-remain-qty').innerText = (currentQty - outQty).toLocaleString(); }
 }
 
-// 💡 [수정 3] 분할 시 파이썬 정식 API(/api/orders_create) 사용
+// 💡 [수정 3] 항목 분할 증발(Ghosting) 완벽 차단 로직 (로딩 UI 적용)
 async function executeSplitAcc() {
     if(!splitTargetItem) return;
     let outQty = parseInt(document.getElementById('split-out-qty').value) || 0;
     if(outQty <= 0 || outQty >= splitTargetItem.qty) return alert("분할 수량이 올바르지 않습니다.");
+
+    // 💡 화면 클릭 방지용 임시 로딩창 생성
+    let loader = document.createElement('div');
+    loader.id = 'temp-loader';
+    loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[9999]';
+    loader.innerHTML = '<div class="bg-white px-6 py-4 rounded-2xl shadow-2xl font-black text-purple-700 flex items-center text-lg"><span class="animate-spin text-3xl mr-4">⏳</span> 분할 데이터 안전 기록 중...</div>';
+    document.body.appendChild(loader);
 
     let backupHistory = JSON.parse(JSON.stringify(globalHistory));
 
@@ -651,7 +664,6 @@ async function executeSplitAcc() {
 
         if(updatePayload.length > 0) await fetch('/api/history_update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updatePayload) });
         
-        // 보안 차단 없는 정식 터널 사용
         const res = await fetch('/api/orders_create', { 
             method: 'POST', headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify([newPayload]) 
@@ -659,9 +671,14 @@ async function executeSplitAcc() {
         
         if((await res.json()).status !== 'success') throw new Error("새로운 행 분할 생성 실패");
 
-        setTimeout(() => load(), 500); 
+        // 💡 1.5초 대기 후 새로고침
+        setTimeout(async () => { 
+            await load(); 
+            if(document.getElementById('temp-loader')) document.body.removeChild(document.getElementById('temp-loader'));
+        }, 1500); 
     } catch (e) { 
         globalHistory = backupHistory; renderAccounting();
+        if(document.getElementById('temp-loader')) document.body.removeChild(document.getElementById('temp-loader'));
         alert("분할 중 오류 발생: " + e.message); 
     }
 }
