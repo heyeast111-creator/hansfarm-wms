@@ -329,9 +329,6 @@ function renderMap() {
     } catch(e) { console.error("렌더링 에러: ", e); }
 }
 
-// ==========================================
-// 💡 렉 클릭 시 우측 상세 정보 패널 출력
-// ==========================================
 async function clickCell(displayId, searchId) { 
     try {
         if(!searchId) { 
@@ -564,7 +561,7 @@ async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     } catch(e) { alert("서버 통신 오류"); }
 }
 
-// 💡 [핵심 패치] 출고 완료 후 잔여 파레트 계산 (전체 창고 기준) 및 타 로케이션 안내
+// 💡 [핵심 패치] 출고 완료 후 '전체 창고 기준' 잔여량 계산 및 타 로케이션 직관적 안내
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
     if(loginMode === 'viewer') return;
     const qtyStr = prompt(`[${itemName}] 출고 수량 (최대 ${maxQty}EA)`, maxQty); 
@@ -574,17 +571,15 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
     
     let currentItem = globalOccupancy.find(o => o.id === invId);
     let supplier = currentItem ? currentItem.remarks : null;
-
     const outPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: qty}); 
 
-    // 1. 전체 창고(globalOccupancy)에서 동일 품목의 총 수량 및 위치 파악
+    // 1. 전체 창고(globalOccupancy)에서 동일 품목의 총 수량 및 흩어진 위치 파악
     let totalGlobalQty = 0;
     let otherLocations = new Set();
     
     globalOccupancy.forEach(o => {
         if(o.item_name === itemName) {
             totalGlobalQty += o.quantity;
-            // 현재 출고 중인 렉의 남은 수량 처리
             if(o.id === invId) {
                 if (o.quantity > qty) otherLocations.add(o.location_id);
             } else {
@@ -593,7 +588,7 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
         }
     });
 
-    // 2. 출고 후 찐 잔여 수량 계산
+    // 2. 출고 후 전체 창고의 찐 잔여 수량 계산
     const remainGlobalQty = totalGlobalQty - qty;
     const remainGlobalPallet = getDynamicPalletCount({item_name: itemName, remarks: supplier, quantity: remainGlobalQty});
 
@@ -602,20 +597,19 @@ async function processOutbound(invId, itemName, maxQty, currentPallet, locId) {
         
         let msg = "✅ 출고 완료";
         
-        // 3. 3P 미만 위험 재고 알림 (전체 재고 기준)
+        // 3. 전체 창고 기준으로 3P 미만일 때 진짜 경고 알림
         if (remainGlobalPallet < 3) {
             msg += `\n\n🚨 [위험] 전체 안전재고 3P 미만!\n▶ 현재 총 재고: ${remainGlobalPallet.toFixed(1)}P (${remainGlobalQty.toLocaleString()}EA)`;
             if (remainGlobalQty > 0 && otherLocations.size > 0) {
                 msg += `\n📍 남은 재고 위치: ${Array.from(otherLocations).join(', ')}`;
             }
         } 
-        // 4. 안전재고는 넘지만, 방금 출고한 렉이 텅 비어서 다른 렉을 찾아야 할 때 직관적 안내
+        // 4. 안전재고는 충분하지만, 방금 뺀 렉이 텅 비어서 다른 위치를 찾아가야 할 때 친절하게 안내
         else if (qty === maxQty && otherLocations.size > 0) {
-            msg += `\n\n💡 현재 렉은 비워졌지만, 다른 위치에 재고가 넉넉히 있습니다.\n📍 남은 재고 위치: ${Array.from(otherLocations).join(', ')}\n▶ 현재 총 재고: ${remainGlobalPallet.toFixed(1)}P (${remainGlobalQty.toLocaleString()}EA)`;
+            msg += `\n\n💡 현재 렉은 비워졌지만, 다른 위치에 재고가 남아있습니다.\n📍 남은 재고 위치: ${Array.from(otherLocations).join(', ')}\n▶ 현재 총 재고: ${remainGlobalPallet.toFixed(1)}P (${remainGlobalQty.toLocaleString()}EA)`;
         }
 
         alert(msg);
-        
         await load(); 
     } catch(e) { console.error(e); } 
 }
@@ -671,6 +665,7 @@ async function editInventoryItem(invId, itemName, qty, date, locId, remarks) {
         } 
     }
 }
+
 // ==========================================
 // 💡 대기장 & 기타 직접입력
 // ==========================================
@@ -999,7 +994,7 @@ function findItemLocationFromSummary() {
 }
 
 // ==========================================
-// 💡 발주 장바구니 & 내역 (투명도 버그 해결 포함)
+// 💡 발주 장바구니 & 내역
 // ==========================================
 function toggleOrderCart() { 
     const el = document.getElementById('order-cart-container'); 
@@ -1437,32 +1432,42 @@ async function importExcel(event) {
 
         for (let row of jsonData) {
             let keys = Object.keys(row);
-            let loc = keys.find(k => k === "위치" || k.includes("렉")) ? String(row[keys.find(k => k === "위치" || k.includes("렉"))]).trim() : "";
+            let locKey = keys.find(k => k === "위치" || k.includes("렉"));
+            let loc = locKey ? String(row[locKey]).trim() : "";
             if(!loc) continue;
 
-            let itemName = keys.find(k => k.includes("품목")) ? String(row[keys.find(k => k.includes("품목"))]).trim() : "";
+            let itemKey = keys.find(k => k.includes("품목"));
+            let itemName = itemKey ? String(row[itemKey]).trim() : "";
             if(itemName === "[비어있음]" || itemName === "-") itemName = "";
 
-            let sysQty = parseInt(String(row[keys.find(k => k.includes("전산"))]||"0").replace(/,/g, '')) || 0;
-            let physQtyStr = String(row[keys.find(k => k.includes("실사"))]||"").trim();
-            if(physQtyStr === "") continue; 
+            let sysQtyKey = keys.find(k => k.includes("전산"));
+            let sysQtyStr = sysQtyKey ? String(row[sysQtyKey]).replace(/,/g, '').trim() : "";
             
-            let physQty = parseInt(physQtyStr.replace(/,/g, ''));
-            if(isNaN(physQty) || physQty < 0) continue;
+            let physQtyKey = keys.find(k => k.includes("실사"));
+            let physQtyStr = physQtyKey ? String(row[physQtyKey]).replace(/,/g, '').trim() : "";
 
-            parsedRows.push({ loc, itemName, sysQty, physQty, row });
+            // 💡 [핵심 패치 1] 실사수량을 안 적고 전산수량을 바로 고쳐서 올리는 경우 대응!
+            let targetQtyStr = physQtyStr !== "" ? physQtyStr : sysQtyStr;
+            if(targetQtyStr === "") continue; 
+            
+            let targetQty = parseInt(targetQtyStr);
+            if(isNaN(targetQty) || targetQty < 0) continue;
 
+            parsedRows.push({ loc, itemName, targetQty, row });
+
+            // 💡 [핵심 패치 2] 엑셀 내부 비교가 아닌, "실제 현재 DB 재고"와 비교하여 변동사항 감지!
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
+            let currentDbQty = existings.reduce((sum, o) => sum + o.quantity, 0);
 
-            if (itemName !== oldItemName || physQty !== sysQty) {
+            if (itemName !== oldItemName || targetQty !== currentDbQty) {
                 changedLocs.add(loc); 
             }
         }
 
         if (changedLocs.size === 0) {
             document.body.removeChild(loader);
-            alert("반영할 변동 사항이 없습니다.");
+            alert("반영할 변동 사항이 없습니다.\n(엑셀 파일의 수량이 현재 시스템 재고와 완전히 일치합니다.)");
             event.target.value = '';
             return;
         }
@@ -1478,23 +1483,31 @@ async function importExcel(event) {
         });
 
         for (let parsed of parsedRows) {
-            if (changedLocs.has(parsed.loc) && parsed.physQty > 0) {
+            if (changedLocs.has(parsed.loc) && parsed.targetQty > 0) {
                 let finalName = parsed.itemName !== "" ? parsed.itemName : "품목명누락_실사";
-                let cat = String(parsed.row[Object.keys(parsed.row).find(k=>k.includes("카테고리"))]||"미분류").trim();
-                let remarks = String(parsed.row[Object.keys(parsed.row).find(k=>k.includes("입고처"))]||"기본입고처").trim();
-                let pDate = String(parsed.row[Object.keys(parsed.row).find(k=>k.includes("일자"))]||new Date().toISOString().split('T')[0]).trim();
+                let catKey = Object.keys(parsed.row).find(k=>k.includes("카테고리"));
+                let cat = catKey ? String(parsed.row[catKey]).trim() : "미분류";
+                if(cat === "-") cat = "미분류";
+                
+                let remKey = Object.keys(parsed.row).find(k=>k.includes("입고처"));
+                let remarks = remKey ? String(parsed.row[remKey]).trim() : "기본입고처";
+                if(remarks === "-") remarks = "기본입고처";
+                
+                let dateKey = Object.keys(parsed.row).find(k=>k.includes("일자"));
+                let pDate = dateKey ? String(parsed.row[dateKey]).trim() : new Date().toISOString().split('T')[0];
+                if(!pDate || pDate === "-") pDate = new Date().toISOString().split('T')[0];
                 
                 let pInfo = finishedProductMaster.find(p => p.item_name === finalName) || productMaster.find(p => p.item_name === finalName);
                 let pEa = pInfo && pInfo.pallet_ea > 0 ? pInfo.pallet_ea : 180;
 
                 insertTasks.push({ 
                     location_id: parsed.loc, 
-                    category: cat === "-" ? "미분류" : cat, 
+                    category: cat, 
                     item_name: finalName, 
-                    quantity: parsed.physQty, 
-                    pallet_count: parsed.physQty/pEa, 
+                    quantity: parsed.targetQty, 
+                    pallet_count: parsed.targetQty / pEa, 
                     production_date: pDate, 
-                    remarks: remarks === "-" ? "기본입고처" : remarks,
+                    remarks: remarks,
                     acc_status: "미확정",        
                     payment_status: "미지급"    
                 });
