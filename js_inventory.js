@@ -265,6 +265,7 @@ function renderMap() {
             
             vHtml += `</div>`; 
             if(vContainer) vContainer.innerHTML = vHtml; 
+            if (typeof checkUndoVisibility === 'function') checkUndoVisibility(); // 💡 취소 버튼 상태 갱신
             return; 
         } 
         
@@ -326,6 +327,8 @@ function renderMap() {
         } 
         hHtml += `</div>`; 
         if(hContainer) hContainer.innerHTML = hHtml; 
+
+        if (typeof checkUndoVisibility === 'function') checkUndoVisibility(); // 💡 취소 버튼 상태 갱신
     } catch(e) { console.error("렌더링 에러: ", e); }
 }
 
@@ -561,7 +564,6 @@ async function dispatchToFloor(invId, itemName, maxQty, fromLoc, supplier) {
     } catch(e) { alert("서버 통신 오류"); }
 }
 
-// 💡 [핵심 패치] 출고 완료 후 '전체 창고 기준' 잔여량 계산 및 타 로케이션 직관적 안내
 async function processOutbound(invId, itemName, maxQty, currentPallet, locId) { 
     if(loginMode === 'viewer') return;
     const qtyStr = prompt(`[${itemName}] 출고 수량 (최대 ${maxQty}EA)`, maxQty); 
@@ -1446,7 +1448,6 @@ async function importExcel(event) {
             let physQtyKey = keys.find(k => k.includes("실사"));
             let physQtyStr = physQtyKey ? String(row[physQtyKey]).replace(/,/g, '').trim() : "";
 
-            // 💡 [핵심 패치 1] 실사수량을 안 적고 전산수량을 바로 고쳐서 올리는 경우 대응!
             let targetQtyStr = physQtyStr !== "" ? physQtyStr : sysQtyStr;
             if(targetQtyStr === "") continue; 
             
@@ -1455,7 +1456,6 @@ async function importExcel(event) {
 
             parsedRows.push({ loc, itemName, targetQty, row });
 
-            // 💡 [핵심 패치 2] 엑셀 내부 비교가 아닌, "실제 현재 DB 재고"와 비교하여 변동사항 감지!
             let existings = globalOccupancy.filter(o => o.location_id === loc);
             let oldItemName = existings.length > 0 ? existings[0].item_name : "";
             let currentDbQty = existings.reduce((sum, o) => sum + o.quantity, 0);
@@ -1555,3 +1555,64 @@ async function importExcel(event) {
         event.target.value = '';
     }
 }
+
+// ==========================================
+// 💡 직전 출고 취소 (Undo) 로직
+// ==========================================
+window.checkUndoVisibility = function() {
+    const btn = document.getElementById('btn-undo-outbound');
+    if(!btn) return;
+    let lastOut = globalHistory.filter(h => h.action_type === '출고').sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    if(lastOut) {
+        btn.classList.remove('hidden');
+        btn.innerHTML = `↩️ 직전 출고 취소<br><span class="text-[9px] font-normal block leading-tight text-rose-200">${lastOut.item_name} (${lastOut.quantity}EA)</span>`;
+    } else {
+        btn.classList.add('hidden');
+    }
+};
+
+window.undoLastOutbound = async function() {
+    if(loginMode === 'viewer') return alert("뷰어 모드에서는 취소할 수 없습니다.");
+    
+    let lastOut = globalHistory.filter(h => h.action_type === '출고').sort((a,b) => new Date(b.created_at) - new Date(a.created_at))[0];
+    if(!lastOut) return alert("취소할 출고 기록이 없습니다.");
+
+    if(!confirm(`⚠️ 직전 출고 취소\n\n품목명: ${lastOut.item_name}\n수량: ${lastOut.quantity} EA\n위치: ${lastOut.location_id}\n\n정말 출고를 취소하고 렉으로 다시 복구하시겠습니까?`)) return;
+
+    // 화면 클릭 방지용 임시 로딩창 생성 (데이터 증발 차단)
+    let loader = document.createElement('div');
+    loader.id = 'undo-loader';
+    loader.className = 'fixed inset-0 bg-slate-900 bg-opacity-60 flex items-center justify-center z-[9999]';
+    loader.innerHTML = '<div class="bg-white px-6 py-4 rounded-2xl shadow-2xl font-black text-rose-700 flex items-center text-lg"><span class="animate-spin text-3xl mr-4">⏳</span> 출고 취소 및 복구 중...</div>';
+    document.body.appendChild(loader);
+
+    try {
+        let restoredPallet = getDynamicPalletCount({item_name: lastOut.item_name, remarks: lastOut.remarks, quantity: lastOut.quantity});
+
+        // 1. 해당 출고 기록 삭제
+        await fetch(`/api/history/${lastOut.id}`, { method: 'DELETE' });
+        
+        // 2. 원래 위치로 재입고 (복구)
+        let payload = {
+            location_id: lastOut.location_id,
+            category: lastOut.category || '미분류',
+            item_name: lastOut.item_name,
+            quantity: lastOut.quantity,
+            pallet_count: restoredPallet,
+            production_date: lastOut.production_date || new Date().toISOString().split('T')[0],
+            remarks: lastOut.remarks || '기본입고처',
+            acc_status: '미확정',
+            payment_status: '미지급'
+        };
+        await fetch('/api/inbound', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        
+        setTimeout(async () => {
+            await load();
+            if(document.getElementById('undo-loader')) document.body.removeChild(document.getElementById('undo-loader'));
+            alert("✅ 출고 취소가 완료되어 재고가 원상 복구되었습니다.");
+        }, 1000);
+    } catch(e) {
+        if(document.getElementById('undo-loader')) document.body.removeChild(document.getElementById('undo-loader'));
+        alert("복구 실패: " + e.message);
+    }
+};
